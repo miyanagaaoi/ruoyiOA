@@ -207,7 +207,13 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  /* 宽度锁死为同一个 --node-w。
+     box-sizing 必须与泳道头/空态一致，否则这里多出 2px 边框宽，左右各偏 1px；
+     min/max-width 一起固定，防止 flex item 的 min-width:auto 被长文本撑宽。 */
   width: var(--node-w);
+  min-width: var(--node-w);
+  max-width: var(--node-w);
+  box-sizing: border-box;
   min-height: 62px;
   border: 1px solid #d8d8d8;
   border-radius: 6px;
@@ -325,9 +331,12 @@ export default {
     text-overflow: ellipsis;
   }
   .ft-sum {
+    min-width: 0;
     color: #aaa;
     font-size: 11px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* 起止节点：灰蓝 */
@@ -453,6 +462,8 @@ export default {
   flex-wrap: wrap;
   /* 与同级卡片**完全同宽**（同一个 --node-w），保证左右边缘持久对齐 */
   width: var(--node-w);
+  min-width: var(--node-w);
+  max-width: var(--node-w);
   box-sizing: border-box;
   border: 1px solid #dfe4ea;
   border-radius: 4px;
@@ -516,6 +527,8 @@ export default {
   align-items: center;
   gap: 4px;
   width: var(--node-w);
+  min-width: var(--node-w);
+  max-width: var(--node-w);
   box-sizing: border-box;
   border: 1px dashed #dcdcdc;
   border-radius: 6px;
