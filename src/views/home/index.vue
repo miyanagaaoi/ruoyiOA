@@ -1,28 +1,32 @@
 <template>
-  <!-- 首页 -->
-  <div class="home">
-    <!-- 左侧 -->
-    <div class="left-position">
-      <div class="left-header">
+  <!-- 首页 · 工作台（视觉语言取自集团 OA 设计体系，见 oa-home.scss） -->
+  <div class="oa-home">
+    <header class="oa-page-head">
+      <h1>工作台</h1>
+      <p class="oa-page-sub">{{ todayText }}</p>
+    </header>
+
+    <div class="oa-home-grid">
+      <!-- 主区：统计 → 待办 → (快捷入口 + 资讯) -->
+      <section class="oa-col-main">
         <static ref="static" />
-      </div>
-      <div class="left-body">
         <todo ref="todo" />
-      </div>
-      <div class="left-foot">
-        <fast-entrance @reflesh="reflesh" />
-        <news />
-      </div>
-    </div>
-    <!-- 右侧 -->
-    <div class="right-position">
-      <welcome />
-      <notice />
-      <schedule ref="schedule" />
+        <div class="oa-row-2">
+          <fast-entrance @reflesh="reflesh" />
+          <news />
+        </div>
+      </section>
+
+      <!-- 侧栏：欢迎 → 公告 → 日程 -->
+      <aside class="oa-col-side">
+        <welcome />
+        <notice />
+        <schedule ref="schedule" />
+      </aside>
     </div>
   </div>
 </template>
-  
+
 <script>
 import Todo from "./components/Todo/Collapse.vue";
 import FastEntrance from "./components/FastEntrance";
@@ -32,6 +36,8 @@ import News from "./components/News";
 import Static from "./components/Static";
 import Schedule from "./components/Schedule";
 import eventType from "@/utils/socket/eventType.js";
+// 首页主题：统一接管 8 个子组件的卡片面与分区标题（全局样式 + .oa-home 作用域）
+import "./oa-home.scss";
 
 export default {
   name: "HomeIndex",
@@ -39,13 +45,20 @@ export default {
   data() {
     return {};
   },
+  computed: {
+    /** 页头副标题：今天是 XXXX 年 X 月 X 日 星期X */
+    todayText() {
+      const d = new Date();
+      const week = ["日", "一", "二", "三", "四", "五", "六"][d.getDay()];
+      return `今天是 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 星期${week}`;
+    },
+  },
   mounted() {
     this.$eventBus.$on(eventType[1], (payload) => {
       console.log("收到消息:", payload.text);
       this.refleshTodo();
     });
   },
-  computed: {},
   methods: {
     reflesh() {
       this.$refs.schedule.getScheduleData();
@@ -57,34 +70,3 @@ export default {
   },
 };
 </script>
-  
-<style scoped lang="scss">
-.home {
-  display: flex;
-  justify-content: space-between;
-  height: 88vh;
-  padding: 12px;
-}
-
-.left-position {
-  display: flex;
-  flex-direction: column;
-  width: 75%;
-}
-.left-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-}
-.left-foot > div {
-  flex: 1 1 48%;
-  min-width: 0;
-}
-.right-position {
-  display: flex;
-  flex-direction: column;
-  width: 24.5%;
-}
-</style>
-  
-  

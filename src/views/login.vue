@@ -1,7 +1,10 @@
 <template>
   <div class="login">
     <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form">
-      <h3 class="title">若依后台管理系统</h3>
+      <div class="login-brand">
+        <img :src="logoUrl" class="login-logo" alt="集团OA系统" />
+        <h3 class="title">集团OA系统</h3>
+      </div>
       <el-form-item prop="username">
         <el-input v-model="loginForm.username" type="text" auto-complete="off" placeholder="账号">
           <svg-icon slot="prefix" icon-class="user" class="el-input__icon input-icon" />
@@ -44,11 +47,13 @@ import Cookies from "js-cookie";
 import { encrypt, decrypt } from "@/utils/jsencrypt";
 import { connectWs } from "@/utils/socket/handleMessage.js";
 import defaultSettings from '@/settings'
+import logoImg from '@/assets/logo/logo.png'
 
 export default {
   name: "Login",
   data() {
     return {
+      logoUrl: logoImg,
       footerContent: defaultSettings.footerContent,
       codeUrl: "",
       loginForm: {
@@ -144,10 +149,26 @@ export default {
   background-image: url("../assets/images/login-background.jpg");
   background-size: cover;
 }
+/* 登录页品牌区：logo + 系统名（logo 取自集团 OA 设计稿） */
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.login-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  margin-bottom: 10px;
+}
 .title {
-  margin: 0px auto 30px auto;
+  margin: 0px auto 0 auto;
   text-align: center;
-  color: #707070;
+  color: #303133;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 .login-form {

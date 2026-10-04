@@ -1,0 +1,149 @@
+/**
+ * 首页主题 · 集团 OA 设计语言
+ * ----------------------------------------------------------------------------
+ * 来源：`H:\dsh\OA\oa-web`（DESIGN.md 体系），令牌见 `@/assets/styles/oa-tokens.scss`
+ *
+ * 为什么用「全局样式 + .oa-home 作用域」而不是改 8 个子组件：
+ *   首页的 8 个组件（统计/待办/快捷入口/资讯/公告/日程/欢迎）各自 import 了
+ *   scoped 样式，但它们用的是**同一套容器模式**：
+ *       border: 1px solid #f5f5f5; border-radius: 4px;
+ *       background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.10);
+ *   与其改 8 个文件（且每次新增组件还要记得改），不如在这里一次性接管。
+ *   选择器多加一层 `.oa-home-grid` 是为了**在特异性上压过**组件的 scoped 规则
+ *   （两段类 0,2,0 < 三段类 0,3,0），这样就不用 `!important`。
+ *
+ * oa-web 的两条视觉纪律（本文件全程遵守）：
+ *   1. 卡片用 **1px 细线**分隔，**不用阴影**（阴影只留给浮层）
+ *   2. 层级靠**字重与颜色**表达，不靠边框粗细和投影
+ */
+
+.oa-home {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 16px 20px 24px;
+  background: var(--oa-color-surface-1);
+  font-family: var(--oa-font-family);
+  color: var(--oa-color-ink);
+
+  /* ============ 页头 ============ */
+  .oa-page-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 16px;
+
+    h1 {
+      margin: 0;
+      font: var(--oa-font-title-page);
+      color: var(--oa-color-ink);
+    }
+    .oa-page-sub {
+      margin: 0;
+      font: var(--oa-font-body-sm);
+      color: var(--oa-color-ink-subtle);
+    }
+  }
+
+  /* ============ 栅格 ============ */
+  .oa-home-grid {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .oa-col-main {
+    flex: 1 1 74%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .oa-col-side {
+    flex: 1 1 24%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .oa-row-2 {
+    display: flex;
+    gap: 16px;
+
+    > * {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
+
+  /* ============ 卡片面：白底 + 细线 + 无阴影 ============ */
+  .oa-home-grid {
+    .sum-container,
+    .fast-container,
+    .news-container,
+    .notice-container,
+    .msg-container,
+    .todo-list-container {
+      background-color: var(--oa-color-canvas);
+    }
+
+    .sum-container,
+    .fast-container,
+    .news-container,
+    .notice-container,
+    .msg-container,
+    .todo-list-container,
+    .welcome {
+      border: 1px solid var(--oa-color-hairline);
+      border-radius: var(--oa-radius-lg);
+      box-shadow: none; /* 取代组件里的 0 2px 12px rgba(0,0,0,.10) */
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    /* 欢迎卡自带装饰底图：只统一边框，不动背景图 */
+    .welcome {
+      border-radius: var(--oa-radius-lg);
+    }
+
+    /* ============ 分区标题：14px bold → 16px/600 ============ */
+    .position-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 16px;
+      font: var(--oa-font-title-section);
+      color: var(--oa-color-ink);
+      border-bottom: 1px solid var(--oa-color-hairline);
+
+      .load-more {
+        font: var(--oa-font-caption);
+        color: var(--oa-color-ink-subtle);
+        cursor: pointer;
+
+        &:hover {
+          color: var(--oa-color-primary);
+        }
+      }
+    }
+
+    /* 统计条里的数字：用金额级字重，弱化标签 */
+    .sum-item {
+      border-radius: var(--oa-radius-md);
+
+      .count {
+        font: var(--oa-font-amount-lg);
+        color: var(--oa-color-ink);
+      }
+      .desc {
+        font: var(--oa-font-caption);
+        color: var(--oa-color-ink-subtle);
+      }
+    }
+  }
+
+  /* ============ 首页内的 Element 控件跟随品牌色 ============ */
+  .el-button--text {
+    color: var(--oa-color-primary);
+  }
+  .el-tabs__item.is-active,
+  .el-link.el-link--primary {
+    color: var(--oa-color-primary);
+  }
+}

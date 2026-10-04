@@ -1,0 +1,91 @@
+/**
+ * 集团 OA 设计令牌
+ * ----------------------------------------------------------------------------
+ * 来源：`H:\dsh\OA\oa-web\src\styles\tokens.scss`（该项目的 DESIGN.md 体系）
+ * 目的：让 ruoyiOA 的界面与 oa-web 属同一产品语言。
+ *
+ * 用法：颜色/圆角/间距/字号一律走这里的变量，不要在页面里写裸色值。
+ *  ⚠ 只定义令牌，不改 Element UI 的编译期主题（$--color-primary 在
+ *    `src/assets/styles/variables.scss`，那是另一件事）。
+ */
+
+:root {
+  /* ---------- 品牌色 ---------- */
+  --oa-color-primary: #1f5ae0;
+  --oa-color-primary-hover: #1749bd;
+  --oa-color-primary-active: #12398f;
+  --oa-color-on-primary: #ffffff;
+  --oa-color-primary-subtle: #eef3fe;
+  --oa-color-primary-border: #c4d5f8;
+
+  /* ---------- 文字 ---------- */
+  --oa-color-ink: #14181f;
+  --oa-color-ink-muted: #4a5563;
+  --oa-color-ink-subtle: #5f6b7a;
+  --oa-color-ink-disabled: #aeb7c4;
+
+  /* ---------- 底色与表面 ---------- */
+  --oa-color-canvas: #ffffff;
+  --oa-color-canvas-subtle: #f7f8fa;
+  --oa-color-surface-1: #f2f4f7; /* 页面底 / 分组容器 */
+  --oa-color-surface-2: #e6e9ef;
+
+  /* ---------- 分隔线（oa-web 用细线代替阴影） ---------- */
+  --oa-color-hairline: #e2e5ea;
+  --oa-color-hairline-strong: #c8cdd6;
+
+  /* ---------- 深色（导航 / 反白） ---------- */
+  --oa-color-inverse-canvas: #151a22;
+  --oa-color-inverse-surface-1: #1e242e;
+  --oa-color-inverse-surface-2: #28303c;
+  --oa-color-inverse-ink: #f4f6f9;
+  --oa-color-inverse-ink-muted: #9aa4b2;
+
+  /* ---------- 语义色 ---------- */
+  --oa-color-success: #1f7a4d;
+  --oa-color-success-surface: #e6f4ec;
+  --oa-color-warning: #9a6200;
+  --oa-color-warning-surface: #fdf1dd;
+  --oa-color-error: #c02b25;
+  --oa-color-error-surface: #fbeaea;
+  --oa-color-info: #1f5ae0;
+  --oa-color-info-surface: #eef3fe;
+  --oa-color-neutral: #5b6472;
+  --oa-color-neutral-surface: #eef0f4;
+  --oa-color-focus-ring: #1f5ae0;
+
+  /* ---------- 圆角 ---------- */
+  --oa-radius-xs: 2px;
+  --oa-radius-sm: 4px;
+  --oa-radius-md: 6px;
+  --oa-radius-lg: 8px;
+  --oa-radius-pill: 9999px;
+
+  /* ---------- 间距 ---------- */
+  --oa-space-xxs: 4px;
+  --oa-space-xs: 8px;
+  --oa-space-sm: 12px;
+  --oa-space-md: 16px;
+  --oa-space-lg: 24px;
+  --oa-space-xl: 32px;
+  --oa-space-xxl: 48px;
+
+  /* ---------- 字体 ---------- */
+  --oa-font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --oa-font-display: 600 28px/1.25 var(--oa-font-family);
+  --oa-font-title-page: 600 20px/1.3 var(--oa-font-family);
+  --oa-font-title-section: 600 16px/1.4 var(--oa-font-family);
+  --oa-font-body: 400 14px/1.6 var(--oa-font-family);
+  --oa-font-body-sm: 400 13px/1.55 var(--oa-font-family);
+  --oa-font-label: 500 13px/1.4 var(--oa-font-family);
+  --oa-font-caption: 400 12px/1.45 var(--oa-font-family);
+  --oa-font-amount-lg: 600 32px/1.2 var(--oa-font-family);
+
+  /* ---------- 阴影（oa-web 只在浮层用） ---------- */
+  --oa-shadow-layer-4: 0 12px 32px rgba(20, 24, 31, 0.16);
+  --oa-shadow-drawer: -8px 0 24px rgba(20, 24, 31, 0.12);
+
+  /* ---------- 控件高度 ---------- */
+  --oa-space-control: 32px;
+  --oa-space-control-comfortable: 40px;
+}
