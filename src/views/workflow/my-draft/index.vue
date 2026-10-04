@@ -52,6 +52,12 @@
           <span>{{ parseTime(scope.row.createTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="操作" align="center" width="90" fixed="right">
+        <template slot-scope="scope">
+          <!-- .stop 必须有：整行有点击进详情的处理，不加会连带跳走 -->
+          <el-button size="mini" type="text" icon="el-icon-printer" @click.stop="printRow(scope.row)">打印</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <pagination v-show="total>0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize" @pagination="getList" />
@@ -96,6 +102,26 @@ export default {
     this.getList();
   },
   methods: {
+    /**
+     * 列表行打印（PRD 7.2 入口2）。新窗口打开打印预览页。
+     * 注意草稿列表的业务ID字段是 bizId（与行点击口径一致）。
+     */
+    printRow(row) {
+      const businessId = row.bizId;
+      if (!businessId) {
+        this.$modal.msgWarning("该记录没有业务ID，无法打印");
+        return;
+      }
+      const { href } = this.$router.resolve({
+        path: "/workflow/print",
+        query: { businessId: businessId },
+      });
+      // 被拦截时退化为当前窗口跳转，保证点击永远有反应
+      const w = window.open(href, "_blank");
+      if (!w) {
+        this.$router.push({ path: "/workflow/print", query: { businessId: businessId } });
+      }
+    },
     /** 行点击 */
     handleRowClick(row, column, event) {
       this.$router.push({

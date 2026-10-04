@@ -274,11 +274,13 @@ export default {
      * 打印是只读动作；不传 printTplId，由服务端按单据模板挑启用的打印模板（无则用系统默认）。
      */
     printBtn() {
-      const { href } = this.$router.resolve({
-        path: '/workflow/print',
-        query: { businessId: this.businessId }
-      })
-      window.open(href, '_blank')
+      const route = { path: '/workflow/print', query: { businessId: this.businessId } }
+      const { href } = this.$router.resolve(route)
+      // 被浏览器拦截时退化为当前窗口跳转，保证点击永远有反应
+      const w = window.open(href, '_blank')
+      if (!w) {
+        this.$router.push(route)
+      }
     },
     handleButtonClick(btnCode) {
       switch (btnCode) {

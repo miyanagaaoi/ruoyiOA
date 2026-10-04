@@ -123,7 +123,15 @@ export default {
       /** 表单字段中文标签：字段 __vModel__ -> label */
       formLabels: {},
       /** 表单 schema 的字段顺序（内置系统模板据此自动排版） */
-      schemaFields: []
+      schemaFields: [],
+      /**
+       * 选项翻译表：字段 -> { 值: 中文标签 }。
+       * 选项**不在** `__config__` 里，而在字段的 `__slot__.options`
+       * （实测：el-select / el-radio-group / el-checkbox-group 都是这个位置）。
+       */
+      optionMap: {},
+      /** 开关翻译表：字段 -> { 'true': '是', 'false': '否' }（el-switch 的 active/inactive） */
+      switchMap: {}
     }
   },
   computed: {
@@ -280,8 +288,46 @@ export default {
     valueOf(field) {
       if (!field) return ''
       if (field.charAt(0) === '$') return this.builtin(field)
-      const v = this.formValues[field]
-      return this.display(v)
+      return this.renderValue(field, this.formValues[field])
+    },
+
+    /**
+     * 把**原始值**渲染成打印件上该有的样子：
+     * 选项值转中文标签、开关转是/否、数组用「、」连接、金额加千分位。
+     * 翻译表来自表单 schema（见 buildTranslateMaps），不再依赖字典接口。
+     */
+    renderValue(field, v) {
+      if (v === null || v === undefined || v === '') return ''
+      const one = x => {
+        if (x === null || x === undefined || x === '') return ''
+        const key = String(x)
+        const opt = this.optionMap[field]
+        if (opt && opt[key] !== undefined) return opt[key]
+        const sw = this.switchMap[field]
+        if (sw && sw[key] !== undefined) return sw[key]
+        if (typeof x === 'boolean') return x ? '是' : '否'
+        if (typeof x === 'number') return this.fmtNumber(field, x)
+        if (typeof x === 'object') {
+          // 值是 {label,value} / {dictLabel,dictValue} 这类包装时取可读的那一侧
+          if (x.label !== undefined) return String(x.label)
+          if (x.dictLabel !== undefined) return String(x.dictLabel)
+          if (x.value !== undefined) return String(x.value)
+          return ''
+        }
+        return String(x)
+      }
+      if (Array.isArray(v)) return v.map(one).filter(s => s !== '').join('、')
+      return one(v)
+    },
+
+    /** 金额类字段加千分位（el-input-number） */
+    fmtNumber(field, n) {
+      const f = this.schemaFields.find(x => x.__vModel__ === field)
+      const tag = f && f.__config__ ? f.__config__.tag : ''
+      if (tag === 'el-input-number' || tag === 'design-amount') {
+        return n.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+      }
+      return String(n)
     },
 
     builtin(name) {
@@ -371,7 +417,41 @@ export default {
           labels[f.__vModel__] = c.printLabel || c.label || f.__vModel__
         })
         this.formLabels = labels
+        this.buildTranslateMaps(this.schemaFields)
       }
+    },
+
+    /**
+     * 建"值 → 中文"的翻译表。
+     *
+     * 表单里存的是**原始值**（`leave` / `normal` / `true`），打印件上必须显示中文。
+     * 这些标签就在 schema 自身里，不必再查字典接口：
+     *   · 选项类（select / radio / checkbox）→ 字段的 `__slot__.options`
+     *   · 开关类（el-switch）             → `active-value/active-text`、`inactive-value/inactive-text`
+     */
+    buildTranslateMaps(fields) {
+      const optMap = {}
+      const swMap = {}
+      fields.forEach(f => {
+        const c = f.__config__ || {}
+        const model = f.__vModel__
+        const opts = f.__slot__ && f.__slot__.options
+        if (Array.isArray(opts) && opts.length) {
+          const m = {}
+          opts.forEach(o => {
+            if (o && o.value !== undefined) m[String(o.value)] = o.label
+          })
+          optMap[model] = m
+        }
+        if (c.tag === 'el-switch') {
+          const m = {}
+          if (f['active-value'] !== undefined) m[String(f['active-value'])] = f['active-text'] || '是'
+          if (f['inactive-value'] !== undefined) m[String(f['inactive-value'])] = f['inactive-text'] || '否'
+          if (Object.keys(m).length) swMap[model] = m
+        }
+      })
+      this.optionMap = optMap
+      this.switchMap = swMap
     },
 
     /** 纯排版类字段不进基本信息表（分组标题/说明文字/按钮等） */
@@ -405,19 +485,6 @@ export default {
     /** 字段中文标签（配置了 field_map 时用 label 已够，这里作为兜底展示用） */
     labelOf(field) {
       return this.formLabels[field] || field
-    },
-
-    display(v) {
-      if (v === null || v === undefined || v === '') return ''
-      if (Array.isArray(v)) return v.map(x => this.display(x)).filter(Boolean).join('、')
-      if (typeof v === 'object') {
-        // 常见形态：{ label, value } / { dictLabel, dictValue }
-        if (v.label !== undefined) return String(v.label)
-        if (v.dictLabel !== undefined) return String(v.dictLabel)
-        if (v.value !== undefined) return String(v.value)
-        return ''
-      }
-      return String(v)
     },
 
     /* ---------- 展示工具 ---------- */

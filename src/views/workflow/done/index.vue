@@ -58,6 +58,12 @@
           <span>{{ parseTime(scope.row.handleTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="操作" align="center" width="90" fixed="right">
+        <template slot-scope="scope">
+          <!-- .stop 必须有：整行有点击进详情的处理，不加会连带跳走 -->
+          <el-button size="mini" type="text" icon="el-icon-printer" @click.stop="printRow(scope.row)">打印</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <pagination v-show="total>0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize" @pagination="getList" />
@@ -132,6 +138,27 @@ export default {
     resetQuery() {
       this.resetForm("queryForm");
       this.handleQuery();
+    },
+    /**
+     * 列表行打印（PRD 7.2 入口2）。新窗口打开打印预览页；打印只读，不改业务数据。
+     * 沿用行点击的 businessId 口径。
+     */
+    printRow(row) {
+      const businessId = row.businessId;
+      if (!businessId) {
+        this.$modal.msgWarning("该记录没有业务ID，无法打印");
+        return;
+      }
+      const { href } = this.$router.resolve({
+        path: "/workflow/print",
+        query: { businessId: businessId },
+      });
+      // 新窗口打开；被浏览器拦截时（window.open 返回 null）退化为当前窗口跳转，
+      // 否则用户点了"打印"却什么都不发生，比跳走更糟。
+      const w = window.open(href, "_blank");
+      if (!w) {
+        this.$router.push({ path: "/workflow/print", query: { businessId: businessId } });
+      }
     },
     // 行点击
     handleRowClick(row, column, event) {
