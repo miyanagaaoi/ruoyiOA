@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workflow.mapper.SignRecordMapper">
+
+    <resultMap type="SignRecord" id="SignRecordResult">
+        <result property="id"           column="id"             />
+        <result property="businessId"   column="business_id"    />
+        <result property="procInsId"    column="proc_ins_id"    />
+        <result property="taskId"       column="task_id"        />
+        <result property="taskDefKey"   column="task_def_key"   />
+        <result property="nodeName"     column="node_name"      />
+        <result property="signType"     column="sign_type"      />
+        <result property="fileId"       column="file_id"        />
+        <result property="signUserId"   column="sign_user_id"   />
+        <result property="signUserName" column="sign_user_name" />
+        <result property="signTime"     column="sign_time"      />
+        <result property="signIp"       column="sign_ip"        />
+        <result property="userAgent"    column="user_agent"     />
+        <result property="formDataHash" column="form_data_hash" />
+        <result property="prevHash"     column="prev_hash"      />
+        <result property="recordHash"   column="record_hash"    />
+    </resultMap>
+
+    <sql id="selectSignRecordVo">
+        select id, business_id, proc_ins_id, task_id, task_def_key, node_name,
+               sign_type, file_id, sign_user_id, sign_user_name, sign_time,
+               sign_ip, user_agent, form_data_hash, prev_hash, record_hash
+        from t_workflow_sign_record
+    </sql>
+
+    <!-- 只追加：本 Mapper 不提供 update / delete -->
+
+    <insert id="insert" parameterType="SignRecord">
+        insert into t_workflow_sign_record (
+            id, business_id, proc_ins_id, task_id, task_def_key, node_name,
+            sign_type, file_id, sign_user_id, sign_user_name, sign_time,
+            sign_ip, user_agent, form_data_hash, prev_hash, record_hash
+        ) values (
+            #{id}, #{businessId}, #{procInsId}, #{taskId}, #{taskDefKey}, #{nodeName},
+            #{signType}, #{fileId}, #{signUserId}, #{signUserName}, #{signTime},
+            #{signIp}, #{userAgent}, #{formDataHash}, #{prevHash}, #{recordHash}
+        )
+    </insert>
+
+    <select id="selectByBusinessId" parameterType="String" resultMap="SignRecordResult">
+        <include refid="selectSignRecordVo"/>
+        where business_id = #{businessId}
+        order by sign_time asc, id asc
+    </select>
+
+    <select id="selectLatestByBusinessId" parameterType="String" resultMap="SignRecordResult">
+        <include refid="selectSignRecordVo"/>
+        where business_id = #{businessId}
+        order by sign_time desc, id desc
+        limit 1
+    </select>
+
+    <!-- 某任务的最新一条；若是撤销记录则视为"当前无有效签名" -->
+    <select id="selectLatestByTask" resultMap="SignRecordResult">
+        <include refid="selectSignRecordVo"/>
+        where business_id = #{businessId}
+          and task_id = #{taskId}
+        order by sign_time desc, id desc
+        limit 1
+    </select>
+
+    <!-- 表单快照原文（用于算 formDataHash）：t_workflow_form 的主键就是业务ID -->
+    <select id="selectFormDataById" parameterType="String" resultType="String">
+        select form_data from t_workflow_form where id = #{businessId} limit 1
+    </select>
+
+</mapper>

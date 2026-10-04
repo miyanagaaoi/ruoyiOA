@@ -16,6 +16,7 @@ import com.ruoyi.workflow.mapper.PrintLogMapper;
 import com.ruoyi.workflow.mapper.PrintTemplateMapper;
 import com.ruoyi.workflow.print.model.PrintData;
 import com.ruoyi.workflow.print.service.IPrintService;
+import com.ruoyi.workflow.sign.service.ISignService;
 import com.ruoyi.workfile.module.BizAttachmentDTO;
 import com.ruoyi.workfile.service.IWorkflowAttachmentService;
 import org.apache.commons.lang3.StringUtils;
@@ -30,6 +31,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -71,6 +73,9 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
     @Autowired
     private IBizFormService bizFormService;
 
+    @Autowired
+    private ISignService signService;
+
     /* ==================== 打印数据聚合 ==================== */
 
     @Override
@@ -107,8 +112,9 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         data.setSubmitterDept(firstNonBlank(records, FlowTaskDto::getStartDeptName));
         data.setBusinessNo(businessId);
 
-        // 4) 签批栏
-        data.setNodes(buildNodes(records));
+        // 4) 签批栏：签名图片按"每个节点当前有效的签名"取（已被撤销的节点取不到）
+        Map<String, String> signMap = signService.effectiveSignByTask(businessId);
+        data.setNodes(buildNodes(records, signMap));
 
         // 5) 附件清单
         data.setAttachments(loadAttachments(businessId));
@@ -170,7 +176,7 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
      * <p> 未到达的节点**不出栏**（PRD 7.4-C 的"未到达节点整栏留空"由前端按模板开关处理，
      * 这里只给出真实发生过的节点，避免凭空捏造节点顺序）。 </p>
      */
-    private List<PrintData.Node> buildNodes(List<FlowTaskDto> records) {
+    private List<PrintData.Node> buildNodes(List<FlowTaskDto> records, Map<String, String> signMap) {
         List<PrintData.Node> nodes = new ArrayList<>();
         if (records == null) {
             return nodes;
@@ -194,8 +200,8 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
                 // FlowCommentVo 只有 type 与 comment 两个字段
                 n.setComment(r.getComment().getComment());
             }
-            // 签名记录尚未实现（PRD 第 8 章）：保持 null，打印页据此留空栏供手写
-            n.setSignFileId(null);
+            // 签名图片：按任务ID取"当前有效"的那一张（被撤销的节点取不到，打印件留空供手写）
+            n.setSignFileId(signMap == null ? null : signMap.get(r.getTaskId()));
             nodes.add(n);
         }
         return nodes;
