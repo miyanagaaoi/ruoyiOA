@@ -88,7 +88,7 @@
       </el-scrollbar>
     </div>
 
-    <right-panel :active-data="activeData" :form-conf="formConf" :show-field="!!drawingList.length" @tag-change="tagChange" @fetch-data="fetchData" />
+    <right-panel :active-data="activeData" :form-conf="formConf" :fields="drawingList" :show-field="!!drawingList.length" @tag-change="tagChange" @fetch-data="fetchData" />
 
     <form-drawer :visible.sync="drawerVisible" :form-data="formData" size="100%" :generate-conf="generateConf" />
     <json-drawer size="60%" :visible.sync="jsonDrawerVisible" :json-str="JSON.stringify(formData)" @refresh="refreshJson" />

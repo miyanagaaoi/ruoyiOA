@@ -39,6 +39,29 @@
             <el-input v-model="activeData.__config__.label" placeholder="请输入字段名称" @input="changeRenderKey" />
           </el-form-item>
           <!-- 纯排版控件（分组标题 / 说明文字）：标题与正文由自己画，不编辑"字段名称" -->
+          <!-- 只读计算（PRD 9.3 / AC-38）：值由别的字段算出来，用户不能填 -->
+          <el-form-item v-if="activeData.__config__.tag==='design-calc'" label="计算方式">
+            <el-select v-model="activeData.formula" placeholder="请选择" :style="{width: '100%'}">
+              <el-option label="日期区间 → 天数（结束 − 开始）" value="dateDiff" />
+              <el-option label="金额小写 → 中文大写" value="amountUpper" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-calc'" :label="activeData.formula==='amountUpper' ? '金额字段' : '开始日期字段'">
+            <el-select v-model="activeData.fromField" placeholder="请选择字段" clearable filterable :style="{width: '100%'}">
+              <el-option v-for="item in fieldOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-calc' && activeData.formula!=='amountUpper'" label="结束日期字段">
+            <el-select v-model="activeData.toField" placeholder="请选择字段" clearable filterable :style="{width: '100%'}">
+              <el-option v-for="item in fieldOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-calc' && activeData.formula!=='amountUpper'" label="结果单位">
+            <el-input v-model="activeData.unit" placeholder="天" />
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-calc'" label="未填提示">
+            <el-input v-model="activeData.placeholder" placeholder="如：请先选择合同有效期" />
+          </el-form-item>
           <!-- 金额控件（PRD 9.3 / AC-36）：小数位 / 币种 / 大写开关（范围用通用的最小值/最大值） -->
           <el-form-item v-if="activeData.__config__.tag==='design-amount'" label="小数位">
             <el-input-number v-model="activeData.decimals" :min="0" :max="6" placeholder="默认 2" />
@@ -583,7 +606,9 @@ export default {
     IconsDialog,
     draggable,
   },
-  props: ["showField", "activeData", "formConf"],
+  // fields：当前画布上的控件清单（含行容器子控件）。只读计算控件要"引用另一个字段"，
+  // 让用户从下拉里选，而不是手敲 __vModel__（敲错了不会报错，只会算不出结果）。
+  props: ["showField", "activeData", "formConf", "fields"],
   data() {
     return {
       currentTab: "field",
@@ -719,6 +744,24 @@ export default {
     },
     activeTag() {
       return this.activeData.__config__.tag;
+    },
+    /** 可被引用的字段：摊平画布上的控件（含行容器子控件），排除纯排版类 */
+    fieldOptions() {
+      const out = [];
+      const walk = (list) => {
+        (list || []).forEach((f) => {
+          const cfg = f.__config__ || {};
+          if (Array.isArray(cfg.children) && cfg.children.length) {
+            walk(cfg.children);
+            return;
+          }
+          if (!f.__vModel__ || !cfg.tag) return;
+          if (["design-section", "design-text", "el-button", "el-divider"].indexOf(cfg.tag) >= 0) return;
+          out.push({ label: `${cfg.label || f.__vModel__}（${f.__vModel__}）`, value: f.__vModel__ });
+        });
+      };
+      walk(this.fields);
+      return out;
     },
     isShowMin() {
       return ["el-input-number", "el-slider", "design-amount"].indexOf(this.activeTag) > -1;

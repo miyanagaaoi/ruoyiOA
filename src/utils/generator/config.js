@@ -752,6 +752,25 @@ export const formOaComponents = [
   },
   {
     __config__: {
+      label: '时长（天）',
+      tag: 'design-calc',
+      tagIcon: 'time',
+      defaultValue: null,
+      layout: 'colFormItem',
+      span: 12,
+      showLabel: true,
+      required: false,
+      regList: []
+    },
+    formula: 'dateDiff',
+    fromField: '',
+    toField: '',
+    unit: '天',
+    placeholder: '',
+    style: { width: '100%' }
+  },
+  {
+    __config__: {
       label: '分组标题',
       tag: 'design-section',
       tagIcon: 'component',

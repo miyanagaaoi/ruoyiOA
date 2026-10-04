@@ -206,6 +206,20 @@ export default {
       default: () => {},
     },
   },
+  /**
+   * 把表单模型暴露给"需要读兄弟字段"的控件（如只读计算：结束日 − 开始日、金额小写→大写）。
+   *
+   * 为什么给的是**取值函数**而不是模型本身：
+   *   · 模型是 data() 里的动态键（`this[formConf.formModel]`），而 provide 先于 data 执行，
+   *     直接 provide 只会拿到 undefined；
+   *   · 取值函数每次调用都返回当前对象，注入方在 computed 里调用它即可建立响应式依赖
+   *     （所以兄弟字段一变，计算结果就会跟着重算）。
+   */
+  provide() {
+    return {
+      oaFormModel: () => this[this.formConf.formModel],
+    };
+  },
   data() {
     const data = {
       formConfCopy: deepClone(this.formConf),
