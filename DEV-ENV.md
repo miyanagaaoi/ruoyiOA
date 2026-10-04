@@ -247,6 +247,30 @@ git config user.name "你的名字" ; git config user.email "you@example.com"
 19. **`IBizFormService.getBizForm()` 返回的 `formData` 是一段 JSON 字符串**（不是对象）：
     解析后形如 `{ formData: { fields:[{__config__,__vModel__}] }, valData: { 字段 → 值 } }`，
     **值在 `valData`、中文标签与顺序在 `fields`**。只按对象递归会一个字段都取不到。
+20. **上传/取文件用经典链路 `/common/upload`，不要用新文件模块 `/file/operate/**`**（已踩过）。
+    现状：
+    * `t_file_storage` 里**只有 1 条**演示记录（`storage_type=minio`），
+      但 **MinIO 根本没在跑**（9000/9001 未监听），且它记录的本地路径下**文件也不存在**；
+    * 新文件模块配的本地路径是 `E:/ruoyi/upload`（见
+      `ruoyi-file/src/main/resources/env/dev/application-file.properties`），
+      而真正有文件的目录是 `H:/dsh/ruoyiOA/uploadPath`（经典 RuoYi 的 `RuoYiConfig.getProfile()`）；
+    * `/file/operate/downloadfile` 是 **POST**（写成 GET 会收到
+      `Request method 'GET' not supported`），且入参 `FileQO` **没有 `@RequestBody`** ——
+      参数必须走 query，放 JSON body 会得到"参数错误"；
+    * `/file/operate/uploadfile` 走 `UploadFile` **分片上传**协议，简单 multipart 会得到 `上传失败`。
+    **可用做法**：
+    ```
+    POST /common/upload   (multipart, 字段名 file)
+      → { "fileName": "/profile/upload/2026/10/04/xxx.png",
+          "url": "http://localhost:8080/profile/upload/2026/10/04/xxx.png" }
+    ```
+    `fileName` 是**相对路径**，通过静态资源映射 `/profile/**` 直接可访问，
+    前端加 `process.env.VUE_APP_BASE_API` 前缀即可 `<img src>`：
+    - `http://localhost/dev-api/profile/upload/....png` → **200 / image/png / 真实字节**；
+    - `http://localhost/profile/upload/....png`（**不加前缀**）→ 200 但返回的是
+      **SPA 的 HTML**（`text/html`），图是取不到的。
+    落了库的路径字符串（如签名记录的 `file_id`）建议按"以 `/` 开头 = 可直接访问的相对路径"
+    来判定，否则再走文件模块的 POST 取 blob。
 
 ## 7. 结论
 
