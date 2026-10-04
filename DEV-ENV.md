@@ -153,6 +153,36 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\authz-check.ps1
 > 当 ANSI 解码，直接 `Unexpected token` 解析失败。新增脚本时务必保持带 BOM。
 > ⚠️ `.ps1` 里**不能写 `/** … */` 块注释**（那是 JS 的写法，PowerShell 只有 `<# … #>`）；
 > 另外双引号串里的 `"$var:%"` 会被当成作用域变量而解析失败，要写 `"${var}:%"`。
+> ⚠️ 用 `| Select-Object -First N` 截断脚本输出 = **提前掐断上游管道**，脚本的 `finally`
+> 清理段跑不完，会留下测试数据（踩过：留下几枚预存签名）。要看前面几行就跑全量再翻日志。
+
+### 4.1.1 表单控件改动的固定动作（踩过多次，2026-10-04 定型）
+
+> **表单有两条渲染路径，新增/改控件必须两条都适配**，否则"拟稿时好看、审批时难看或丢字段"：
+>
+> | 场景 | 渲染器 | 位置 |
+> | --- | --- | --- |
+> | 拟稿 / 发起（`pageType=0`） | `Parser` + 自定义控件 | `UI/src/components/parser/Parser.vue`、`components/render/render.js` |
+> | 审批 / 详情（`pageType!=0`） | 只读 `label:value` 视图 | `UI/src/views/workflow/flow-form/component/view-form.vue` |
+> | 设计器画布 | 与拟稿页**同一个** `render` 组件 | `UI/src/views/tool/build/*` |
+> | 打印件 | 按单据快照里的 `formData.fields` 排版 | `UI/src/views/workflow/print/index.vue` |
+>
+> 新控件的落地清单（少一处就会"设计器能拖、运行时白屏"或"审批页看不见"）：
+> 1. 控件本体 `UI/src/components/form/design/DesignXxx.vue`；
+> 2. `components/render/render.js` 注册（拟稿页 + 设计器画布共用）；
+> 3. `utils/generator/config.js` 加进左侧组件清单（`formOaComponents` 组）；
+> 4. `views/tool/build/RightPanel.vue` 加属性配置项；
+> 5. `views/workflow/flow-form/component/view-form.vue` 适配只读视图；
+> 6. 需要值转换的话，后端 `ruoyi-biz-sdk/.../enums/ComponentTypeEnum.java` 补分支。
+>
+> ⚠️ 打印件的字段表来自**单据自己保存的 `formData.fields`**（不是 `PrintData.formSchema`，
+> 后端那个字段从未赋值、前端也从不读）。手写夹具时 `form_data` 必须是
+> `{"formData":{"fields":[…]},"valData":{…}}` 这种合法 JSON —— 解析失败会**静默**退回
+> 模板里的内置 field_map，看起来就像"打印排版没生效"（我为此误判过一次）。
+>
+> ⚠️ 动态表单的 `PUT` 是**版本化**的：旧行置 `enable_flag=0`，插一条新版本（新 id），
+> 列表只返回启用版本。所以：① 更新后要拿新 id（别拿旧 id 再 PUT，会攒出多份启用版本）；
+> ② `t_template.form_id` 指向的是**某一版**，改过表单的模板不会自动跟随新版本。
 
 ### 4.2 手动命令（脚本出问题时的对照）
 
