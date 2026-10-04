@@ -341,14 +341,17 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         if (StringUtils.isBlank(t.getOrientation())) {
             t.setOrientation("portrait");
         }
+        // 打印件的定位是「只打印表单信息」：签批栏与附件清单属流程侧数据，
+        // 默认**不打印**，由管理员在打印模板里显式打开（showSignature='1' / showAttachment='1'）。
+        // 注意这两项原先默认 '1'，与「只打印表单信息」相反。
         if (StringUtils.isBlank(t.getShowSignature())) {
-            t.setShowSignature("1");
+            t.setShowSignature("0");
         }
         if (StringUtils.isBlank(t.getShowComment())) {
             t.setShowComment("1");
         }
         if (StringUtils.isBlank(t.getShowAttachment())) {
-            t.setShowAttachment("1");
+            t.setShowAttachment("0");
         }
         if (StringUtils.isBlank(t.getShowCcNode())) {
             t.setShowCcNode("0");
