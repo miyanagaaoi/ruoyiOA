@@ -56,15 +56,15 @@
         v-if="d.isContainer(node)"
         :key="'c' + node.id"
         class="ft-lanes"
-        :class="{ 'single-lane': (node.branches || []).length <= 1 }"
       >
-        <div class="ft-split" :style="laneVars(node)" />
+        <div class="ft-stub" />
         <div class="ft-lane-row">
           <div
             v-for="(br, j) in (node.branches || [])"
             :key="br.id"
             class="ft-lane"
           >
+            <span class="laneline laneline-top" />
             <!-- 泳道头 -->
             <div
               class="ft-lane-head"
@@ -106,9 +106,10 @@
               :nodes="br.nodes || []"
               :path-prefix="p(i, j)"
             />
+            <span class="laneline laneline-bottom" />
           </div>
         </div>
-        <div class="ft-merge" :style="laneVars(node)" />
+        <div class="ft-stub" />
 
         <!-- 容器级：添加分支 -->
         <div class="ft-add-lane">
@@ -180,11 +181,6 @@ export default {
     p() {
       const args = Array.prototype.slice.call(arguments)
       return this.pathPrefix.concat(args)
-    },
-    /** 泳道数注入 CSS 变量，供分叉/汇合横杠计算位置 */
-    laneVars(node) {
-      const n = Math.max(1, (node.branches || []).length)
-      return { '--lanes': n }
     }
   }
 }
@@ -374,47 +370,71 @@ export default {
 }
 
 /* ---------- 容器 / 泳道 ---------- */
+/*
+ * 泳道按**内容宽度**自适应（不再等宽拉伸）。
+ * 分叉/汇合线改为「每条泳道各画一段」拼接 —— 这样与泳道宽度无关，
+ * 1 / 2 / N 条、宽窄不一都能正确对齐；原先那套 calc(50% / var(--lanes))
+ * 只能处理等宽泳道。
+ */
 .ft-lanes {
   width: 100%;
-}
-.ft-lane-row {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 16px;
-}
-.ft-lane {
-  flex: 1 1 0;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-
-/* 分叉 / 汇合横杠：位置随泳道数变化（修正写死 2 条的缺陷） */
-.ft-split,
-.ft-merge {
+.ft-lane-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+}
+.ft-lane {
   position: relative;
-  height: 18px;
-  margin: 0 auto;
-  width: 100%;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: calc(50% / var(--lanes, 2));
-    right: calc(50% / var(--lanes, 2));
-    top: 50%;
-    height: 1px;
-    background: #d5d5d5;
-  }
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 14px;
 }
 
-/* 单泳道：不画横杠（视觉退化为一条竖线） */
-.single-lane .ft-split::before,
-.single-lane .ft-merge::before {
-  display: none;
+/* 分段横线：靠 -14px 负外边距跨过泳道间距，与相邻泳道拼接 */
+.laneline {
+  position: absolute;
+  height: 1px;
+  background: #d5d5d5;
+  left: -14px;
+  right: -14px;
+}
+.laneline-top { top: 0; }
+.laneline-bottom { bottom: 0; }
+
+/* 首段只画右半（自泳道中心起），末段只画左半 */
+.ft-lane:first-child .laneline { left: 50%; }
+.ft-lane:last-child .laneline { right: 50%; }
+/* 单泳道退化：不画横线，只留一条竖线 */
+.ft-lane:only-child .laneline { display: none; }
+
+/* 横线到泳道头（尾）的竖直短线 */
+.ft-lane::before,
+.ft-lane::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  height: 16px;
+  background: #d5d5d5;
+  transform: translateX(-50%);
+}
+.ft-lane::before { top: 0; }
+.ft-lane::after { bottom: 0; }
+
+/* 容器上下与父/子节点相连的竖线 */
+.ft-stub {
+  width: 1px;
+  height: 16px;
+  background: #d5d5d5;
+  flex: none;
 }
 
 /* 泳道头 */

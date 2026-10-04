@@ -38,8 +38,8 @@
     </div>
 
     <el-row :gutter="12" style="margin-top:12px">
-      <!-- ============ 左：节点清单 ============ -->
-      <el-col :span="10">
+      <!-- ============ 流程画布（占满主内容区） ============ -->
+      <el-col :span="24">
         <el-card shadow="never" class="pane">
           <div slot="header" class="pane-head">
             <span>流程画布</span>
@@ -49,15 +49,21 @@
           <FlowTree :nodes="flow.nodes" :path-prefix="[]" />
         </el-card>
       </el-col>
+    </el-row>
 
-      <!-- ============ 右：节点配置 ============ -->
-      <el-col :span="14">
-        <el-card shadow="never" class="pane">
-          <div slot="header" class="pane-head">
-            <span>{{ panelTitle }}</span>
-            <span class="tip">{{ panelSubtitle }}</span>
-          </div>
+    <!-- ============ 配置抽屉：选中节点/分支后弹出 ============ -->
+    <el-drawer
+      :visible.sync="drawerVisible"
+      direction="rtl"
+      size="540px"
+      custom-class="flow-drawer"
+    >
+      <div slot="title" class="pane-head">
+        <span>{{ panelTitle }}</span>
+        <span class="tip">{{ panelSubtitle }}</span>
+      </div>
 
+      <div class="drawer-body">
           <div v-if="currentNode" class="cfg">
             <el-form label-width="96px" size="small">
               <el-form-item label="节点名称">
@@ -312,8 +318,8 @@
             </el-table-column>
           </el-table>
         </el-card>
-      </el-col>
-    </el-row>
+      </div>
+    </el-drawer>
 
     <!-- 图形化条件组编辑器（字段清单由表单自动提取） -->
     <ConditionEditor
@@ -402,6 +408,8 @@ export default {
       selection: { path: [0] },
       /** 已折叠的泳道，key = 路径字符串 */
       collapsedLanes: {},
+      /** 配置抽屉开关：选中节点/分支时自动弹出 */
+      drawerVisible: false,
       saving: false,
       publishing: false,
       condVisible: false,
@@ -643,6 +651,8 @@ export default {
     },
     selectPath(path) {
       this.selection = { path: (path || []).slice() }
+      // 选中即弹出配置抽屉（画布占满主内容区，配置不常驻占位）
+      this.drawerVisible = true
     },
     /**
      * 取 path 末位元素所在的同级数组。
@@ -1234,9 +1244,25 @@ export default {
       }
     }
   }
+  /* 配置抽屉 */
+  ::v-deep .flow-drawer {
+    .el-drawer__header {
+      margin-bottom: 0;
+      padding: 14px 20px 12px;
+      border-bottom: 1px solid #ebeef5;
+      color: #333;
+    }
+    .el-drawer__body {
+      padding: 0;
+      overflow-y: auto;
+    }
+  }
+  .drawer-body {
+    padding: 14px 20px 20px;
+  }
   .cfg {
-    max-height: 620px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
     padding-right: 6px;
   }
   /* 分支配置面板 */
