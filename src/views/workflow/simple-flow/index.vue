@@ -23,7 +23,7 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList" />
     </el-row>
 
-    <el-table v-loading="loading" :data="list">
+    <el-table v-if="listState === 'ready'" v-loading="loading" :data="list">
       <el-table-column label="流程名称" prop="name" min-width="160" show-overflow-tooltip />
       <el-table-column label="流程标识" prop="defKey" width="180" show-overflow-tooltip />
       <el-table-column label="分类" prop="category" width="100" />
@@ -48,7 +48,28 @@
       </el-table-column>
     </el-table>
 
-    <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize" @pagination="getList" />
+    <pagination v-show="listState === 'ready' && total > 0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize" @pagination="getList" />
+
+    <!--
+      列表的四种状态。这里带 `v-if="listState !== 'ready'"` 是刻意的：
+      表格已在上面渲染，此处只负责加载/空/错误三态，避免正常态下多套一层容器。
+      重点是把「请求失败」和「确实没有数据」区分开 —— 失败时绝不能只给一张空表。
+    -->
+    <StateBlock
+      v-if="listState !== 'ready'"
+      :state="listState"
+      loading-text="正在加载流程列表…"
+      error-title="流程列表加载失败"
+      :error-text="listError"
+      :error-cause="listErrorCause"
+      empty-title="还没有流程"
+      empty-desc="新建一个流程，在画布上配置审批链路后发布即可生效。"
+      @retry="getList"
+    >
+      <template slot="empty-action">
+        <el-button type="primary" size="small" icon="el-icon-plus" @click="handleAdd">新建流程</el-button>
+      </template>
+    </StateBlock>
 
     <!-- 新建流程 -->
     <el-dialog title="新建流程" :visible.sync="addVisible" width="520px" append-to-body>
@@ -96,9 +117,12 @@ import {
   historySimpleFlow,
   delSimpleFlow
 } from '@/api/workflow/simpleFlow'
+import StateBlock from '@/components/StateBlock'
+import { describeError } from '@/utils/errorMessage'
 
 export default {
   name: 'SimpleFlowList',
+  components: { StateBlock },
   data() {
     return {
       loading: false,
@@ -117,7 +141,18 @@ export default {
         ]
       },
       historyVisible: false,
-      historyList: []
+      historyList: [],
+      /** 列表加载失败的信息（null 表示没失败）—— 用于把"失败"和"没数据"分开 */
+      listError: null,
+      listErrorCause: ''
+    }
+  },
+  computed: {
+    /** 列表的四态之一：loading / error / empty / ready */
+    listState() {
+      if (this.loading) return 'loading'
+      if (this.listError) return 'error'
+      return this.list.length ? 'ready' : 'empty'
     }
   },
   created() {
@@ -126,11 +161,20 @@ export default {
   methods: {
     getList() {
       this.loading = true
+      this.listError = null
+      this.listErrorCause = ''
       listSimpleFlow(this.queryParams).then(res => {
         this.list = res.rows || []
         this.total = res.total || 0
         this.loading = false
-      }).catch(() => {
+      }).catch(err => {
+        // 关键：失败时**清空列表**，否则会残留上一次的数据 +
+        // 一个错误提示同时出现，用户没法判断看到的到底是不是最新结果
+        this.list = []
+        this.total = 0
+        const d = describeError(err)
+        this.listError = d.text
+        this.listErrorCause = d.cause
         this.loading = false
       })
     },
@@ -184,37 +228,54 @@ export default {
           this.addVisible = false
           this.$modal.msgSuccess('已创建，进入设计器')
           this.$router.push({ path: '/workflow/simple-flow/designer', query: { id: res.data.id } })
-        }).catch(() => {
+        }).catch(err => {
+          // 创建失败：**保留弹窗与已填内容**，让用户改完直接重试，不要逼他重敲
           this.creating = false
+          this.$modal.msgError('创建失败：' + describeError(err).text)
         })
       })
     },
     handleDesign(row) {
       this.$router.push({ path: '/workflow/simple-flow/designer', query: { id: row.id } })
     },
+    /**
+     * 发布。
+     * ⚠ 这里原来是 `$confirm(...).then(请求).catch(() => {})` —— 一个 catch 同时吞掉了
+     * 「用户点了取消」和「发布请求失败」，后者会导致点了发布没反应也没报错。
+     * 必须把两条路径拆开：外层 catch 只负责取消，请求失败在内层报出来。
+     */
     handlePublish(row) {
       this.$confirm('发布将生成新的流程版本并部署到流程引擎，是否继续？', '提示', { type: 'warning' })
-        .then(() => publishSimpleFlow({ id: row.id, remark: '列表发布' }))
-        .then(res => {
-          this.$modal.msgSuccess('发布成功 v' + res.data.version)
-          this.getList()
+        .then(() => {
+          return publishSimpleFlow({ id: row.id, remark: '列表发布' }).then(res => {
+            this.$modal.msgSuccess('发布成功 v' + res.data.version)
+            this.getList()
+          }).catch(err => {
+            this.$modal.msgError('发布失败：' + describeError(err).text)
+          })
         })
-        .catch(() => {})
+        .catch(() => {}) // 仅：用户取消确认框
     },
     handleHistory(row) {
       historySimpleFlow(row.defKey).then(res => {
         this.historyList = res.data || []
         this.historyVisible = true
+      }).catch(err => {
+        // 原来这里完全没有 catch —— 失败会变成未处理的 Promise 拒绝，界面毫无反馈
+        this.$modal.msgError('版本历史加载失败：' + describeError(err).text)
       })
     },
     handleDelete(row) {
       this.$confirm('确认删除流程「' + row.name + '」？已部署到引擎的流程定义不会自动删除。', '提示', { type: 'warning' })
-        .then(() => delSimpleFlow(row.id))
         .then(() => {
-          this.$modal.msgSuccess('删除成功')
-          this.getList()
+          return delSimpleFlow(row.id).then(() => {
+            this.$modal.msgSuccess('删除成功')
+            this.getList()
+          }).catch(err => {
+            this.$modal.msgError('删除失败：' + describeError(err).text)
+          })
         })
-        .catch(() => {})
+        .catch(() => {}) // 仅：用户取消确认框
     }
   }
 }

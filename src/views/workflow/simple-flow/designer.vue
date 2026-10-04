@@ -27,6 +27,11 @@
         <el-option v-for="f in formOptions" :key="f.id" :label="f.name" :value="f.id" />
       </el-select>
       <span v-if="formDef.list.length" class="tip">已提取 {{ formDef.list.length }} 个字段</span>
+      <!-- 表单下拉本身拉不到时，之前是一个静默的空下拉，用户会以为"系统里没有表单" -->
+      <span v-if="formOptionsError" class="tip warn">
+        <i class="el-icon-warning-outline" /> 表单列表加载失败：{{ formOptionsError }}
+        <el-button type="text" size="mini" @click="loadFormOptions">重试</el-button>
+      </span>
       <el-tag :type="flow.status === '1' ? 'success' : 'info'" size="small">
         {{ flow.status === '1' ? '已发布 v' + flow.version : '草稿' }}
       </el-tag>
@@ -43,10 +48,26 @@
         <el-card shadow="never" class="pane">
           <div slot="header" class="pane-head">
             <span>流程画布</span>
-            <span class="tip">点节点配置 · 点 + 插入 · 分支并列</span>
+            <span class="tip">拖动卡片排序 · 点节点配置 · 点 + 插入 · 分支并列</span>
           </div>
 
-          <FlowTree :nodes="flow.nodes" :path-prefix="[]" />
+          <!--
+            画布外层只管「加载中 / 加载失败 / 正常」三态。**不用空态**：
+            空链的可视空态由 FlowTree 自己的 .ft-empty 负责（每一层嵌套链都要有），
+            在这里再放一个空态会重复。
+            原先 loadFlow() **完全没有 catch**：详情接口一失败，flow.nodes 就是空数组，
+            画布一片空白，用户看到的是"这个流程没有节点"而不是"加载失败了"——必须区分。
+          -->
+          <StateBlock
+            :state="canvasState"
+            loading-text="正在加载流程定义…"
+            error-title="流程定义加载失败"
+            :error-text="loadError"
+            :error-cause="loadErrorCause"
+            @retry="reloadFlow"
+          >
+            <FlowTree :nodes="flow.nodes" :path-prefix="[]" />
+          </StateBlock>
         </el-card>
       </el-col>
     </el-row>
@@ -296,7 +317,14 @@
             <span>表单字段（自动提取）</span>
             <span class="tip">{{ formDef.name || '未关联表单' }}</span>
           </div>
-          <div v-if="!formDef.list.length" class="tip" style="padding:6px 0">
+          <div v-if="formError" class="tip warn" style="padding:6px 0">
+            <i class="el-icon-warning-outline" /> 表单字段加载失败：{{ formError }}
+            <el-button type="text" size="mini" @click="reloadForm">重试</el-button>
+            <br />
+            ⚠ 此时字段清单是空的，它会**跳过发布校验里的字段级检查**（条件字段是否必填、并行分支引用的多选字段是否存在）。
+            请先恢复字段再发布。
+          </div>
+          <div v-else-if="!formDef.list.length" class="tip" style="padding:6px 0">
             未关联表单 → 发布校验会跳过字段级检查（条件字段是否必填、并行分支是否引用多选字段）
           </div>
           <el-table v-else :data="formDef.list" size="mini" max-height="200">
@@ -355,6 +383,8 @@
 <script>
 import ConditionEditor from './ConditionEditor'
 import FlowTree from './FlowTree'
+import StateBlock from '@/components/StateBlock'
+import { describeError } from '@/utils/errorMessage'
 import {
   getSimpleFlow,
   saveSimpleFlowDraft,
@@ -382,7 +412,7 @@ import {
  */
 export default {
   name: 'SimpleFlowDesigner',
-  components: { ConditionEditor, FlowTree },
+  components: { ConditionEditor, FlowTree, StateBlock },
   data() {
     return {
       flow: {
@@ -407,6 +437,11 @@ export default {
       selection: { path: [0] },
       /** 已折叠的泳道，key = 路径字符串 */
       collapsedLanes: {},
+      /**
+       * 拖拽排序的"身份锚点"：拖动开始时记下当前选中对象与已折叠泳道对象，
+       * 拖放结束后按**对象身份**重新解析它们的路径（见 reorderStart / reorderEnd）。
+       */
+      reorderAnchor: null,
       /** 配置抽屉开关：选中节点/分支时自动弹出 */
       drawerVisible: false,
       saving: false,
@@ -416,6 +451,14 @@ export default {
       historyVisible: false,
       historyList: [],
       formOptions: [],
+      /** 关联表单下拉本身加载失败时的原因（此前失败=静默的空下拉） */
+      formOptionsError: '',
+      /** 字段清单加载失败的原因（此前失败=静默的 0 字段，会让发布校验跳过字段级检查） */
+      formError: '',
+      /** 流程定义加载中 / 加载失败（此前 loadFlow 没有 catch，失败就是一片空白画布） */
+      loadingFlow: false,
+      loadError: '',
+      loadErrorCause: '',
       /** 关联的表单及其字段清单（从表单 schema 自动提取，不再手敲字段名） */
       formDef: { id: '', name: '', list: [] },
       assigneeSources: [
@@ -441,6 +484,12 @@ export default {
     }
   },
   computed: {
+    /** 画布三态：加载中 / 加载失败 / 正常（空态交给 FlowTree 自己的 .ft-empty） */
+    canvasState() {
+      if (this.loadingFlow) return 'loading'
+      if (this.loadError) return 'error'
+      return 'ready'
+    },
     /** 路径解析器：偶数位=节点下标，奇数位=泳道下标 */
     resolvePath() {
       return path => {
@@ -595,7 +644,9 @@ export default {
         toggleLane: p => vm.toggleLane(p),
         isSys: n => vm.isSys(n),
         removeNode: p => vm.removeNodeAt(p),
-        moveNode: (p, d) => vm.moveNodeAt(p, d)
+        // 同链拖拽排序：画布在拖前/拖后各回调一次，宿主负责按对象身份重算路径
+        reorderStart: () => vm.reorderStart(),
+        reorderEnd: () => vm.reorderEnd()
       }
     }
   },
@@ -746,19 +797,69 @@ export default {
       this.$set(branches, target, a)
       this.selectPath(path.slice(0, -1).concat([target]))
     },
-    /** 节点排序；起止节点不参与 */
-    moveNodeAt(path, delta) {
-      const nodes = this.siblingsOf(path)
-      if (!nodes) return
-      const idx = path[path.length - 1]
-      const target = idx + delta
-      if (target < 0 || target >= nodes.length) return
-      if (this.isSys(nodes[idx]) || this.isSys(nodes[target])) return
-      const a = nodes[idx]
-      const b = nodes[target]
-      this.$set(nodes, idx, b)
-      this.$set(nodes, target, a)
-      this.selectPath(path.slice(0, -1).concat([target]))
+    /* ---------------- 拖拽排序：重排后按对象身份重解析路径 ---------------- */
+    /**
+     * 拖动开始：把「当前选中对象」和「已折叠的泳道对象」按**引用**记下来。
+     * 不能只记下标 —— 重排后下标必然变，过期的 selection.path 会静默打开另一个节点的配置面板。
+     */
+    reorderStart() {
+      this.reorderAnchor = {
+        selection: this.resolvePath(this.selection.path || []),
+        collapsed: Object.keys(this.collapsedLanes)
+          .filter(k => this.collapsedLanes[k])
+          .map(k => this.resolvePath(k.split('-').map(Number)))
+          .filter(Boolean)
+      }
+    },
+    /**
+     * 拖动结束：遍历整棵树，按对象身份把它们的新路径写回。
+     * 顺序：先修 selection.path（决定右侧配置面板指向谁），再重建 collapsedLanes
+     * （否则泳道折叠标记会留在旧下标上，表现为"另一条泳道莫名其妙是收起的"）。
+     */
+    reorderEnd() {
+      const anchor = this.reorderAnchor
+      this.reorderAnchor = null
+      if (!anchor) return
+      if (anchor.selection) {
+        const path = this.findPathOf(anchor.selection)
+        this.selection = { path: path || this.safeSelectionPath() }
+      }
+      if (anchor.collapsed.length) {
+        const next = {}
+        anchor.collapsed.forEach(br => {
+          const path = this.findPathOf(br)
+          if (path) next[this.laneKey(path)] = true
+        })
+        this.collapsedLanes = next
+      }
+    },
+    /**
+     * 在整棵树里按**对象身份**找路径。
+     * 返回值与 resolvePath 的入参同构（偶数位=节点下标、奇数位=泳道下标）；找不到返回 null。
+     */
+    findPathOf(target) {
+      if (!target) return null
+      const walk = (nodes, prefix) => {
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i]
+          const np = prefix.concat([i])
+          if (node === target) return np
+          const branches = node.branches || []
+          for (let j = 0; j < branches.length; j++) {
+            const br = branches[j]
+            const bp = np.concat([j])
+            if (br === target) return bp
+            const hit = walk(br.nodes || [], bp)
+            if (hit) return hit
+          }
+        }
+        return null
+      }
+      return walk(this.flow.nodes || [], [])
+    },
+    /** 锚点找不到时的安全落点：退回顶层第一个节点；树为空则什么都不选（绝不留在过期下标上） */
+    safeSelectionPath() {
+      return this.flow.nodes && this.flow.nodes.length ? [0] : []
     },
     /** 删除节点；起止节点不可删。删掉最后一个节点时把选中落回所属泳道 */
     removeNodeAt(path) {
@@ -779,24 +880,43 @@ export default {
     },
     /* ---------------- 表单字段（自动提取） ---------------- */
     loadFormOptions() {
+      this.formOptionsError = ''
       listDynamicForm({ pageNum: 1, pageSize: 200 }).then(res => {
         this.formOptions = (res.rows || []).map(r => ({ id: r.id, name: r.name }))
-      }).catch(() => {})
+      }).catch(err => {
+        // 关联表单下拉拉不到 = 后面所有字段驱动的功能都不可用，必须说出来
+        this.formOptionsError = describeError(err).text
+      })
     },
     onFormChange(formId) {
       if (formId) {
         this.loadForm(formId)
       } else {
         this.formDef = { id: '', name: '', list: [] }
+        this.formError = ''
       }
     },
     loadForm(formId) {
+      this.formError = ''
       getDynamicForm(formId).then(res => {
         const d = res.data || {}
         this.formDef.id = d.id
         this.formDef.name = d.name
         this.formDef.list = extractFormFields(d.content)
-      }).catch(() => {})
+      }).catch(err => {
+        // 关键：不能让"拉字段失败"退化成"这个表单没有字段"。
+        // 后者会让发布校验静默跳过字段级检查，等于放行了本该拦下的流程。
+        this.formDef.list = []
+        this.formError = describeError(err).text
+      })
+    },
+    reloadForm() {
+      this.formError = ''
+      if (this.formDef.id) {
+        this.loadForm(this.formDef.id)
+      } else {
+        this.loadFormOptions()
+      }
     },
     /* ---------------- 初始化 ---------------- */
     initEmptyFlow() {
@@ -809,8 +929,11 @@ export default {
       this.selection = { path: [1] }
     },
     loadFlow(id) {
+      this.loadingFlow = true
+      this.loadError = ''
+      this.loadErrorCause = ''
       getSimpleFlow(id).then(res => {
-        const d = res.data
+        const d = res.data || {}
         this.flow.id = d.id
         this.flow.defKey = d.defKey
         this.flow.name = d.name
@@ -825,11 +948,31 @@ export default {
             this.loadForm(content.formId)
           }
         } catch (e) {
+          // 内容不是合法 JSON 属于"数据坏了"，不是"没有节点"——用错误态而不是空态
           this.$modal.msgError('流程内容不是合法 JSON')
           this.flow.nodes = []
+          this.loadError = '流程定义内容不是合法 JSON。'
+          this.loadErrorCause = '该流程的 content 字段已损坏，请从版本历史回滚到可用版本。'
         }
         this.selection = { path: [0] }
+        this.loadingFlow = false
+      }).catch(err => {
+        this.flow.nodes = []
+        const d = describeError(err)
+        this.loadError = d.text
+        this.loadErrorCause = d.cause
+        this.loadingFlow = false
       })
+    },
+    /** 画布错误态的「重试」：按当前路由重新拉一次 */
+    reloadFlow() {
+      const id = this.flow.id || this.$route.query.id
+      if (!id) {
+        this.loadError = ''
+        this.initEmptyFlow()
+        return
+      }
+      this.loadFlow(id)
     },
     /* ---------------- 节点工厂 ---------------- */
     newStart() {
@@ -961,8 +1104,10 @@ export default {
           this.flow.id = res.data.id
         }
         this.$modal.msgSuccess('草稿已保存')
-      }).catch(() => {
+      }).catch(err => {
+        // 原来只把 saving 置回 false —— 保存失败用户看不到任何提示，会以为存上了
         this.saving = false
+        this.$modal.msgError('草稿保存失败：' + describeError(err).text)
       })
     },
     handlePublish() {
@@ -991,11 +1136,14 @@ export default {
             this.flow.version = r.data.version
             this.flow.deployId = r.data.deployId
             this.$modal.msgSuccess('发布成功 v' + r.data.version)
-          }).catch(() => {
+          }).catch(err => {
+            // 原来这里静默重置 publishing：点了发布，没反应也没报错
             this.publishing = false
+            this.$modal.msgError('发布失败：' + describeError(err).text)
           })
         }
         if (warns.length) {
+          // 外层 catch 只吃掉"用户点了取消"，发布失败由 doPublish 内部报出来
           this.$confirm(warns.map(w => '· ' + w.message).join('<br/>'), '存在提示项，是否继续发布？', {
             dangerouslyUseHTMLString: true,
             type: 'warning'
@@ -1003,6 +1151,9 @@ export default {
         } else {
           doPublish()
         }
+      }).catch(err => {
+        // 校验接口本身失败：不能当成"校验通过"就往下发布
+        this.$modal.msgError('发布前校验未完成：' + describeError(err).text)
       })
     },
     showIssues(blocks, warns) {
@@ -1025,6 +1176,8 @@ export default {
       previewSimpleFlow(this.flow.id).then(res => {
         this.previewXml = res.xml || res.msg || ''
         this.previewVisible = true
+      }).catch(err => {
+        this.$modal.msgError('编译预览失败：' + describeError(err).text)
       })
     },
     handleHistory() {
@@ -1032,16 +1185,21 @@ export default {
       historySimpleFlow(this.flow.defKey).then(res => {
         this.historyList = res.data || []
         this.historyVisible = true
+      }).catch(err => {
+        this.$modal.msgError('版本历史加载失败：' + describeError(err).text)
       })
     },
     handleRollback(row) {
       this.$confirm('将以 v' + row.version + ' 的内容重新发布（生成新版本，历史不可改），是否继续？', '提示', {
         type: 'warning'
       }).then(() => {
-        rollbackSimpleFlow({ defKey: this.flow.defKey, version: row.version }).then(res => {
+        // 内层 catch 单独接住回滚失败；外层 catch 只负责"用户取消"
+        return rollbackSimpleFlow({ defKey: this.flow.defKey, version: row.version }).then(res => {
           this.$modal.msgSuccess('已回滚并发布为 v' + res.data.version)
           this.historyVisible = false
           this.loadFlow(this.flow.id)
+        }).catch(err => {
+          this.$modal.msgError('回滚失败：' + describeError(err).text)
         })
       }).catch(() => {})
     },
@@ -1121,135 +1279,12 @@ export default {
   .tip.warn {
     color: #c0392b;
   }
-  .node-wrap {
-    margin-bottom: 4px;
-  }
-  .node-card {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid #d8d8d8;
-    background: #fff;
-    border-radius: 4px;
-    padding: 7px 10px;
-    cursor: pointer;
-    font-size: 13px;
-    &:hover {
-      border-color: #b5b5b5;
-    }
-    &.active {
-      border: 2px solid #6b6b6b;
-      background: #fbfbfb;
-    }
-    &.sys {
-      background: #f7f7f7;
-      color: #666;
-    }
-    .idx {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      border: 1px solid #999;
-      background: #f0f0f0;
-      color: #555;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      flex: none;
-      &.dot {
-        border: none;
-        background: transparent;
-        font-size: 12px;
-      }
-    }
-    .nm {
-      font-weight: 500;
-    }
-    .summary {
-      color: #999;
-      font-size: 12px;
-      margin-left: auto;
-    }
-  }
-  .insert-line {
-    padding: 2px 0 2px 20px;
-    color: #999;
-  }
-  .branch-box {
-    margin: 4px 0 4px 20px;
-    border-left: 2px dashed #d0b070;
-    padding-left: 10px;
-  }
-  .branch-item {
-    border: 1px solid #eee;
-    border-radius: 4px;
-    padding: 6px 8px;
-    margin-bottom: 6px;
-    background: #fdfdfd;
-  }
-  .branch-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    font-size: 12px;
-    .branch-name {
-      color: #8a6d1f;
-      font-weight: 500;
-    }
-    .fr {
-      margin-left: auto;
-    }
-  }
-  .cond-chip {
-    border: 1px solid #bbb;
-    border-radius: 10px;
-    padding: 0 8px;
-    color: #555;
-    background: #fff;
-  }
-  .tag-default {
-    color: #999;
-  }
-  .branch-body {
-    margin-top: 4px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .sub-node {
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    padding: 2px 8px;
-    font-size: 12px;
-    color: #555;
-    background: #fff;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    &:hover {
-      border-color: #b5b5b5;
-    }
-    &.active {
-      border: 2px solid #6b6b6b;
-      background: #fbfbfb;
-    }
-    .sub-sum {
-      color: #b0b0b0;
-      font-style: normal;
-      font-size: 11px;
-    }
-    i {
-      margin-left: 2px;
-      color: #bbb;
-      cursor: pointer;
-      &:hover {
-        color: #666;
-      }
-    }
-  }
+  /*
+   * 旧的「缩进清单」布局样式（.node-wrap / .node-card / .insert-line / .branch-box /
+   * .branch-item / .branch-head / .cond-chip / .tag-default / .branch-body / .sub-node
+   * 以及只在它们下面嵌套的 .idx / .nm / .summary / .sub-sum / .branch-name / .fr）
+   * 已全部搬到 FlowTree.vue 的画布样式里，designer.vue 模板中零引用，故删除。
+   */
   /* 配置抽屉 */
   ::v-deep .flow-drawer {
     .el-drawer__header {
@@ -1287,20 +1322,6 @@ export default {
     border: 1px solid #cbe7d7;
     border-radius: 10px;
     padding: 0 10px;
-  }
-  .cond-text {
-    display: inline-block;
-    max-width: 320px;
-    font-size: 12px;
-    line-height: 20px;
-    color: #666;
-    background: #f5f7fa;
-    border: 1px solid #e4e8ee;
-    border-radius: 4px;
-    padding: 0 10px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .xml-pre {
     padding: 12px;
