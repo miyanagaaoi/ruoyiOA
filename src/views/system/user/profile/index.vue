@@ -51,6 +51,10 @@
             <el-tab-pane label="修改密码" name="resetPwd">
               <resetPwd />
             </el-tab-pane>
+            <!-- 预存签名（PRD 8.4）：入口就放在个人中心，与"我的头像/我的资料"同级 -->
+            <el-tab-pane label="我的签名" name="mySign">
+              <mySign />
+            </el-tab-pane>
           </el-tabs>
         </el-card>
       </el-col>
@@ -62,11 +66,12 @@
 import userAvatar from "./userAvatar"
 import userInfo from "./userInfo"
 import resetPwd from "./resetPwd"
+import mySign from "./mySign"
 import { getUserProfile } from "@/api/system/user"
 
 export default {
   name: "Profile",
-  components: { userAvatar, userInfo, resetPwd },
+  components: { userAvatar, userInfo, resetPwd, mySign },
   data() {
     return {
       user: {},

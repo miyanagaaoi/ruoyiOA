@@ -153,7 +153,7 @@ import { restoreSeal } from "@/api/workflow/mainText";
 import SelectUser from "./component/select-user";
 import DeleteMulti from "./component/delete-multi.vue";
 import SignaturePad from "@/components/SignaturePad";
-import { listEffectiveSigns } from "@/api/workflow/sign";
+import { listEffectiveSigns, getSignPolicy } from "@/api/workflow/sign";
 import { describeError } from "@/utils/errorMessage";
 
 export default {
@@ -217,6 +217,12 @@ export default {
       signVisible: false,
       /** 本节点当前有效的签名图片路径（空 = 未签） */
       signedFileId: "",
+      /**
+       * 本节点签名策略（`{signMode, signTypes, signRequired}`，服务端解释口径见
+       * SignPolicyReader）。取不到时为 null —— 只影响"提前拦一下"的体验，
+       * 真正的强制在服务端 TaskSignGuard，不依赖它。
+       */
+      signPolicy: null,
       bizName: null, // 业务名称
       startUser: null, // 发起人信息,
       // 常用意见查询参数
@@ -292,6 +298,7 @@ export default {
         this.taskForm.taskId = res.data.taskId;
         this.taskForm.taskDefKey = res.data.taskDefKey;
         this.loadSigned();
+        this.loadSignPolicy();
         this.taskForm.defId = res.data.procDefId;
         this.taskForm.deployId = res.data.deployId;
         this.taskForm.procInsId = res.data.procInsId;
@@ -332,6 +339,23 @@ export default {
           this.signedFileId = map[taskId] || "";
         })
         .catch(() => {});
+    },
+    /**
+     * 载入本节点签名策略（PRD 8.2 / AC-26）。
+     *
+     * 只用来"提前拦住并给明确提示" —— 真实验证在服务端（`TaskSignGuard`），
+     * 所以这里失败就静默降级为"未配置"，绝不能因为它把提交弄坏。
+     */
+    loadSignPolicy() {
+      const taskId = this.taskForm.taskId;
+      if (!taskId) return;
+      getSignPolicy(taskId)
+        .then((res) => {
+          this.signPolicy = (res && res.data) || null;
+        })
+        .catch(() => {
+          this.signPolicy = null;
+        });
     },
     handleButtonClick(btnCode) {
       switch (btnCode) {
@@ -402,6 +426,11 @@ export default {
           this.taskForm.procInsId = res.data.procInsId;
           this.taskForm.executionId = res.data.executionId;
           this.getButtons();
+          // 审批页也要能显示"已签名 / 重新签名"（AC-28）与节点签名要求（AC-26）。
+          // 必须放在这里：两个方法都读 taskForm.taskId，而这个字段刚在上一步写入，
+          // 放到 getFlowTask 的 await 之后会读到空值（getTask 没有 await）。
+          this.loadSigned();
+          this.loadSignPolicy();
         }
       });
       // 流程任务获取变量信息
@@ -735,6 +764,13 @@ export default {
       }
       if (this.requiredCmt && (!this.comment || this.comment.trim() === "")) {
         this.$message.error("请填写审批意见");
+        return;
+      }
+      // AC-26 前端这一半：节点要求"必须签名"而本节点还没签 → 提前拦下并说清怎么做。
+      // 服务端（TaskSignGuard）有一份同样的校验，绕过前端也会被拒；
+      // 这里只是把"提交后才报错"变成"点提交就知道"，不承担强制职责。
+      if (this.signPolicy && this.signPolicy.signRequired && !this.signedFileId) {
+        this.$message.error("本节点要求签名后才能提交，请先点击「签名」完成签名");
         return;
       }
       if (this.isCustomForm) {

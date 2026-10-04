@@ -42,6 +42,96 @@ export function listEffectiveSigns(businessId) {
   })
 }
 
+/* ==================== 节点签名策略（PRD 8.2 / AC-25） ==================== */
+
+/**
+ * 当前任务节点的签名策略：`{ signMode, signTypes[], signRequired }`。
+ *
+ * 签名弹窗靠它决定"这个节点允许手写还是预存"—— PRD 8.2 的「允许方式」生效点。
+ * `signTypes` 缺省为 `['HANDWRITE', 'PRESET']`（PRD 默认值），服务端已把默认值补好，
+ * 前端不要再自己补一遍，否则两处默认值迟早会不一致。
+ *
+ * ⚠ 这个接口**失败不该挡住签名**：拿不到策略时按"两种都允许"处理（fail-open）。
+ */
+export function getSignPolicy(taskId) {
+  return request({
+    url: '/workflow/sign/policy',
+    method: 'get',
+    params: { taskId: taskId }
+  })
+}
+
+/* ==================== 预存签名（PRD 8.4 / AC-29、AC-30） ==================== */
+
+/**
+ * 我的预存签名列表（服务端按当前登录用户过滤，默认签名排最前）。
+ *
+ * 归属校验在服务端做 —— 前端拿到的天生只有自己的，不需要也不应该再筛一遍。
+ */
+export function listMySignPresets() {
+  return request({
+    url: '/workflow/sign/preset/list',
+    method: 'get'
+  })
+}
+
+/**
+ * 我的默认预存签名；**没有配过时 data 为 null**。
+ *
+ * "没有默认签名"是正常状态而不是错误，调用方据此决定「一键使用默认签名」
+ * 是否可用即可，不要去猜、也不要弹错误提示。
+ */
+export function getDefaultSignPreset() {
+  return request({
+    url: '/workflow/sign/preset/default',
+    method: 'get'
+  })
+}
+
+/**
+ * 新增预存签名。
+ *
+ * 只传 `{name, fileId}`：user_id / 默认标记 / 状态 / 时间全部由服务端决定。
+ * **第一枚自动成为默认**；显式传 `isDefault: '1'` 也会在同一事务内先清后置。
+ */
+export function addSignPreset(data) {
+  return request({
+    url: '/workflow/sign/preset',
+    method: 'post',
+    data: data
+  })
+}
+
+/**
+ * 改名（`name`）或停用启用（`status`：'0' 停用 / '1' 启用）。
+ *
+ * 服务端只接受这两个字段，传别的一律忽略 —— 签名图不可替换，
+ * 换图应该新增一枚，否则已引用它的历史签名记录会被动改观。
+ */
+export function updateSignPreset(data) {
+  return request({
+    url: '/workflow/sign/preset',
+    method: 'put',
+    data: data
+  })
+}
+
+/** 设为默认（服务端同一事务内先清后置，保证同一用户只有一个默认） */
+export function setDefaultSignPreset(id) {
+  return request({
+    url: '/workflow/sign/preset/default/' + id,
+    method: 'put'
+  })
+}
+
+/** 删除（逻辑删：签名图可能已被历史签名记录引用） */
+export function delSignPreset(id) {
+  return request({
+    url: '/workflow/sign/preset/' + id,
+    method: 'delete'
+  })
+}
+
 /** dataURL(base64) -> Blob */
 export function dataURLtoBlob(dataURL) {
   const arr = String(dataURL).split(',')
