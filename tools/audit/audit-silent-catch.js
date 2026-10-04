@@ -11,6 +11,44 @@
 const fs = require('fs')
 const path = require('path')
 
+if (process.argv.includes('--selftest')) {
+  const { makeFixtureDir, runSelfOn, finish } = require('./_selftest')
+  const dir = makeFixtureDir({
+    // 3 处应当被清点出来：空 catch、只有空格的 catch、只有注释的 catch
+    'three.vue': `<script>
+export default {
+  methods: {
+    a() { delX().catch(() => {}); },
+    b() { delY().catch(() => { }); },
+    c() { delZ().catch(() => {
+      // 取消
+    }); }
+  }
+}
+</script>`,
+    // 阴性：catch 里有语句 -> 不算"静默"
+    'none.vue': `<script>
+export default {
+  methods: {
+    a() { delX().catch(() => { this.loading = false; }); },
+    b() { delY().catch((e) => { console.warn(e); }); },
+    c() { delZ().then(() => {}); }
+  }
+}
+</script>`
+  })
+  const r = runSelfOn(__filename, dir)
+  const hits = Array.isArray(r.json) ? r.json : []
+  const byFile = {}
+  hits.forEach(h => { byFile[h.file] = (byFile[h.file] || 0) + 1 })
+  finish('audit-silent-catch', dir, [
+    { label: '脚本能跑通', pass: r.code === 0, detail: r.code === 0 ? '' : r.out.slice(0, 200) },
+    { label: 'three.vue 清点出 3 处', pass: byFile['three.vue'] === 3, detail: '实际 ' + (byFile['three.vue'] || 0) },
+    { label: 'none.vue 一处都不报', pass: !byFile['none.vue'], detail: '实际 ' + (byFile['none.vue'] || 0) },
+    { label: '总数正好 3', pass: hits.length === 3, detail: '实际 ' + hits.length }
+  ])
+}
+
 const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 const files = []
 ;(function walk(dir) {

@@ -31,10 +31,83 @@ function findNodeModules(start) {
   }
   return null
 }
-const NM = findNodeModules(SRC)
-if (!NM) { console.error('找不到 node_modules/@babel/parser（从 ' + SRC + ' 向上查找失败）'); process.exit(1) }
+const NM = process.env.DSH_AUDIT_NM || findNodeModules(SRC) || findNodeModules('H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src')
+if (!NM) { console.error('找不到 node_modules/@babel/parser（可用 DSH_AUDIT_NM 指定路径）'); process.exit(1) }
 const parser = require(path.join(NM, '@babel', 'parser'))
 const traverse = require(path.join(NM, '@babel', 'traverse')).default
+
+if (process.argv.includes('--selftest')) {
+  const { makeFixtureDir, runSelfOn, finish } = require('./_selftest')
+  process.env.DSH_AUDIT_NM = NM
+  const dir = makeFixtureDir({
+    // 真风险：模板绑定里在用，但没在 data 里声明 -> 模板永远不会更新
+    'risky.vue': `<template>
+  <div>{{ foo }}</div>
+</template>
+<script>
+export default {
+  data() { return { ok: 1 } },
+  methods: { m() { this.foo = 'x'; } }
+}
+</script>`,
+    // 无害：赋值了但名字**不在任何模板绑定里** -> 死代码/暂存
+    'benign-dead.vue': `<template>
+  <div>{{ ok }}</div>
+</template>
+<script>
+export default {
+  data() { return { ok: 1 } },
+  methods: { m() { this.deadField = 'x'; } }
+}
+</script>`,
+    // 阴性：已声明 -> 既不 risky 也不 benign
+    'good-declared.vue': `<template>
+  <div>{{ baz }}</div>
+</template>
+<script>
+export default {
+  data() { return { baz: 1 } },
+  methods: { m() { this.baz = 2; } }
+}
+</script>`,
+    // 回归断言（§10 踩过的坑）：静态 class 名 "json-editor" 不等于模板里绑定了 jsonEditor
+    'static-class.vue': `<template>
+  <div id="editorJson" class="json-editor">{{ ok }}</div>
+</template>
+<script>
+export default {
+  data() { return { ok: 1 } },
+  methods: { m() { this.jsonEditor = 'x'; } }
+}
+</script>`,
+    // 阴性：v-for 别名与 slot-scope 解构不是 this 上的属性
+    'good-scope.vue': `<template>
+  <div>
+    <span v-for="(it, i) in list" :key="i">{{ it.name }}</span>
+    <el-table :data="list"><template slot-scope="{ row }">{{ row.a }}</template></el-table>
+  </div>
+</template>
+<script>
+export default {
+  data() { return { list: [] } },
+  methods: { m() { this.list = [1]; this.keepOut = 2; } }
+}
+</script>`
+  })
+  const r = runSelfOn(__filename, dir)
+  const j = r.json || {}
+  const risky = (j.risky || []).map(h => h.file)
+  const benign = (j.benign || []).map(h => h.file)
+  finish('audit-undeclared-writes', dir, [
+    { label: '脚本能跑通', pass: r.code === 0, detail: r.code === 0 ? '' : r.out.slice(0, 300) },
+    { label: 'risky 抓到 risky.vue', pass: risky.includes('risky.vue'), detail: 'risky：' + (risky.join(', ') || '(空)') },
+    { label: 'benign 含 benign-dead.vue', pass: benign.includes('benign-dead.vue') },
+    { label: '静态 class 名不算模板引用（§10 的坑）', pass: !risky.includes('static-class.vue') },
+    { label: '已声明的 good-declared.vue 两边都不报', pass: !risky.includes('good-declared.vue') && !benign.includes('good-declared.vue') },
+    { label: 'v-for/slot-scope 解构不被误当属性', pass: !risky.includes('good-scope.vue') },
+    { label: 'risky 总数正好 1', pass: risky.length === 1, detail: '实际 ' + risky.length }
+  ])
+}
 
 const PARSER_OPTS = {
   sourceType: 'module', errorRecovery: true,

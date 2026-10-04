@@ -11,6 +11,76 @@
 const fs = require('fs')
 const path = require('path')
 
+if (process.argv.includes('--selftest')) {
+  const { makeFixtureDir, runSelfOn, finish } = require('./_selftest')
+  const dir = makeFixtureDir({
+    // 阳性：置了 loading、有 .then、成功路径复位、**没有 catch**
+    'bad.vue': `<script>
+export default {
+  data() { return { loading: false, list: [] } },
+  methods: {
+    getList() {
+      this.loading = true;
+      listX(this.queryParams).then((res) => {
+        this.list = res.rows;
+        this.loading = false;
+      });
+    }
+  }
+}
+</script>`,
+    // 阴性①：有 catch
+    'good-catch.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    getList() {
+      this.loading = true;
+      listX().then((res) => { this.loading = false; }).catch((e) => { this.loading = false; });
+    }
+  }
+}
+</script>`,
+    // 阴性②：多行链，catch 另起一行
+    'good-multiline.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    getList() {
+      this.loading = true;
+      listX()
+        .then((res) => { this.loading = false; })
+        .catch((e) => { this.loading = false; });
+    }
+  }
+}
+</script>`,
+    // 阴性③：置了 loading 也复位，但没有 .then（不是本审计的目标形态）
+    'good-nothen.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    sync() {
+      this.loading = true;
+      this.loading = false;
+    }
+  }
+}
+</script>`
+  })
+  const r = runSelfOn(__filename, dir)
+  const hits = Array.isArray(r.json) ? r.json : []
+  const files = hits.map(h => h.file)
+  finish('audit-then-loaders', dir, [
+    { label: '脚本能跑通', pass: r.code === 0, detail: r.code === 0 ? '' : r.out.slice(0, 200) },
+    { label: '抓到阳性 bad.vue', pass: files.includes('bad.vue'), detail: '实际：' + (files.join(', ') || '(空)') },
+    { label: '没有误报 good-catch.vue', pass: !files.includes('good-catch.vue') },
+    { label: '没有误报 good-multiline.vue', pass: !files.includes('good-multiline.vue') },
+    { label: '没有误报 good-nothen.vue', pass: !files.includes('good-nothen.vue') },
+    { label: '命中数正好 1', pass: hits.length === 1, detail: '实际 ' + hits.length }
+  ])
+}
+
 const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 const files = []
 ;(function walk(dir) {

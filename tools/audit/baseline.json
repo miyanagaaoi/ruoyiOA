@@ -1,0 +1,12 @@
+{
+  "updatedAt": "2026-10-04T04:22:42.724Z",
+  "src": "H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src",
+  "counts": {
+    "audit-then-loaders.js": 0,
+    "audit-async-loaders.js": 0,
+    "audit-silent-catch.js": 69,
+    "audit-loading-pairs.js": 3,
+    "audit-undeclared-writes.js": 0,
+    "audit-template-refs.js": 1
+  }
+}

@@ -36,13 +36,86 @@ function findNodeModules(start) {
   }
   return null
 }
-const NM = findNodeModules(SRC)
+// 依赖定位的兜底顺序：环境变量 -> 从 SRC 向上找 -> 默认仓库路径。
+// 自检时 SRC 指向临时目录（那里没有 node_modules），所以必须有后两级兜底。
+const DEFAULT_REPO_SRC = 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const NM = process.env.DSH_AUDIT_NM || findNodeModules(SRC) || findNodeModules(DEFAULT_REPO_SRC)
 if (!NM) {
-  console.error('找不到可用的 node_modules/@babel/parser（从 ' + SRC + ' 向上查找失败）')
+  console.error('找不到可用的 node_modules/@babel/parser（可用 DSH_AUDIT_NM 指定路径）')
   process.exit(1)
 }
 const parser = require(path.join(NM, '@babel', 'parser'))
 const traverse = require(path.join(NM, '@babel', 'traverse')).default
+
+if (process.argv.includes('--selftest')) {
+  const { makeFixtureDir, runSelfOn, finish } = require('./_selftest')
+  process.env.DSH_AUDIT_NM = NM // 子进程在临时目录里跑，要把依赖位置传下去
+  const dir = makeFixtureDir({
+    // 阳性：成功路径的复位移在 if (res.code === 200) 内 -> code 非 200 时永久转圈
+    'bad-conditional.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    getList() {
+      this.loading = true;
+      listX().then((res) => {
+        if (res.code === 200) { this.list = res.rows; this.loading = false; }
+      }).catch((err) => { this.loading = false; });
+    }
+  }
+}
+</script>`,
+    // 阳性2：失败路径根本没有复位（没有 catch）
+    'bad-nocatch.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    getList() {
+      this.loading = true;
+      listX().then((res) => { this.list = res.rows; this.loading = false; });
+    }
+  }
+}
+</script>`,
+    // 阴性：finally 复位，天然覆盖两条路径
+    'good-finally.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    getList() {
+      this.loading = true;
+      listX().then((res) => { this.list = res.rows; }).catch((err) => { this.list = []; })
+        .finally(() => { this.loading = false; });
+    }
+  }
+}
+</script>`,
+    // 阴性：then 与 catch 各自无条件复位
+    'good-both.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    getList() {
+      this.loading = true;
+      listX().then((res) => { this.list = res.rows; this.loading = false; })
+        .catch((err) => { this.list = []; this.loading = false; });
+    }
+  }
+}
+</script>`
+  })
+  const r = runSelfOn(__filename, dir)
+  const hits = Array.isArray(r.json) ? r.json : []
+  const files = hits.map(h => h.file)
+  finish('audit-loading-pairs', dir, [
+    { label: '脚本能跑通', pass: r.code === 0, detail: r.code === 0 ? '' : r.out.slice(0, 300) },
+    { label: '抓到 bad-conditional.vue', pass: files.includes('bad-conditional.vue'), detail: '实际：' + (files.join(', ') || '(空)') },
+    { label: '抓到 bad-nocatch.vue', pass: files.includes('bad-nocatch.vue') },
+    { label: '没有误报 good-finally.vue', pass: !files.includes('good-finally.vue') },
+    { label: '没有误报 good-both.vue', pass: !files.includes('good-both.vue') },
+    { label: '命中数正好 2', pass: hits.length === 2, detail: '实际 ' + hits.length }
+  ])
+}
 
 const PARSER_OPTS = {
   sourceType: 'module',

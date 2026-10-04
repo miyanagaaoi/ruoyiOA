@@ -14,6 +14,75 @@
 const fs = require('fs')
 const path = require('path')
 
+if (process.argv.includes('--selftest')) {
+  const { makeFixtureDir, runSelfOn, finish } = require('./_selftest')
+  const dir = makeFixtureDir({
+    // 阳性：await 取数、置了 loading、**没有 try**
+    'bad.vue': `<script>
+export default {
+  data() { return { loading: false, list: [] } },
+  methods: {
+    async getList() {
+      this.loading = true;
+      const res = await listX(this.queryParams);
+      this.list = res.rows;
+      this.loading = false;
+    }
+  }
+}
+</script>`,
+    // 阴性①：有 try/catch/finally
+    'good-try.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    async getList() {
+      this.loading = true;
+      try { const res = await listX(); this.list = res.rows; }
+      catch (e) { this.list = []; }
+      finally { this.loading = false; }
+    }
+  }
+}
+</script>`,
+    // 阴性②：置了 loading 但没有 await（不是本审计的目标形态）
+    'good-noawait.vue': `<script>
+export default {
+  data() { return { loading: false } },
+  methods: {
+    sync() {
+      this.loading = true;
+      listX().then(() => { this.loading = false; }).catch(() => {});
+    }
+  }
+}
+</script>`,
+    // 阴性③：有 await 但没置 loading（没有"永久转圈"可谈）
+    'good-noloading.vue': `<script>
+export default {
+  data() { return { list: [] } },
+  methods: {
+    async load() {
+      const res = await listX();
+      this.list = res.rows;
+    }
+  }
+}
+</script>`
+  })
+  const r = runSelfOn(__filename, dir)
+  const hits = Array.isArray(r.json) ? r.json : []
+  const files = hits.map(h => h.file)
+  finish('audit-async-loaders', dir, [
+    { label: '脚本能跑通', pass: r.code === 0, detail: r.code === 0 ? '' : r.out.slice(0, 200) },
+    { label: '抓到阳性 bad.vue', pass: files.includes('bad.vue'), detail: '实际：' + (files.join(', ') || '(空)') },
+    { label: '没有误报 good-try.vue', pass: !files.includes('good-try.vue') },
+    { label: '没有误报 good-noawait.vue', pass: !files.includes('good-noawait.vue') },
+    { label: '没有误报 good-noloading.vue', pass: !files.includes('good-noloading.vue') },
+    { label: '命中数正好 1', pass: hits.length === 1, detail: '实际 ' + hits.length }
+  ])
+}
+
 const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 const files = []
 ;(function walk(dir) {
