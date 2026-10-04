@@ -1,7 +1,6 @@
 package com.ruoyi.workflow.mapper;
 
 import com.ruoyi.workflow.domain.SignRecord;
-import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -19,14 +18,13 @@ public interface SignRecordMapper {
     /** 新增（只追加） */
     int insert(SignRecord signRecord);
 
-    /** 某单据的全部签名记录（按签名时间升序，便于取"每个节点的最新一条"） */
+    /**
+     * 某单据的全部签名记录（按 sign_time, id 升序）。
+     *
+     * <p> ⚠ 这个顺序**不能**当作业务顺序用："最新一条"必须由哈希链决定
+     * （{@code SignChain}）—— 同一秒内的重签+撤销，会因随机 uuid 的大小而判反。 </p>
+     */
     List<SignRecord> selectByBusinessId(String businessId);
-
-    /** 某单据的最后一条记录（取 prevHash 用；按签名时间倒序） */
-    SignRecord selectLatestByBusinessId(String businessId);
-
-    /** 某任务的最新一条有效签名（撤销后取不到，用于"是否已签"判定） */
-    SignRecord selectLatestByTask(@Param("businessId") String businessId, @Param("taskId") String taskId);
 
     /**
      * 取业务ID对应的表单快照原文（表 {@code t_workflow_form}，主键即业务ID）。

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workflow.mapper.AccessCheckMapper">
+
+    <!--
+        单据可见性命中数（PRD 11.3 / AC-35）。
+
+        四张表 union 成"是否可见"，与列表页的数据来源保持一致：
+          · t_workflow_todo.cur_handler  待办（含候选人/加签 → 有 todo 行就能看到）
+          · t_workflow_done.handler      已办
+          · t_workflow_recycle.create_id 回收站（本人删掉的件）
+          · t_workflow_form.create_id    发起人 / 草稿所有者
+
+        ⚠ t_workflow_form 与 t_workflow_done **没有** del_flag（表单本体不做逻辑删，
+          已办记录随流程走），另两张有 —— 必须带上，否则删掉的待办/回收站记录
+          仍然会给出查看权。
+    -->
+    <select id="countViewerHit" resultType="int">
+        select (
+            (select count(1) from t_workflow_todo
+              where business_id = #{businessId} and cur_handler = #{userId} and del_flag = '0')
+          + (select count(1) from t_workflow_done
+              where business_id = #{businessId} and handler = #{userId})
+          + (select count(1) from t_workflow_recycle
+              where business_id = #{businessId} and create_id = #{userId} and del_flag = '0')
+          + (select count(1) from t_workflow_form
+              where id = #{businessId} and create_id = #{userId})
+        )
+    </select>
+
+    <!--
+        任务归属命中数（AC-35：非本任务办理人调用签名接口返回 403）。
+
+        为什么同时查三处：ASSIGNEE_ 是主路径；候选人（未签收）在 ACT_RU_IDENTITYLINK；
+        加签/转办等由应用侧写 t_workflow_todo —— 任何一处命中都算"这个任务是我的"。
+        反过来：三处都不命中才拒绝，不会把正常的办理人挡在门外。
+    -->
+    <select id="countTaskOwnerHit" resultType="int">
+        select (
+            (select count(1) from ACT_RU_TASK t
+              where t.ID_ = #{taskId} and t.ASSIGNEE_ = #{userId})
+          + (select count(1) from ACT_RU_IDENTITYLINK l
+              where l.TASK_ID_ = #{taskId} and l.USER_ID_ = #{userId})
+          + (select count(1) from t_workflow_todo d
+              where d.task_id = #{taskId} and d.cur_handler = #{userId} and d.del_flag = '0')
+        )
+    </select>
+
+</mapper>

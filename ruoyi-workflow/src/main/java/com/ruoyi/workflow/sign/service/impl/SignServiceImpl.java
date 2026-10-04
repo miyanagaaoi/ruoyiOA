@@ -5,6 +5,8 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.flowable.factory.FlowServiceFactory;
 import com.ruoyi.workflow.domain.SignRecord;
 import com.ruoyi.workflow.mapper.SignRecordMapper;
+import com.ruoyi.workflow.sign.SignChain;
+import com.ruoyi.workflow.sign.guard.TaskOwnershipGuard;
 import com.ruoyi.workflow.sign.service.ISignService;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.engine.history.HistoricProcessInstance;
@@ -19,7 +21,6 @@ import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,12 +47,18 @@ public class SignServiceImpl extends FlowServiceFactory implements ISignService 
     @Autowired
     private SignRecordMapper signRecordMapper;
 
+    @Autowired
+    private TaskOwnershipGuard taskOwnershipGuard;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public SignRecord sign(SignRecord req, String ip, String userAgent) {
         if (req == null || StringUtils.isBlank(req.getBusinessId())) {
             throw new ServiceException("签名缺少业务ID");
         }
+        // AC-35：只能给自己的任务签名。放在最前面 —— 越权请求不该在库里留下任何痕迹，
+        // 也不该有机会读到"这个 businessId 下有没有签名"这种信息。
+        taskOwnershipGuard.requireMine(req.getTaskId());
         String signType = StringUtils.isBlank(req.getSignType())
                 ? SignRecord.TYPE_HANDWRITE : req.getSignType();
         if (SignRecord.TYPE_REVOKE.equals(signType)) {
@@ -79,7 +86,8 @@ public class SignServiceImpl extends FlowServiceFactory implements ISignService 
         r.setSignIp(ip);
         r.setUserAgent(userAgent);
         r.setFormDataHash(sha256OrNull(loadFormData(businessId)));
-        SignRecord last = signRecordMapper.selectLatestByBusinessId(businessId);
+        // 上一条 = 哈希链的链尾（**不是** order by sign_time desc 的那条，见 SignChain 的说明）
+        SignRecord last = SignChain.tip(signRecordMapper.selectByBusinessId(businessId));
         r.setPrevHash(last == null ? null : last.getRecordHash());
         r.setRecordHash(sha256(chainOf(r)));
         signRecordMapper.insert(r);
@@ -92,7 +100,10 @@ public class SignServiceImpl extends FlowServiceFactory implements ISignService 
         if (StringUtils.isBlank(businessId) || StringUtils.isBlank(taskId)) {
             throw new ServiceException("撤销签名需要业务ID与任务ID");
         }
-        SignRecord latest = signRecordMapper.selectLatestByTask(businessId, taskId);
+        // 撤销同样是"对着自己的任务"的动作，越权校验与签名一致
+        taskOwnershipGuard.requireMine(taskId);
+        // "该任务当前最新一条"同样由哈希链决定：同一秒内的重签+撤销不会判反
+        SignRecord latest = SignChain.latestByTask(signRecordMapper.selectByBusinessId(businessId)).get(taskId);
         if (latest == null || SignRecord.TYPE_REVOKE.equals(latest.getSignType())) {
             throw new ServiceException("该节点当前没有可撤销的签名");
         }
@@ -111,7 +122,8 @@ public class SignServiceImpl extends FlowServiceFactory implements ISignService 
         r.setSignIp(ip);
         r.setUserAgent(StringUtils.isBlank(reason) ? userAgent : userAgent + " | 撤签原因：" + reason);
         r.setFormDataHash(sha256OrNull(loadFormData(businessId)));
-        SignRecord last = signRecordMapper.selectLatestByBusinessId(businessId);
+        // 撤销记录也要接在链尾，否则"链断在撤销处"，后面再签就丢了历史
+        SignRecord last = SignChain.tip(signRecordMapper.selectByBusinessId(businessId));
         r.setPrevHash(last == null ? null : last.getRecordHash());
         r.setRecordHash(sha256(chainOf(r)));
         signRecordMapper.insert(r);
@@ -126,9 +138,13 @@ public class SignServiceImpl extends FlowServiceFactory implements ISignService 
     /**
      * 每个节点"当前有效"的签名：{@code taskId -> fileId}。
      *
-     * <p> 判定规则：按时间顺序扫，**最后一条说了算** ——
+     * <p> 判定规则：<b>按哈希链的顺序</b>取每个任务的最后一条 ——
      * 最后一条是撤销（signType=9）则该节点视为未签，否则取它的 fileId。
      * 用"最后一条"而不是"存在一条非撤销记录"，是为了让"签了又撤"能正确回到未签状态。 </p>
+     *
+     * <p> ⚠ 顺序**不能**用 {@code order by sign_time desc, id desc} 来取：
+     * 同一秒内的重签+撤销会因为随机 uuid 的大小而判反，撤签后仍然显示"已签"，
+     * 连锁把 AC-26 的"必需签名"校验一起绕过。详见 {@link SignChain}。 </p>
      */
     @Override
     public Map<String, String> effectiveSignByTask(String businessId) {
@@ -140,15 +156,8 @@ public class SignServiceImpl extends FlowServiceFactory implements ISignService 
         if (all == null) {
             return out;
         }
-        Map<String, SignRecord> lastByTask = new HashMap<>();
-        for (SignRecord r : all) {
-            if (r == null || StringUtils.isBlank(r.getTaskId())) {
-                continue;
-            }
-            // 列表按 sign_time asc，后写覆盖前写
-            lastByTask.put(r.getTaskId(), r);
-        }
-        for (Map.Entry<String, SignRecord> e : lastByTask.entrySet()) {
+        // 链序里每个任务的最后一条（后写覆盖前写）
+        for (Map.Entry<String, SignRecord> e : SignChain.latestByTask(all).entrySet()) {
             SignRecord r = e.getValue();
             if (!SignRecord.TYPE_REVOKE.equals(r.getSignType()) && StringUtils.isNotBlank(r.getFileId())) {
                 out.put(e.getKey(), r.getFileId());

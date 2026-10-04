@@ -44,26 +44,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         )
     </insert>
 
+    <!--
+        基础列表：按 sign_time, id 升序。
+
+        ⚠ 这只用于"取全量再交给 SignChain 排序"，**不要**把它当成业务顺序：
+          sign_time 只到秒、id 是随机 uuid，同一秒内的重签+撤销会被判反
+          （实测后果：撤签后仍算"已签"，AC-26 的必需签名校验被绕过）。
+          取"最新一条 / 链尾 / 每个任务最新"一律走 SignChain。
+    -->
     <select id="selectByBusinessId" parameterType="String" resultMap="SignRecordResult">
         <include refid="selectSignRecordVo"/>
         where business_id = #{businessId}
         order by sign_time asc, id asc
-    </select>
-
-    <select id="selectLatestByBusinessId" parameterType="String" resultMap="SignRecordResult">
-        <include refid="selectSignRecordVo"/>
-        where business_id = #{businessId}
-        order by sign_time desc, id desc
-        limit 1
-    </select>
-
-    <!-- 某任务的最新一条；若是撤销记录则视为"当前无有效签名" -->
-    <select id="selectLatestByTask" resultMap="SignRecordResult">
-        <include refid="selectSignRecordVo"/>
-        where business_id = #{businessId}
-          and task_id = #{taskId}
-        order by sign_time desc, id desc
-        limit 1
     </select>
 
     <!-- 表单快照原文（用于算 formDataHash）：t_workflow_form 的主键就是业务ID -->
