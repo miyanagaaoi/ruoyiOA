@@ -112,6 +112,14 @@ export default {
         this.$modal.msgWarning("该记录没有业务ID，无法打印");
         return;
       }
+      // 草稿（workflow_biz_status = 0）尚未发起流程，**没有流程实例**。
+      // 打印数据接口以流程实例为锚点聚合（PrintServiceImpl.getPrintData 第 92-95 行
+      // 取不到实例直接抛 ServiceException），用户点进浮层只会看到一个技术性报错。
+      // 这里提前拦下并说明原因。
+      if (String(row.status) === "0") {
+        this.$modal.msgWarning("该单据还是草稿，尚未发起流程，暂不能打印");
+        return;
+      }
       // 页内浮层打开（不跳转、不开新窗口）
       this.$openPrintPreview(businessId);
     },
