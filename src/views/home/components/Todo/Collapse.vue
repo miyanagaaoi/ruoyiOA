@@ -13,45 +13,57 @@
       </span>
     </div>
     <div class="todo-body">
-      <el-collapse v-model="activeNames">
-        <el-collapse-item v-for="item in collapseList" :key="item.templateId" :name="item.templateId">
-          <template slot="title">
-            <i :class="['header-icon', activeNames.includes(item.templateId) ? 'el-icon-caret-bottom' : 'el-icon-caret-top']" class="title-icon"></i>
-            <span class="title-text">{{ item.templateName}}</span>
-            <span class="count">({{ item.count }})</span>
-          </template>
-          <el-table
-            v-loading="loading"
-            ref="todoTable"
-            :data="item.todoList"
-            :row-class-name="tableRowClassName"
-            :show-header="false"
-            stripe
-            class="pointer"
-            @row-click="handleRowClick"
-            element-loading-text="正在加载中..."
-            element-loading-spinner="el-icon-loading"
-          >
-            <el-table-column label="标题" align="left" prop="title" show-overflow-tooltip>
-              <template slot-scope="scope">
-                <span v-if="scope.row.urgeFlag === '1'" class="urge">【催】</span>
-                <span v-if="scope.row.urgencyStatus && scope.row.urgencyStatus !== '0'" class="urgeStatus">{{ urgency(scope.row.urgencyStatus) }}</span>
-                <span
-                  v-else
-                  :class="scope.row.handleType === '0' ? 'draft' : scope.row.handleType === '1' ? '' : 'hanleType'"
-                >{{ handleTypeDesc(scope.row.handleType) }}</span>
-                <span>{{ scope.row.title }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="发送时间" align="left" prop="sendTime" width="160">
-              <template slot-scope="scope">
-                <span>{{ parseTime(scope.row.sendTime, '{y}-{m}-{d} {h}:{i}') }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-collapse-item>
-      </el-collapse>
-      <el-empty v-if="!hasData" :image-size="50"></el-empty>
+      <!-- 数据区：只有 .todo-body 内部随状态切换，标题栏与展开/收起按钮常驻 -->
+      <StateBlock
+        :state="fetchState"
+        :compact="true"
+        loading-text="正在加载待办…"
+        :error-text="errorText"
+        :error-cause="errorCause"
+        empty-title="暂无待办"
+        empty-desc="当前没有需要你处理的审批任务。"
+        @retry="getList"
+      >
+        <el-collapse v-model="activeNames">
+          <el-collapse-item v-for="item in collapseList" :key="item.templateId" :name="item.templateId">
+            <template slot="title">
+              <i :class="['header-icon', activeNames.includes(item.templateId) ? 'el-icon-caret-bottom' : 'el-icon-caret-top']" class="title-icon"></i>
+              <span class="title-text">{{ item.templateName}}</span>
+              <span class="count">({{ item.count }})</span>
+            </template>
+            <el-table
+              ref="todoTable"
+              :data="item.todoList"
+              :row-class-name="tableRowClassName"
+              :show-header="false"
+              stripe
+              class="pointer"
+              @row-click="handleRowClick"
+            >
+              <el-table-column label="标题" align="left" prop="title" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <span v-if="scope.row.urgeFlag === '1'" class="urge">【催】</span>
+                  <span v-if="scope.row.urgencyStatus && scope.row.urgencyStatus !== '0'" class="urgeStatus">{{ urgency(scope.row.urgencyStatus) }}</span>
+                  <span
+                    v-else
+                    :class="scope.row.handleType === '0' ? 'draft' : scope.row.handleType === '1' ? '' : 'hanleType'"
+                  >{{ handleTypeDesc(scope.row.handleType) }}</span>
+                  <span>{{ scope.row.title }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="发送时间" align="left" prop="sendTime" width="160">
+                <template slot-scope="scope">
+                  <span>{{ parseTime(scope.row.sendTime, '{y}-{m}-{d} {h}:{i}') }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-collapse-item>
+        </el-collapse>
+        <!-- 空态必须有标题 + 说明 + 一个主行动 -->
+        <template slot="empty-action">
+          <el-button type="primary" size="mini" @click="goMyApply">查看我发起的</el-button>
+        </template>
+      </StateBlock>
     </div>
     <div class="todo-footer"></div>
   </div>
@@ -59,24 +71,35 @@
 
 <script>
 import { listTodoCollapse, readTodo, readCopyTodo } from "@/api/workflow/todo";
+import StateBlock from "@/components/StateBlock";
+// 错误文案统一由 @/utils/errorMessage 提供（request.js 会把 HTTP 错误的 message 改写成中文、
+// 非 200 业务码可能 reject 出字符串，这些坑都在那个文件里处理了）
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "TodoCollapseModule",
+  components: {
+    StateBlock,
+  },
   data() {
     return {
       // 加载状态
       activeNames: [],
       // 展开状态
       isSpread: true,
-      loading: false,
+      // 取数状态：loading | error | empty | ready（交给 StateBlock 渲染，错误不降级成空态）
+      fetchState: "loading",
+      // 错误三问：发生了什么 / 为什么（"怎么办"由 StateBlock 的重试按钮承担）
+      errorText: "",
+      errorCause: "",
+      // 请求是否在途
+      fetching: false,
       // 待办总数
       todoTotal: 0,
       // 待办数据
       collapseList: [],
       // 是否有更多
       hasMore: false,
-      // 是否有数据
-      hasData: true,
       // 请求参数
       queryParams: {
         pageNum: 1,
@@ -152,20 +175,53 @@ export default {
   methods: {
     /** 查询待办列表 */
     async getList() {
-      if (this.loading) return;
-      this.loading = true;
-      const response = await listTodoCollapse(this.queryParams);
-      if (response.code == 200) {
-        this.collapseList = response.data;
-        this.hasData = response.data.length > 0 ? true : false;
-        if (this.collapseList && this.collapseList.length > 0) {
-          this.collapseList.forEach((item) => {
+      if (this.fetching) return;
+      this.fetching = true;
+      // 已有内容时（socket 推送会调 refleshTodo 再次触发）不闪 loading，直接换数据
+      if (this.fetchState !== "ready") {
+        this.fetchState = "loading";
+        this.errorText = "";
+        this.errorCause = "";
+      }
+      try {
+        const response = await listTodoCollapse(this.queryParams);
+        if (response && response.code == 200) {
+          const list = response.data || [];
+          this.collapseList = list;
+          // activeNames / todoTotal 都是累加值：必须清零后重建，否则刷新一次就重复计数一次
+          this.activeNames = [];
+          this.todoTotal = 0;
+          list.forEach((item) => {
             this.activeNames.push(item.templateId);
             this.todoTotal += item.count;
           });
+          this.errorText = "";
+          this.errorCause = "";
+          // 请求成功但确实没有待办 → empty；有待办 → ready
+          this.fetchState = list.length > 0 ? "ready" : "empty";
+        } else {
+          this.applyError({ message: "接口返回了非 200 状态码（code=" + (response && response.code) + "）。" });
         }
-        this.loading = false;
+      } catch (e) {
+        this.applyError(e);
+      } finally {
+        this.fetching = false;
       }
+    },
+    /** 取数失败：清掉旧数据并进入错误态（文案来自 describeError） */
+    applyError(err) {
+      const d = describeError(err);
+      // 不能出现"旧待办 + 错误提示"同屏
+      this.collapseList = [];
+      this.activeNames = [];
+      this.todoTotal = 0;
+      this.errorText = d.text;
+      this.errorCause = d.cause;
+      this.fetchState = "error";
+    },
+    /** 空态主行动：没有待办时去看自己发起的流程 */
+    goMyApply() {
+      this.$router.push({ path: "/my/apply" });
     },
     /** 行样式控制 */
     tableRowClassName({ row, rowIndex }) {
@@ -182,15 +238,22 @@ export default {
       }
       if (row.handleType === "6") {
         pageType = "2";
-        readCopyTodo(row.id).then((res) => {
-          if (res.code === 200) {
-            this.totalNoRead = this.totalNoRead-- <= 0 ? 0 : this.totalNoRead;
-            this.$emit("resetNoReadTotal", this.totalNoRead);
-          }
-        });
+        readCopyTodo(row.id)
+          .then((res) => {
+            if (res.code === 200) {
+              this.totalNoRead = this.totalNoRead-- <= 0 ? 0 : this.totalNoRead;
+              this.$emit("resetNoReadTotal", this.totalNoRead);
+            }
+          })
+          .catch((e) => {
+            // 抄送已读标记失败不回滚跳转，只是未读数会偏大；记日志避免未处理的 Promise 拒绝
+            console.warn("[待办] 抄送已读标记失败", e);
+          });
       } else if (row.readFlag === "0") {
         row.readFlag = "1";
-        readTodo(row.id);
+        readTodo(row.id).catch((e) => {
+          console.warn("[待办] 标记已读失败", e);
+        });
       }
       this.$router.push({
         path: "/workflow/flowForm/" + new Date().getTime(),

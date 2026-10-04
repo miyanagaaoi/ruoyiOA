@@ -22,43 +22,55 @@
       </div>
     </div>
     <div class="todo-body">
-      <el-table
-        v-loading="loading"
-        ref="todoTable"
-        :data="todoList"
-        :row-class-name="tableRowClassName"
-        stripe
-        class="pointer"
-        height="60vh"
-        @row-click="handleRowClick"
-        element-loading-text="正在加载中..."
-        element-loading-spinner="el-icon-loading"
+      <!-- 数据区：只有 .todo-body 内部随状态切换（.todo-body 自己要 flex:1，所以留在外面） -->
+      <StateBlock
+        :state="fetchState"
+        :compact="true"
+        loading-text="正在加载待办…"
+        :error-text="errorText"
+        :error-cause="errorCause"
+        empty-title="暂无待办"
+        empty-desc="当前没有需要你处理的审批任务。"
+        @retry="getList"
       >
-        <el-table-column label="序号" type="index" align="center" width="55">
-          <template slot-scope="scope">
-            <span>{{scope.$index + 1}}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="标题" align="left" prop="title" show-overflow-tooltip>
-          <template slot-scope="scope">
-            <span v-if="scope.row.urgeFlag === '1'" class="urge">【催】</span>
-            <span v-if="scope.row.urgencyStatus !== '0'" class="urgeStatus">{{ urgency(scope.row.urgencyStatus) }}</span>
-            <span v-if="scope.row.type === '0'" class="draft">【草稿】</span>
-            <span>{{ scope.row.title }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="类型" align="center" prop="templateName" width="150" show-overflow-tooltip />
-        <el-table-column label="当前环节" align="center" prop="curNode" width="150" show-overflow-tooltip />
-        <el-table-column label="发送人" align="center" prop="senderName" width="120" show-overflow-tooltip />
-        <el-table-column label="发送时间" align="center" prop="sendTime" width="180">
-          <template slot-scope="scope">
-            <span>{{ parseTime(scope.row.sendTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!hasData" :image-size="50"></el-empty>
+        <el-table
+          ref="todoTable"
+          :data="todoList"
+          :row-class-name="tableRowClassName"
+          stripe
+          class="pointer"
+          height="60vh"
+          @row-click="handleRowClick"
+        >
+          <el-table-column label="序号" type="index" align="center" width="55">
+            <template slot-scope="scope">
+              <span>{{scope.$index + 1}}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="标题" align="left" prop="title" show-overflow-tooltip>
+            <template slot-scope="scope">
+              <span v-if="scope.row.urgeFlag === '1'" class="urge">【催】</span>
+              <span v-if="scope.row.urgencyStatus !== '0'" class="urgeStatus">{{ urgency(scope.row.urgencyStatus) }}</span>
+              <span v-if="scope.row.type === '0'" class="draft">【草稿】</span>
+              <span>{{ scope.row.title }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="类型" align="center" prop="templateName" width="150" show-overflow-tooltip />
+          <el-table-column label="当前环节" align="center" prop="curNode" width="150" show-overflow-tooltip />
+          <el-table-column label="发送人" align="center" prop="senderName" width="120" show-overflow-tooltip />
+          <el-table-column label="发送时间" align="center" prop="sendTime" width="180">
+            <template slot-scope="scope">
+              <span>{{ parseTime(scope.row.sendTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <!-- 空态必须有标题 + 说明 + 一个主行动 -->
+        <template slot="empty-action">
+          <el-button type="primary" size="mini" @click="goMyApply">查看我发起的</el-button>
+        </template>
+      </StateBlock>
     </div>
-    <div class="todo-footer">
+    <div class="todo-footer" v-if="fetchState === 'ready'">
       <div v-if="hasMore" @click="loadMore" class="load-more">
         加载更多
         <i class="el-icon-arrow-down" />
@@ -70,20 +82,30 @@
 
 <script>
 import { listTodoTable, readTodo } from "@/api/workflow/todo";
+import StateBlock from "@/components/StateBlock";
+// 错误文案统一由 @/utils/errorMessage 提供（request.js 会把 HTTP 错误的 message 改写成中文、
+// 非 200 业务码可能 reject 出字符串，这些坑都在那个文件里处理了）
+import { describeError } from "@/utils/errorMessage";
 export default {
   name: "TodoTableModule",
+  components: {
+    StateBlock,
+  },
   data() {
     return {
-      // 加载状态
-      loading: false,
+      // 取数状态：loading | error | empty | ready（交给 StateBlock 渲染，错误不降级成空态）
+      fetchState: "loading",
+      // 错误三问：发生了什么 / 为什么（"怎么办"由 StateBlock 的重试按钮承担）
+      errorText: "",
+      errorCause: "",
+      // 请求是否在途（防止"加载更多"被重复点击）
+      fetching: false,
       // 待办总数
       todoTotal: 0,
       // 待办列表
       todoList: [],
       // 是否有更多
       hasMore: false,
-      // 是否有数据
-      hasData: true,
       // 请求参数
       queryParams: {
         pageNum: 1,
@@ -116,25 +138,58 @@ export default {
     },
   },
   methods: {
-    /** 查询待办列表 */
+    /** 查询待办列表（首次加载与"加载更多"共用） */
     async getList() {
-      if (this.loading) return;
-      this.loading = true;
-      const response = await listTodoTable(this.queryParams);
-      if (response.code == 200) {
-        this.todoList = [...this.todoList, ...response.rows];
-        this.todoTotal = response.total;
-        this.queryParams.pageNum += 1;
-        this.hasMore = this.todoTotal > this.todoList.length ? true : false;
-        this.hasData = this.todoTotal > 0 ? true : false;
-        this.loading = false;
-      } else {
+      if (this.fetching) return;
+      this.fetching = true;
+      // 已有列表时是"加载更多"，保留旧内容避免整块闪白；首次加载/重试才进加载态
+      if (!this.todoList.length) {
+        this.fetchState = "loading";
+        this.errorText = "";
+        this.errorCause = "";
+      }
+      try {
+        const response = await listTodoTable(this.queryParams);
+        if (response && response.code == 200) {
+          this.todoList = [...this.todoList, ...(response.rows || [])];
+          this.todoTotal = response.total;
+          this.queryParams.pageNum += 1;
+          this.hasMore = this.todoTotal > this.todoList.length ? true : false;
+          this.errorText = "";
+          this.errorCause = "";
+          // 请求成功但确实没有待办 → empty；有待办 → ready
+          this.fetchState = this.todoList.length > 0 ? "ready" : "empty";
+        } else {
+          this.hasMore = false;
+          this.applyError({ message: "接口返回了非 200 状态码（code=" + (response && response.code) + "）。" });
+        }
+      } catch (e) {
         this.hasMore = false;
+        this.applyError(e);
+      } finally {
+        this.fetching = false;
       }
     },
     /** 加载更多 */
     async loadMore() {
       await this.getList();
+    },
+    /** 取数失败：清掉旧数据并进入错误态（文案来自 describeError） */
+    applyError(err) {
+      const d = describeError(err);
+      // 不能出现"旧列表 + 错误提示"同屏：列表清空
+      this.todoList = [];
+      // 列表已清空，页码必须回到第一页，否则重试会从第 N 页开始拼数据
+      this.queryParams.pageNum = 1;
+      this.hasMore = false;
+      this.todoTotal = "-";
+      this.errorText = d.text;
+      this.errorCause = d.cause;
+      this.fetchState = "error";
+    },
+    /** 空态主行动：没有待办时去看自己发起的流程 */
+    goMyApply() {
+      this.$router.push({ path: "/my/apply" });
     },
     /** 行样式控制 */
     tableRowClassName({ row, rowIndex }) {
@@ -147,7 +202,10 @@ export default {
     handleRowClick(row, column, event) {
       if (row.readFlag === "0") {
         row.readFlag = "1";
-        readTodo(row.id);
+        // 标记已读失败不回滚跳转，但也不能留一个未处理的 Promise 拒绝
+        readTodo(row.id).catch((e) => {
+          console.warn("[待办] 标记已读失败", e);
+        });
       }
       this.$router.push({
         path: "/workflow/flowForm/" + new Date().getTime(),

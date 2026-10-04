@@ -10,38 +10,63 @@
         <i class="el-icon-arrow-right" />
       </span>
     </div>
+    <!-- 数据区：只有 .news-body 内部随状态切换，标题栏与"更多"常驻 -->
     <div class="news-body">
-      <el-carousel :height="carouselH" :interval="4000" type="card" v-if="newsList && newsList.length > 0">
-        <el-carousel-item v-for="item in newsList" :key="item.id">
-          <div class="news-card" @click="goDetail(item)" :style="{ backgroundImage: 'url(' + imgPath(item.imgUrl) + ')' }">
-            <div class="news-title">{{ item.title }}</div>
-            <div class="info">
-              <span>
-                <i class="el-icon-view"></i>
-                {{ item.readTotal }}
-              </span>
-              <span>
-                <i class="el-icon-time"></i>
-                {{ item.validStartTime }}
-              </span>
+      <StateBlock
+        :state="fetchState"
+        :compact="true"
+        loading-text="正在加载资讯…"
+        :error-text="errorText"
+        :error-cause="errorCause"
+        empty-title="暂无资讯"
+        empty-desc="当前没有已发布的公司资讯，发布后会出现在这里。"
+        @retry="getList"
+      >
+        <el-carousel :height="carouselH" :interval="4000" type="card">
+          <el-carousel-item v-for="item in newsList" :key="item.id">
+            <div class="news-card" @click="goDetail(item)" :style="{ backgroundImage: 'url(' + imgPath(item.imgUrl) + ')' }">
+              <div class="news-title">{{ item.title }}</div>
+              <div class="info">
+                <span>
+                  <i class="el-icon-view"></i>
+                  {{ item.readTotal }}
+                </span>
+                <span>
+                  <i class="el-icon-time"></i>
+                  {{ item.validStartTime }}
+                </span>
+              </div>
             </div>
-          </div>
-        </el-carousel-item>
-      </el-carousel>
-      <el-empty v-else :image-size="50"></el-empty>
+          </el-carousel-item>
+        </el-carousel>
+        <!-- 空态必须有标题 + 说明 + 一个主行动 -->
+        <template slot="empty-action">
+          <el-button type="primary" size="mini" @click="loadMore">查看全部资讯</el-button>
+        </template>
+      </StateBlock>
     </div>
   </div>
 </template>
 
 <script>
 import { listPubInformation, addReadNum } from "@/api/information/information";
+import StateBlock from "@/components/StateBlock";
+// 错误文案统一由 @/utils/errorMessage 提供（request.js 会把 HTTP 错误的 message 改写成中文、
+// 非 200 业务码可能 reject 出字符串，这些坑都在那个文件里处理了）
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "NewsModule",
+  components: {
+    StateBlock,
+  },
   data() {
     return {
-      // 加载状态
-      loading: false,
+      // 取数状态：loading | error | empty | ready（交给 StateBlock 渲染，错误不降级成空态）
+      fetchState: "loading",
+      // 错误三问：发生了什么 / 为什么（"怎么办"由 StateBlock 的重试按钮承担）
+      errorText: "",
+      errorCause: "",
       // 数据列表
       newsList: [],
       queryParams: {
@@ -67,20 +92,46 @@ export default {
   methods: {
     /** 获取数据 */
     async getList() {
-      const res = await listPubInformation(this.queryParams);
-      if (res.code === 200) {
-        this.newsList = res.rows;
+      // 取数开始：先清掉上一轮结果，接口出错时不会出现"旧资讯 + 错误提示"同屏
+      this.fetchState = "loading";
+      this.errorText = "";
+      this.errorCause = "";
+      this.newsList = [];
+      try {
+        const res = await listPubInformation(this.queryParams);
+        if (res && res.code === 200) {
+          this.newsList = res.rows || [];
+          // 请求成功但确实没有资讯 → empty；有资讯 → ready
+          this.fetchState = this.newsList.length > 0 ? "ready" : "empty";
+        } else {
+          this.applyError({ message: "接口返回了非 200 状态码（code=" + (res && res.code) + "）。" });
+        }
+      } catch (e) {
+        this.applyError(e);
       }
+    },
+    /** 取数失败：清掉旧数据并进入错误态（文案来自 describeError） */
+    applyError(err) {
+      const d = describeError(err);
+      this.newsList = [];
+      this.errorText = d.text;
+      this.errorCause = d.cause;
+      this.fetchState = "error";
     },
     /** 查看详情 */
     goDetail(row) {
       let params = { id: row.id };
       this.$tab.openPage(row.title, "/news/information/i/detail/" + new Date().getTime(), params);
-      addReadNum(row.id).then((res) => {
-        if (res.code === 200) {
-          row.readTotal += 1;
-        }
-      });
+      // 阅读数 +1 只是副作用：失败不该拖住已经打开的详情，但也不能留一个未处理的 Promise 拒绝
+      addReadNum(row.id)
+        .then((res) => {
+          if (res.code === 200) {
+            row.readTotal += 1;
+          }
+        })
+        .catch((e) => {
+          console.warn("[资讯] 阅读数更新失败", e);
+        });
     },
     /** 查看更多 */
     loadMore() {
@@ -92,7 +143,9 @@ export default {
 
 <style scoped lang="scss">
 .news-container {
-  height: calc(24vh - 10px);
+  /* 原来是固定 height：卡片矮（24vh）时错误面板会被外层 overflow:hidden 裁掉，
+     正常态下内容高度小于该值，所以用 min-height 视觉不变，只有状态面板会撑高 */
+  min-height: calc(24vh - 10px);
   border-radius: 4px;
   border: 1px solid #f5f5f5;
   box-sizing: border-box;
@@ -117,7 +170,7 @@ export default {
   transition: color 0.3s;
   font-weight: 500;
   &:hover {
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 }
 
@@ -168,8 +221,6 @@ export default {
   }
 }
 
-::v-deep .el-empty {
-  padding-top: 10px;
-}
+/* 空态已统一交给 StateBlock，原来的 el-empty 样式一并撤掉，避免两套空态并存 */
 </style>
 

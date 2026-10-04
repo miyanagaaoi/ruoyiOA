@@ -41,25 +41,39 @@
           </table>
         </div>
 
-        <!-- 日程数据展示 -->
-        <div class="schedule-data" ref="scheduleData" v-loading="loading">
-          <div v-for="item in scheduleList" :key="item.time" @click="goDetail(item)" class="schedule-item">
-            <span class="schedule-title">
-              <span v-if="item.scheduleType && item.scheduleType.tagName" class="ml5">
-                <el-tag
-                  size="mini"
-                  :effect="item.scheduleType.tagEffect || 'plain'"
-                  :type="item.scheduleType.tagType || ''"
-                >{{ item.scheduleType.tagName }}</el-tag>
+        <!-- 日程数据展示：只有这块随状态切换，日历头部/主体常驻 -->
+        <div class="schedule-data" :class="{ 'is-state': fetchState !== 'ready' }" ref="scheduleData">
+          <StateBlock
+            :state="fetchState"
+            :compact="true"
+            loading-text="正在加载日程…"
+            :error-text="errorText"
+            :error-cause="errorCause"
+            empty-title="当天没有日程"
+            empty-desc="选中的这一天没有安排，换一天看看，或去日程管理里新建。"
+            @retry="getScheduleData"
+          >
+            <div v-for="item in scheduleList" :key="item.time" @click="goDetail(item)" class="schedule-item">
+              <span class="schedule-title">
+                <span v-if="item.scheduleType && item.scheduleType.tagName" class="ml5">
+                  <el-tag
+                    size="mini"
+                    :effect="item.scheduleType.tagEffect || 'plain'"
+                    :type="item.scheduleType.tagType || ''"
+                  >{{ item.scheduleType.tagName }}</el-tag>
+                </span>
+                <el-tooltip v-if="item.title.length >= 16" class="item" effect="dark" :content="item.title" placement="top">
+                  <span class="ml5">{{ item.title }}</span>
+                </el-tooltip>
+                <span v-else class="ml5">{{ item.title }}</span>
               </span>
-              <el-tooltip v-if="item.title.length >= 16" class="item" effect="dark" :content="item.title" placement="top">
-                <span class="ml5">{{ item.title }}</span>
-              </el-tooltip>
-              <span v-else class="ml5">{{ item.title }}</span>
-            </span>
-            <span class="schedule-date">{{ parseTime(item.startTime, '{h}:{i}') }} - {{ parseTime(item.endTime, '{h}:{i}') }}</span>
-          </div>
-          <el-empty v-if="!hasData" :image-size="50"></el-empty>
+              <span class="schedule-date">{{ parseTime(item.startTime, '{h}:{i}') }} - {{ parseTime(item.endTime, '{h}:{i}') }}</span>
+            </div>
+            <!-- 空态必须有标题 + 说明 + 一个主行动 -->
+            <template slot="empty-action">
+              <el-button type="primary" size="mini" @click="loadMore">打开日程管理</el-button>
+            </template>
+          </StateBlock>
         </div>
       </div>
     </div>
@@ -71,18 +85,24 @@
 import DialogDetail from "@/views/schedule/components/schedule/detail";
 import { listDay } from "@/api/schedule/schedule";
 import { parseTime } from "@/utils/ruoyi";
+import StateBlock from "@/components/StateBlock";
+// 错误文案统一由 @/utils/errorMessage 提供（request.js 会把 HTTP 错误的 message 改写成中文、
+// 非 200 业务码可能 reject 出字符串，这些坑都在那个文件里处理了）
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "MessageModule",
   components: {
     DialogDetail,
+    StateBlock,
   },
   data() {
     return {
-      // 加载状态
-      loading: false,
-      // 是否有数据
-      hasData: true,
+      // 取数状态：loading | error | empty | ready（交给 StateBlock 渲染，错误不降级成空态）
+      fetchState: "loading",
+      // 错误三问：发生了什么 / 为什么（"怎么办"由 StateBlock 的重试按钮承担）
+      errorText: "",
+      errorCause: "",
       // 当前时间
       currentDate: new Date(),
       // 选中日期
@@ -115,22 +135,38 @@ export default {
   },
   methods: {
     // 获取当天日程
-    getScheduleData() {
-      this.loading = true;
+    async getScheduleData() {
+      // 取数开始：先清掉上一轮结果，接口出错时不会出现"旧日程 + 错误提示"同屏
+      this.fetchState = "loading";
+      this.errorText = "";
+      this.errorCause = "";
       this.total = 0;
-      this.hasData = true;
       this.scheduleList = [];
       const startTime = parseTime(this.currentDate, "{y}-{m}-{d} {h}:{i}:{s}");
       this.queryParams.startTime = startTime;
       this.queryParams.endTime = startTime;
-      listDay(this.queryParams).then((res) => {
-        if (res.code == 200) {
-          this.scheduleList = res.rows;
+      try {
+        const res = await listDay(this.queryParams);
+        if (res && res.code == 200) {
+          this.scheduleList = res.rows || [];
           this.total = res.total;
-          this.hasData = this.total > 0;
-          this.loading = false;
+          // 请求成功但当天确实没有日程 → empty；有日程 → ready
+          this.fetchState = this.scheduleList.length > 0 ? "ready" : "empty";
+        } else {
+          this.applyError({ message: "接口返回了非 200 状态码（code=" + (res && res.code) + "）。" });
         }
-      });
+      } catch (e) {
+        this.applyError(e);
+      }
+    },
+    /** 取数失败：清掉旧数据并进入错误态（文案来自 describeError） */
+    applyError(err) {
+      const d = describeError(err);
+      this.scheduleList = [];
+      this.total = 0;
+      this.errorText = d.text;
+      this.errorCause = d.cause;
+      this.fetchState = "error";
     },
     /** 处理当前周 */
     handleCurrentWeek(date) {
@@ -219,7 +255,9 @@ export default {
 
 <style scoped lang="scss">
 .msg-container {
-  height: calc(38vh - 10px);
+  /* 原来是固定 height：错误/空态面板会被外层 overflow:hidden 裁掉重试按钮，
+     改成 min-height 后正常态高度不变，只有状态面板需要更多空间时卡片才长高 */
+  min-height: calc(38vh - 10px);
   border-radius: 4px;
   border: 1px solid #f5f5f5;
   box-sizing: border-box;
@@ -290,7 +328,7 @@ export default {
         cursor: pointer;
 
         &.today {
-          background-color: #409eff;
+          background-color: var(--oa-color-primary);
           color: #fff;
         }
 
@@ -300,13 +338,13 @@ export default {
           height: 24px;
           line-height: 24px;
           border-radius: 50%;
-          background-color: #409eff;
+          background-color: var(--oa-color-primary);
           color: white;
         }
 
         &.selected span {
           background-color: #d3e9ff;
-          color: #409eff;
+          color: var(--oa-color-primary);
           display: inline-block;
           width: 24px;
           height: 24px;
@@ -328,6 +366,13 @@ export default {
     overflow-y: auto;
     overflow-x: hidden;
     font-size: 14px;
+
+    /* 非正常态（加载/错误/空）不锁高：锁高会把"重试"按钮压到滚动区下面 */
+    &.is-state {
+      height: auto;
+      min-height: calc(36vh - 156px);
+      overflow-y: visible;
+    }
 
     .schedule-item {
       display: flex;
@@ -360,7 +405,7 @@ export default {
           transform: translateY(-50%);
           width: 2px;
           height: 12px;
-          background-color: #409eff;
+          background-color: var(--oa-color-primary);
           border-radius: 2px;
         }
       }
@@ -383,9 +428,7 @@ export default {
   text-align: center;
 }
 
-::v-deep .el-empty {
-  padding: 0;
-}
+/* 空态已统一交给 StateBlock，原来的 el-empty 样式一并撤掉，避免两套空态并存 */
 
 ::v-deep .el-button--mini {
   padding: 5px 8px;
