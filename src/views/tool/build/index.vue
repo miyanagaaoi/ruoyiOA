@@ -122,7 +122,7 @@ import render from "@/components/render/render";
 import FormDrawer from "./FormDrawer";
 import JsonDrawer from "./JsonDrawer";
 import RightPanel from "./RightPanel";
-import { inputComponents, selectComponents, layoutComponents, orgTreeComponents, serialNoComponents, formConf } from "@/utils/generator/config";
+import { inputComponents, selectComponents, layoutComponents, orgTreeComponents, serialNoComponents, formOaComponents, formConf } from "@/utils/generator/config";
 import { exportDefault, beautifierConf, isNumberStr, titleCase, deepClone, isObjectObject } from "@/utils/index";
 import { makeUpHtml, vueTemplate, vueScript, cssStyle } from "@/utils/generator/html";
 import { makeUpJs } from "@/utils/generator/js";
@@ -164,6 +164,7 @@ export default {
       layoutComponents,
       orgTreeComponents,
       serialNoComponents,
+      formOaComponents,
       labelWidth: 100,
       drawingList: drawingDefault,
       drawingData: {},
@@ -197,6 +198,10 @@ export default {
         {
           title: "编号组件",
           list: serialNoComponents,
+        },
+        {
+          title: "合同二开组件",
+          list: formOaComponents,
         },
       ],
       formOpen: false,
@@ -356,7 +361,10 @@ export default {
       const config = item.__config__;
       config.formId = ++this.idGlobal;
       config.renderKey = `${config.formId}${+new Date()}`; // 改变renderKey后可以实现强制更新组件
-      if (config.layout === "colFormItem") {
+      if (config.layout === "colFormItem" && ["design-section", "design-text"].indexOf(config.tag) < 0) {
+        // ⚠ 纯排版控件（分组标题/说明文字）**不给 __vModel__**：
+        //   它们没有值。给了就会在 valData 里多出一个永远为空的假字段、
+        //   在流程条件里多出一个不可比较的候选、在打印件的字段映射里多一行。
         item.__vModel__ = `field${this.idGlobal}`;
       } else if (config.layout === "rowFormItem") {
         config.componentName = `row${this.idGlobal}`;

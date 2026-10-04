@@ -29,12 +29,34 @@
             <el-input v-model="activeData.__vModel__" @input="handlePropInput" placeholder="请使用英文或中文简拼" />
           </el-form-item>
           <el-form-item v-if="activeData.__config__.componentName!==undefined" label="组件名">{{ activeData.__config__.componentName }}</el-form-item>
-          <el-form-item v-if="activeData.__config__.label!==undefined">
+          <el-form-item
+            v-if="activeData.__config__.label!==undefined && ['design-section','design-text'].indexOf(activeData.__config__.tag) < 0"
+          >
             <template slot="label">
               <span style="color: red;">*</span>
               字段名称
             </template>
             <el-input v-model="activeData.__config__.label" placeholder="请输入字段名称" @input="changeRenderKey" />
+          </el-form-item>
+          <!-- 纯排版控件（分组标题 / 说明文字）：标题与正文由自己画，不编辑"字段名称" -->
+          <el-form-item v-if="activeData.__config__.tag==='design-section'" label="分节标题">
+            <el-input v-model="activeData.title" placeholder="如：我方信息" @input="changeRenderKey" />
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-section'" label="标题说明">
+            <el-input v-model="activeData.desc" type="textarea" :rows="2" placeholder="可空；说明这一节要填什么" />
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-section'" label="强调竖条">
+            <el-switch v-model="activeData.showLine" />
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-text'" label="说明内容">
+            <el-input v-model="activeData.content" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="如：请上传加盖公章的扫描件" />
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-text'" label="对齐方式">
+            <el-radio-group v-model="activeData.align">
+              <el-radio-button label="left">左</el-radio-button>
+              <el-radio-button label="center">中</el-radio-button>
+              <el-radio-button label="right">右</el-radio-button>
+            </el-radio-group>
           </el-form-item>
           <el-form-item v-if="activeData.placeholder!==undefined" label="占位提示">
             <el-input v-model="activeData.placeholder" placeholder="请输入占位提示" @input="changeRenderKey" />

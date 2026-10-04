@@ -718,3 +718,50 @@ export const serialNoComponents = [
     filterable: false, 
   }
 ]
+
+/**
+ * 合同审批二开控件（PRD 9.3 / AC-37、REQ-FORM-001）。
+ *
+ * 两个都是**纯排版**控件：没有 __vModel__（不进 valData、不可作流程条件、
+ * 不进打印件的基本信息表），只负责把一张长表单分成看得懂的几节。
+ *
+ * ⚠ showLabel 一律 false：控件自己就画标题，再让 el-form-item 画一遍
+ *   会变成"分组标题：分组标题"。
+ */
+export const formOaComponents = [
+  {
+    __config__: {
+      label: '分组标题',
+      tag: 'design-section',
+      tagIcon: 'component',
+      layout: 'colFormItem',
+      span: 24,
+      showLabel: false,
+      changeTag: false,
+      required: false,
+      regList: []
+    },
+    title: '分组标题',
+    desc: '',
+    showLine: true,
+    icon: '',
+    style: { width: '100%' }
+  },
+  {
+    __config__: {
+      label: '说明文字',
+      tag: 'design-text',
+      tagIcon: 'documentation',
+      layout: 'colFormItem',
+      span: 24,
+      showLabel: false,
+      changeTag: false,
+      required: false,
+      regList: []
+    },
+    content: '请输入说明文字',
+    align: 'left',
+    icon: '',
+    style: { width: '100%' }
+  }
+]
