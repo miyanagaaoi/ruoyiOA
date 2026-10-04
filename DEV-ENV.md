@@ -138,8 +138,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1
 # 简化流程组合矩阵回归（跑在真实环境上，20 条断言）
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\flow-regression.ps1
 
-# 签名组件验收（预存签名/节点策略/只追加/只读字段，39 条断言；会写入一条不可删的签名记录）
+# 签名组件验收（预存签名/节点策略/只追加/只读字段/重签撤签，44 条断言；会写入不可删的签名记录）
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sign-feature-check.ps1
+
+# 越权防护验收（PRD 11.3 / AC-35：打印数据、打印留痕、签名与撤签的越权，14 条断言）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\authz-check.ps1
 ```
 
 两个脚本都是**幂等**的（端口已监听就跳过），可反复执行；所有进程用 WMI 拉起，

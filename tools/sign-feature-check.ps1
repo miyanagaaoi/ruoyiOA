@@ -28,7 +28,7 @@
  关于「业务ID」：本环境里在办流程实例都是**没有 businessKey** 的历史测试单据
    （`ACT_HI_PROCINST.BUSINESS_KEY_` 为 NULL），而签名接口要求 businessId 非空、
    且 form_data_hash 取自 `t_workflow_form`（取不到就按设计写 null）。因此本脚本
-   造一张夹具单据 SIGNCHECK-BIZ（连同表单行），用它承载 AC-30/31/32，
+   造一张**本次运行独有**的夹具单据（连同表单行），用它承载 AC-30/31/32，
    任务ID 仍取**真实在办任务**，收尾时删掉夹具。
 
  副作用：会往真实在办单据上写一条签名记录 —— 按 AC-32 设计上不可删，这是有意的。
@@ -46,7 +46,7 @@ param(
     [string]$TemplateId = '1ADB8299342C4D4FA59EC9F38AB5C768',
     [string]$FlowDefKey = 'testSerial',
     [string]$NodeKey    = 'n1',
-    [string]$FixtureBizId = 'SIGNCHECK-BIZ',
+    [string]$FixtureBizId = '',
     [switch]$SkipAc12
 )
 
@@ -167,6 +167,11 @@ $created = @()
 $signRecordId = ''
 
 try {
+    # 夹具单据ID每次运行都不同：否则历次运行留下的签名记录会累加，
+    # "同一条任务两条记录""三条记录都在"这类条数断言就不再可判（实测踩过）
+    if ([string]::IsNullOrWhiteSpace($FixtureBizId)) {
+        $FixtureBizId = 'SIGNCHECK-' + (Get-Date).ToString('HHmmss')
+    }
     # ============================================================== 夹具单据
     Step '准备夹具单据（签名接口要求 businessId 非空）'
     $fixtureSql = @"
@@ -278,14 +283,25 @@ VALUES ('$FixtureBizId','签名验收夹具','{"formData":{},"valData":{"amount"
     # 哈希链：同单据第二条记录的 prev_hash 必须等于第一条的 record_hash
     $sign2 = Api 'POST' '/workflow/sign/record' @{
         businessId = $FixtureBizId
-        taskId     = "$taskId-x"
+        taskId     = $taskId
         taskDefKey = $NodeKey
-        nodeName   = '自动化验收（哈希链第二环）'
+        nodeName   = '自动化验收（重签，AC-28）'
         signType   = '1'
         fileId     = $fileId
     }
     Assert-That ($sign2.code -eq 200 -and $sign2.data.prevHash -eq $rec.recordHash) `
         '第二条记录的 prev_hash = 第一条的 record_hash（哈希链首尾相接）'
+    # AC-28 重签：旧记录保留，新记录接着哈希链
+    Assert-That ((Sql "SELECT COUNT(*) FROM t_workflow_sign_record WHERE business_id='$FixtureBizId' AND task_id='$taskId'") -eq '2') `
+        '同一任务有两条签名记录（重签新增，旧记录一动不动）'
+
+    # AC-28 撤销：追加一条 sign_type=9 的记录，原记录不动；撤签后该节点视为未签
+    $revoke = Api 'POST' "/workflow/sign/record/revoke?businessId=$FixtureBizId&taskId=$taskId&reason=自动化验收" $null
+    Assert-That ($revoke.code -eq 200 -and $revoke.data.signType -eq '9') '撤销签名成功（追加撤销记录，不是删记录）'
+    Assert-That ($revoke.data.prevHash -eq $sign2.data.recordHash) '撤销记录的 prev_hash = 上一条的 record_hash（链没断）'
+    $effAfter = (Api 'GET' "/workflow/sign/record/effective?businessId=$FixtureBizId" $null).data
+    Assert-That ($null -eq $effAfter.$taskId) '撤签后该节点不再算「已签」（最后一条说了算）'
+    Assert-That ((Sql "SELECT COUNT(*) FROM t_workflow_sign_record WHERE business_id='$FixtureBizId' AND task_id='$taskId'") -eq '3') '三条记录都在（只追加，一条没少）'
 
     # ============================================================== AC-32
     Step 'AC-32 签名记录只追加：数据库层面拒绝 UPDATE / DELETE'
