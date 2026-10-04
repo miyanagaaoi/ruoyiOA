@@ -137,14 +137,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1
 
 # 简化流程组合矩阵回归（跑在真实环境上，20 条断言）
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\flow-regression.ps1
+
+# 签名组件验收（预存签名/节点策略/只追加/只读字段，39 条断言；会写入一条不可删的签名记录）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sign-feature-check.ps1
 ```
 
 两个脚本都是**幂等**的（端口已监听就跳过），可反复执行；所有进程用 WMI 拉起，
 完全脱离调用方句柄，不会把终端/CI 挂住。
 
 > ⚠️ 本机**没有 `pwsh`**，只有 Windows PowerShell 5.1，必须用 `powershell`。
-> ⚠️ 这三个 `.ps1` 都存成 **UTF-8 with BOM** —— 5.1 读无 BOM 的 UTF-8 会把中文注释
+> ⚠️ 这些 `.ps1` 都存成 **UTF-8 with BOM** —— 5.1 读无 BOM 的 UTF-8 会把中文注释
 > 当 ANSI 解码，直接 `Unexpected token` 解析失败。新增脚本时务必保持带 BOM。
+> ⚠️ `.ps1` 里**不能写 `/** … */` 块注释**（那是 JS 的写法，PowerShell 只有 `<# … #>`）；
+> 另外双引号串里的 `"$var:%"` 会被当成作用域变量而解析失败，要写 `"${var}:%"`。
 
 ### 4.2 手动命令（脚本出问题时的对照）
 
