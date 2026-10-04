@@ -271,13 +271,26 @@ export default {
     },
 
     /**
-     * 取签名图片。签名是**只读展示**，取不到时不该让整张打印件失败 ——
-     * 单张失败只记一条告警，那一栏留空（正好还是"供手写"的语义）。
+     * 取签名图片。两种形态都要支持：
+     *
+     *   1. **可直接访问的相对路径**（经典上传 `/common/upload` 返回的
+     *      `/profile/upload/...`）—— 有静态资源映射，加上 API 前缀就能 `<img src>`，
+     *      这是本环境里实际可用的那条路；
+     *   2. **文件ID**（新文件模块）—— 它的下载接口是 POST 且要求 query 传参，
+     *      只能取 blob 再转对象 URL。
+     *
+     * 签名是只读展示，单张失败不该让整张打印件失败：只记一条告警，该栏留空
+     * （正好还是"供手写"的语义）。
      */
     loadSignImages(nodes) {
       const list = (nodes || []).filter(n => n && n.signFileId && n.taskId)
       list.forEach(n => {
-        getFileBlob(n.signFileId)
+        const id = n.signFileId
+        if (id.charAt(0) === '/') {
+          this.$set(this.signUrls, n.taskId, process.env.VUE_APP_BASE_API + id)
+          return
+        }
+        getFileBlob(id)
           .then(res => {
             const blob = res && res.data ? res.data : res
             if (!blob) return
@@ -289,13 +302,16 @@ export default {
       })
     },
 
-    /** 释放对象 URL */
+    /** 释放对象 URL（直接可访问的路径不是对象 URL，不能 revoke） */
     releaseSignUrls() {
       Object.keys(this.signUrls).forEach(k => {
-        try {
-          window.URL.revokeObjectURL(this.signUrls[k])
-        } catch (e) {
-          /* 忽略 */
+        const u = this.signUrls[k]
+        if (typeof u === 'string' && u.indexOf('blob:') === 0) {
+          try {
+            window.URL.revokeObjectURL(u)
+          } catch (e) {
+            /* 忽略 */
+          }
         }
       })
       this.signUrls = {}
