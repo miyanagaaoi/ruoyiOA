@@ -305,7 +305,7 @@ export default {
   }
 
   i:hover {
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 }
 
@@ -356,6 +356,6 @@ export default {
   font-size: 14px;
 }
 ::v-deep .input-wrapper .el-input__inner:focus {
-  border-color: #409eff;
+  border-color: var(--oa-color-primary);
 }
 </style>

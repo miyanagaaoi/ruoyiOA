@@ -137,7 +137,7 @@ export default {
   flex-wrap: wrap;
 
   :hover {
-    border-color: #409eff;
+    border-color: var(--oa-color-primary);
   }
 
   .selected-users {

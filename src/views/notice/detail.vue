@@ -110,7 +110,7 @@ export default {
     }
 
     a {
-      color: #409eff;
+      color: var(--oa-color-primary);
       text-decoration: none;
 
       &:hover {
@@ -125,7 +125,7 @@ export default {
     }
 
     blockquote {
-      border-left: 4px solid #409eff;
+      border-left: 4px solid var(--oa-color-primary);
       padding-left: 16px;
       color: #666;
       margin: 16px 0;

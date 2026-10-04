@@ -62,7 +62,7 @@ const layouts = {
                       <div key={index}>{line}</div>
                     ))}
                 </div>
-                <i class="el-icon-info" style="margin-left:2px;color:#409EFF"></i>
+                <i class="el-icon-info" style="margin-left:2px;color:#1f5ae0"></i>
               </el-tooltip>
             </span>
             <render

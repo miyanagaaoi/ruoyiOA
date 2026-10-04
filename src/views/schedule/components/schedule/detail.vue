@@ -184,7 +184,7 @@ export default {
   padding-bottom: 10px;
 }
 .creator {
-  color: #409eff;
+  color: var(--oa-color-primary);
 }
 .el-avatar {
   margin-right: 3px;
@@ -230,7 +230,7 @@ export default {
   a {
     font-style: italic;
     text-decoration: underline;
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 }
 

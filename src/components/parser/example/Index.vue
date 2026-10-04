@@ -171,7 +171,7 @@ export default {
                 1) formModel='formData', 所以this.formData可以拿到当前表单的model
                 2) formRef='elForm', 所以this.$refs.elForm可以拿到当前表单的ref(vue组件)
               `,
-              'color:#409EFF;font-size: 15px'
+              'color:#1f5ae0;font-size: 15px'
             )
             console.log('表单的Model：', this.formData)
             console.log('表单的ref：', this.$refs.elForm)

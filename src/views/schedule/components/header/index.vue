@@ -115,7 +115,7 @@ export default {
   }
 
   ::v-deep .input-wrapper .el-input__inner:focus {
-    border-color: #409eff;
+    border-color: var(--oa-color-primary);
   }
 }
 </style>

@@ -528,7 +528,7 @@ export default {
   .foot-btn {
     color: #666;
     &:hover {
-      color: #409eff;
+      color: var(--oa-color-primary);
     }
   }
 }
@@ -609,7 +609,7 @@ export default {
   right: 20px;
   width: 30px;
   height: 30px;
-  background-color: #409eff;
+  background-color: var(--oa-color-primary);
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -622,7 +622,7 @@ export default {
   font-size: 20px;
 
   &:hover {
-    background-color: #66b1ff;
+    background-color: #4c7be6;
   }
 }
 .tooltip-text {

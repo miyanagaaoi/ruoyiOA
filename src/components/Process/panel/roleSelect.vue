@@ -239,7 +239,7 @@ export default {
   flex-wrap: wrap;
 
   :hover {
-    border-color: #409eff;
+    border-color: var(--oa-color-primary);
   }
 
   .selected-role {
@@ -327,7 +327,7 @@ export default {
     display: flex;
     align-items: center;
     margin-right: 20px;
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 }
 
@@ -434,7 +434,7 @@ export default {
     gap: 4px;
 
     .selected-count {
-      color: #409eff;
+      color: var(--oa-color-primary);
       font-size: 13px;
       font-weight: normal;
     }

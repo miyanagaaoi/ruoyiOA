@@ -1,14 +1,24 @@
 <template>
   <el-color-picker
     v-model="theme"
-    :predefine="['#409EFF', '#1890ff', '#304156','#212121','#11a983', '#13c2c2', '#6959CD', '#f5222d', ]"
+    :predefine="['#1f5ae0', '#409EFF', '#1890ff', '#304156','#212121','#11a983', '#13c2c2', '#6959CD', '#f5222d', ]"
     class="theme-picker"
     popper-class="theme-picker-dropdown"
   />
 </template>
 
 <script>
-const ORIGINAL_THEME = '#409EFF' // default color
+/**
+ * 换色器 —— 注意 ORIGINAL_THEME 的语义：
+ *
+ * 它**不是**「当前主题色」，而是 `/styles/theme-chalk/index.css` 这份静态 CSS 里实际写着的
+ * 那个主色。setTheme() 的做法是「拉取这份 CSS → 在文本层面把 ORIGINAL_THEME 的整个色簇
+ * 替换成目标色的色簇 → 注入 <style id="chalk-style">」。
+ *
+ * 所以：如果 ORIGINAL_THEME 与 theme-chalk/index.css 里的实际主色不一致，替换就找不到锚点，
+ * 换色会静默失效或串色。这份 css 已随品牌统一改为 #1f5ae0，这里必须同步。
+ */
+const ORIGINAL_THEME = '#1f5ae0' // theme-chalk/index.css 里实际写死的主色，不是"当前主题"
 
 export default {
   data() {

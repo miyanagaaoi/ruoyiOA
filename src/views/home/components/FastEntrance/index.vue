@@ -135,21 +135,21 @@ export default {
 .add-box {
   width: 40px;
   height: 40px;
-  border: 1px dashed #409eff;
+  border: 1px dashed var(--oa-color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 32px;
-  color: #409eff;
+  color: var(--oa-color-primary);
   cursor: pointer;
   transition: all 0.3s ease;
   background-color: #fff;
 }
 
 .add-box:hover {
-  border-color: #409eff;
-  background-color: #ecf5ff;
-  color: #409eff;
+  border-color: var(--oa-color-primary);
+  background-color: #e9effc;
+  color: var(--oa-color-primary);
 }
 </style>
 

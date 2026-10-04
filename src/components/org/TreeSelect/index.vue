@@ -420,7 +420,7 @@ export default {
     gap: 4px;
 
     .selected-count {
-      color: #409eff;
+      color: var(--oa-color-primary);
       font-size: 13px;
       font-weight: normal;
     }

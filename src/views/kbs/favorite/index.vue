@@ -40,7 +40,7 @@
           <div class="favorites-list">
             <div v-for="line in item.favorites" :key="line.id" class="favorite-item" @click="goDetail(line)">
               <div class="item-content">
-                <span class="item-type" :style="{'background-color': line.objectType === '1' ? '#409eff' : '#E6A23C'}">{{ typeDesc(line.objectType) }}</span>
+                <span class="item-type" :style="{'background-color': line.objectType === '1' ? '#1f5ae0' : '#E6A23C'}">{{ typeDesc(line.objectType) }}</span>
                 <span class="item-title">{{ line.objectName }}</span>
               </div>
               <div class="item-actions">
@@ -305,7 +305,7 @@ export default {
   cursor: pointer;
 
   &:hover {
-    color: #409eff;
+    color: var(--oa-color-primary);
     background-color: #f9f9f9;
     .item-actions {
       opacity: 1;

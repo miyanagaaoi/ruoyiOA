@@ -526,7 +526,7 @@ export default {
     text-align: center;
 
     .upload {
-      color: #409eff;
+      color: var(--oa-color-primary);
       cursor: pointer;
     }
 
@@ -608,7 +608,7 @@ export default {
   font-size: 14px;
 
   em {
-    color: #409eff;
+    color: var(--oa-color-primary);
     font-style: normal;
     font-weight: 600;
   }
@@ -628,8 +628,8 @@ export default {
   }
   .uploader-btn {
     margin-right: 0.2rem;
-    border: 1px dashed #409eff;
-    color: #409eff;
+    border: 1px dashed var(--oa-color-primary);
+    color: var(--oa-color-primary);
     border-radius: 0.15rem;
     &:hover {
       background-color: #fff;

@@ -42,6 +42,6 @@ export default {
 ::v-deep .el-tabs__item.is-active {
   font-size: 15px;
   font-weight: 600;
-  color: #409eff;
+  color: var(--oa-color-primary);
 }
 </style>

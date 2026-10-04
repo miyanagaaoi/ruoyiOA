@@ -76,7 +76,7 @@ export default {
   font-size: 14px;
 }
 ::v-deep .el-tabs--border-card > .el-tabs__header .el-tabs__item.is-active {
-  color: #409eff;
+  color: var(--oa-color-primary);
   font-size: 15px;
 }
 ::v-deep .el-form-item {

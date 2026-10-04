@@ -283,7 +283,7 @@ export default {
 }
 
 .model-icon.active {
-  color: #409eff;
+  color: var(--oa-color-primary);
 }
 .ml24 {
   margin-left: 24px;

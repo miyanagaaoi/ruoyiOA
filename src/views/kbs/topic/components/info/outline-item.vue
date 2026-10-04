@@ -83,7 +83,7 @@ export default {
   }
 
   &.active {
-    color: #1890ff;
+    color: var(--oa-color-primary);
     font-weight: 600;
   }
 

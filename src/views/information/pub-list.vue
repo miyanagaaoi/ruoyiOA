@@ -179,7 +179,7 @@ export default {
 }
 
 .input-wrapper .el-input__inner:focus {
-  border-color: #409eff;
+  border-color: var(--oa-color-primary);
 }
 
 /* 新闻卡片容器 */
@@ -287,7 +287,7 @@ export default {
   right: 40px;
   width: 40px;
   height: 40px;
-  background-color: #409eff;
+  background-color: var(--oa-color-primary);
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -300,7 +300,7 @@ export default {
   font-size: 20px;
 
   &:hover {
-    background-color: #66b1ff;
+    background-color: #4c7be6;
   }
 }
 
@@ -311,6 +311,6 @@ export default {
   font-size: 14px;
 }
 ::v-deep .input-wrapper .el-input__inner:focus {
-  border-color: #409eff;
+  border-color: var(--oa-color-primary);
 }
 </style>

@@ -354,7 +354,7 @@ export default {
     cursor: pointer;
     border: 1px solid #ebeef5;
     &:hover {
-      border-color: #409eff;
+      border-color: var(--oa-color-primary);
     }
   }
 }

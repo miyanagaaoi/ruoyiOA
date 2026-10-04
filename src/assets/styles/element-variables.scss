@@ -1,10 +1,17 @@
 /**
 * I think element-ui's default theme color is too light for long-term use.
 * So I modified the default color and you can modify it to your liking.
+*
+* ⚠ 改这里的 $--color-primary 必须同步改三处，否则会出现「两套蓝」：
+*   1. public/styles/theme-chalk/index.css —— ThemePicker 运行时拉取并整体重着色的那份，
+*      色簇（主色 + tint 0.1~0.9 + shade 0.1）必须与这里一致；
+*   2. src/components/ThemePicker/index.vue 的 ORIGINAL_THEME —— 它是重着色算法的「基准色」；
+*   3. src/store/modules/settings.js 的默认 theme + 旧值迁移。
+* 目前统一为集团 OA 品牌蓝 #1f5ae0（令牌见 oa-tokens.scss 的 --oa-color-primary）。
 **/
 
 /* theme color */
-$--color-primary: #1890ff;
+$--color-primary: #1f5ae0;
 $--color-success: #13ce66;
 $--color-warning: #ffba00;
 $--color-danger: #ff4949;

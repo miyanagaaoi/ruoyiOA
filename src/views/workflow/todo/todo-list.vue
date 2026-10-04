@@ -203,11 +203,11 @@ export default {
   color: #909399;
 
   &:hover {
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 }
 
 .model-icon.active {
-  color: #409eff;
+  color: var(--oa-color-primary);
 }
 </style>

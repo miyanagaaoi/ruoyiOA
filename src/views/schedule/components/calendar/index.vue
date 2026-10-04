@@ -147,7 +147,7 @@ export default {
   top: 5px;
   padding: 4px 10px;
   font-size: 14px;
-  background-color: #409eff;
+  background-color: var(--oa-color-primary);
   color: #fff;
   border: none;
   border-radius: 4px;

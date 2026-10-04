@@ -600,7 +600,7 @@ export default {
       transform: translateY(-3px);
 
       .seal-card {
-        border-color: #409eff;
+        border-color: var(--oa-color-primary);
       }
     }
   }
@@ -615,7 +615,7 @@ export default {
 
     &.selected {
       background: rgb(244, 250, 255);
-      border-color: #409eff;
+      border-color: var(--oa-color-primary);
       box-shadow: 0 2px 12px rgba(64, 158, 255, 0.2);
     }
   }

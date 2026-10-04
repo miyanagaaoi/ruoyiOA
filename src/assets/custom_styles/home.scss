@@ -1,5 +1,5 @@
 $selectedColor: #f6f7ff;
-$lighterBlue: #409EFF;
+$lighterBlue: var(--oa-color-primary);
 
 .container {
   position: relative;

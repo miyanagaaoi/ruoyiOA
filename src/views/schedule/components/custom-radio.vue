@@ -88,12 +88,12 @@ export default {
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: #ecf5ff;
+    background-color: #e9effc;
   }
 
   &.checked .radio-icon {
-    background-color: #409eff;
-    border-color: #409eff;
+    background-color: var(--oa-color-primary);
+    border-color: var(--oa-color-primary);
 
     i {
       color: #fff;
@@ -102,7 +102,7 @@ export default {
   }
 
   &.checked .radio-label {
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 }
 

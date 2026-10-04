@@ -179,7 +179,7 @@ export default {
   .title-icon {
     font-size: 14px;
     margin-right: 5px;
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 
   .node-title {
@@ -227,7 +227,7 @@ export default {
       cursor: pointer;
       border: 1px solid #ebeef5;
       &:hover {
-        border-color: #409eff;
+        border-color: var(--oa-color-primary);
       }
     }
   }

@@ -132,7 +132,7 @@ export default {
   border-radius: 4px;
 
   :hover {
-    border-color: #409eff;
+    border-color: var(--oa-color-primary);
   }
 
   .selected-serial {

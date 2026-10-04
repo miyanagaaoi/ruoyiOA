@@ -335,15 +335,15 @@ export default Vue.extend({
     }
 
     &.is-parent.active::before {
-      color: #409eff;
+      color: var(--oa-color-primary);
     }
   }
   li:hover {
-    color: #409eff;
+    color: var(--oa-color-primary);
   }
 }
 .active {
-  color: #409eff;
+  color: var(--oa-color-primary);
 }
 ::v-deep .el-input__inner {
   border: none !important;

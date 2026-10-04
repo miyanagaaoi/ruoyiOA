@@ -233,7 +233,7 @@ export default {
 
 ::v-deep .el-form-item__label {
   font-size: 14px;
-  color: #1890ff;
+  color: var(--oa-color-primary);
   font-weight: 500;
 }
 
@@ -255,8 +255,8 @@ export default {
   border-color: #fff;
 }
 .disabCheck >>> .el-checkbox__input.is-disabled.is-checked .el-checkbox__inner {
-  background-color: #409eff;
-  border-color: #409eff;
+  background-color: var(--oa-color-primary);
+  border-color: var(--oa-color-primary);
 }
 .disabCheck >>> .el-checkbox__input.is-disabled + span.el-checkbox__label {
   color: #606266;

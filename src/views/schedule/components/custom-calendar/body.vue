@@ -350,7 +350,7 @@ export default {
               color: #303133;
 
               &.today {
-                color: #409eff;
+                color: var(--oa-color-primary);
               }
             }
 
@@ -402,7 +402,7 @@ export default {
               transition: color 0.3s ease;
             }
             .more-tip:hover {
-              color: #409eff;
+              color: var(--oa-color-primary);
             }
           }
         }
