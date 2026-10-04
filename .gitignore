@@ -1,4 +1,4 @@
-﻿# 两个子工程各自是独立仓库（见各自目录下的 .git），外层不重复跟踪
+# 两个子工程各自是独立仓库（见各自目录下的 .git），外层不重复跟踪
 ruoyi-vue-oa-master/
 ruoyi-vue-oa-ui-master/
 
@@ -8,3 +8,11 @@ uploadPath/
 .cache/
 *.log
 erl_crash.dump
+
+# 工具与会话状态（技能定义、DSH 会话数据、AgentTeams 状态）：属于本机环境，不入库
+.claude/
+.dsh/
+.agent-teams/
+
+# Office 打开文件时的临时锁文件（~$xxx.xlsx）
+~$*
