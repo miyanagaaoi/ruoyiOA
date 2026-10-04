@@ -2,7 +2,17 @@
   <el-row :gutter="24">
     <el-form ref="form" label-position="right" :label-width="labelWidth">
       <el-col v-for="item in formViewList" :key="item.key" :span="item.span">
-        <el-form-item :label="item.label" :prop="item.prop">
+        <!--
+          纯排版控件（PRD 9.3 / AC-37）：不套「标签：值」的壳。
+          它们没有值，套上去就会渲染成「分组标题： *」这种既没信息量又难看的行。
+        -->
+        <div v-if="item.tag === 'design-section'" class="vf-section">
+          <span class="vf-section-bar"></span>
+          <span class="vf-section-title">{{ item.sectionTitle }}</span>
+          <p v-if="item.sectionDesc" class="vf-section-desc">{{ item.sectionDesc }}</p>
+        </div>
+        <div v-else-if="item.tag === 'design-text'" class="vf-text">{{ item.textContent }}</div>
+        <el-form-item v-else :label="item.label" :prop="item.prop">
           <template slot="label">
             <span v-if="item.required" class="required">*</span>
             {{ item.label }}
@@ -58,6 +68,7 @@
 <script>
 import { deepClone } from "@/utils/index";
 import { StrUtil } from "@/utils/StrUtil";
+import { amountWithUpper } from "@/utils/money";
 
 export default {
   name: "ViewForm",
@@ -103,7 +114,7 @@ export default {
       // 固定138px，如有需要，可使用下面这行代码
       // this.labelWidth = formConfCopy.labelWidth + "px";
 
-      const fields = formConfCopy.fields;
+      const fields = this.collectFields(formConfCopy.fields);
       if (!fields || fields.length === 0) return;
       const formDataCopy = deepClone(this.formData);
       let fieldList = [];
@@ -119,10 +130,37 @@ export default {
           required: _config.required || false,
           radioList: this.getCheckGroup(item),
           checkList: this.getCheckGroup(item),
+          // 纯排版控件的内容（分组标题 / 说明文字）
+          sectionTitle: item.title,
+          sectionDesc: item.desc,
+          textContent: item.content,
         };
         fieldList.push(field);
       });
       this.formViewList = fieldList;
+    },
+    /**
+     * 摊平字段清单：行容器（rowFormItem）里的子控件也要显示。
+     *
+     * ⚠ 原实现只看顶层 fields —— 用行容器排版过的表单，在审批/详情页会**整块消失**
+     * （拟稿页由 Parser 渲染是正常的，只有这个只读视图漏了）。
+     */
+    collectFields(list) {
+      const out = [];
+      const walk = (arr) => {
+        (arr || []).forEach((f) => {
+          const cfg = f.__config__ || {};
+          if (Array.isArray(cfg.children) && cfg.children.length) {
+            walk(cfg.children);
+            return;
+          }
+          // 按钮这类纯交互控件在只读视图里没有意义
+          if (["el-button", "el-divider"].indexOf(cfg.tag) >= 0) return;
+          out.push(f);
+        });
+      };
+      walk(list);
+      return out;
     },
     /** 获取值 */
     getValue(conf, formDataCopy) {
@@ -153,6 +191,25 @@ export default {
         case "el-time-picker": // 时间选择
           value = this.getTimePickerValue(conf, formDataCopy, prop);
           break;
+        // 金额（PRD 9.3 / AC-36）：只读视图也要带千分位与中文大写，
+        // 否则同在审批页，拟稿时看到的「1,234.56（人民币…）」到这里变成「1234.56」。
+        case "design-amount": {
+          const raw = formDataCopy[prop] !== undefined && formDataCopy[prop] !== null && formDataCopy[prop] !== ""
+            ? formDataCopy[prop]
+            : _config.defaultValue;
+          const decimals = conf.decimals !== undefined && conf.decimals !== null ? Number(conf.decimals) : 2;
+          value = amountWithUpper(raw, isFinite(decimals) ? decimals : 2);
+          break;
+        }
+        // 只读计算（AC-38）：值就是算好的结果，补上单位（如「天」）
+        case "design-calc": {
+          const calcVal = formDataCopy[prop] !== undefined && formDataCopy[prop] !== null
+            ? formDataCopy[prop]
+            : _config.defaultValue;
+          const unit = conf.formula === "dateDiff" && conf.unit ? " " + conf.unit : "";
+          value = calcVal === undefined || calcVal === null || calcVal === "" ? "" : String(calcVal) + unit;
+          break;
+        }
         // case "design-user-select":
         //   value = this.getUserSelectValue(conf, formDataCopy, prop);
         //   break;
@@ -240,6 +297,43 @@ export default {
 .required {
   font-size: 15px;
   color: red;
+}
+
+/* 分组标题 / 说明文字（只读视图，与 Parser 里的 DesignSection/DesignText 保持同一观感） */
+.vf-section {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 6px 0 2px;
+}
+.vf-section-bar {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: var(--oa-color-primary);
+}
+.vf-section-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--oa-color-ink, #303133);
+}
+.vf-section-desc {
+  width: 100%;
+  margin: 2px 0 0 9px;
+  font-size: 12px;
+  color: var(--oa-color-ink-subtle, #909399);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.vf-text {
+  padding: 2px 0;
+  font-size: 13px;
+  color: var(--oa-color-ink-muted, #606266);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .org-select {
