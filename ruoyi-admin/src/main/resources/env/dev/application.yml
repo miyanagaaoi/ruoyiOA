@@ -20,6 +20,16 @@ server:
   servlet:
     # 应用的访问路径
     context-path: /
+    # 响应显式声明 charset。
+    # 背景：Spring Boot 默认的 Jackson 转换器按 RFC 8259 只发 `Content-Type: application/json`
+    # （JSON 规范上默认就是 UTF-8），浏览器没问题，但**老客户端会按 Latin-1 猜** ——
+    # 例如 PowerShell 5.1 的 Invoke-RestMethod 会把返回的中文读成乱码，
+    # 脚本据此判断或回写就会把数据改坏（本项目已因此踩过一次）。
+    # 只强制**响应**侧，不动请求侧，避免影响 multipart 上传。
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force-response: true
   tomcat:
     # tomcat的URI编码
     uri-encoding: UTF-8

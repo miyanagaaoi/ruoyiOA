@@ -1,18 +1,12 @@
 package com.ruoyi.workflow.sign.guard;
 
 import com.ruoyi.common.exception.base.BaseException;
-import com.ruoyi.flowable.utils.FlowableUtil;
+import com.ruoyi.workflow.sign.policy.SignPolicyReader;
 import com.ruoyi.workflow.sign.service.ISignService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.flowable.bpmn.model.BpmnModel;
-import org.flowable.engine.RepositoryService;
-import org.flowable.engine.TaskService;
-import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import java.util.Map;
 
 /**
  * <p> 节点级「必须签名」的**服务端强制**（PRD AC-26） </p>
@@ -36,19 +30,17 @@ import java.util.Map;
 @Component
 public class TaskSignGuard {
 
-    /** 节点扩展属性名：签名要求 */
-    public static final String EXT_SIGN_MODE = "signMode";
+    /** 节点扩展属性名：签名要求（读取口径统一在 {@link SignPolicyReader}） */
+    public static final String EXT_SIGN_MODE = SignPolicyReader.EXT_SIGN_MODE;
     /** 必须签名 */
-    public static final String SIGN_REQUIRED = "REQUIRED";
+    public static final String SIGN_REQUIRED = SignPolicyReader.MODE_REQUIRED;
     /** 流程任务操作类型：完成任务（{@code FLowOperateTypeEnum.COMPLETE}） */
     public static final String OPERATE_COMPLETE = "2";
 
     @Autowired
     private ISignService signService;
     @Autowired
-    private TaskService taskService;
-    @Autowired
-    private RepositoryService repositoryService;
+    private SignPolicyReader signPolicyReader;
 
     /**
      * 本节点要求必须签名、而当前任务尚无有效签名时，抛 {@link BaseException}。
@@ -77,30 +69,11 @@ public class TaskSignGuard {
     /**
      * 读任务所在节点的 {@code signMode} 扩展属性。
      *
-     * <p> 任务已不存在（例如被并发处理掉）或读不到模型时返回 null，
-     * 交由调用方按「未配置签名要求」处理 —— 不能因为读不到就把正常提交挡住。 </p>
+     * <p> 读取与默认值的口径统一在 {@link SignPolicyReader} —— 前端拿"允许方式"、
+     * 服务端判"是否必需"必须看同一份解释，否则会出现"界面说不需要、服务端说必需"。
+     * 未配置时给 {@code OPTIONAL}，不会把正常提交挡住。 </p>
      */
     private String resolveSignMode(String taskId) {
-        try {
-            Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
-            if (task == null) {
-                return null;
-            }
-            BpmnModel bpmnModel = repositoryService.getBpmnModel(task.getProcessDefinitionId());
-            if (bpmnModel == null) {
-                return null;
-            }
-            Map<String, Object> extendVars =
-                    FlowableUtil.getExtendVarByTaskDefinitionKey(bpmnModel, task.getTaskDefinitionKey());
-            if (extendVars == null) {
-                return null;
-            }
-            Object value = extendVars.get(EXT_SIGN_MODE);
-            return value == null ? null : String.valueOf(value);
-        } catch (Exception e) {
-            // 读扩展属性属于辅助校验：异常时不应阻断正常审批，但要留下日志便于排查
-            log.warn("读取节点签名的配置失败，按未配置处理：taskId={} err={}", taskId, e.getMessage());
-            return null;
-        }
+        return signPolicyReader.resolveSignMode(taskId);
     }
 }

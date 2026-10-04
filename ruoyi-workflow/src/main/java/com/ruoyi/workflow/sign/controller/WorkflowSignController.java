@@ -6,6 +6,7 @@ import com.ruoyi.common.utils.ServletUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.workflow.domain.SignRecord;
 import com.ruoyi.workflow.domain.UserSignPreset;
+import com.ruoyi.workflow.sign.policy.SignPolicyReader;
 import com.ruoyi.workflow.sign.service.ISignService;
 import com.ruoyi.workflow.sign.service.IUserSignPresetService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,8 +32,10 @@ import java.util.List;
  *
  * <p> <b>关于节点级签名策略</b>：编译器 {@code SimpleFlowCompiler} 已把
  * {@code signMode / signTypes} 写进 BPMN 扩展属性，服务端读它做提交拦截
- * （{@code TaskSignGuard}），前端也可通过任务的扩展变量拿到，故不再单独开
- * {@code GET /workflow/sign/policy}。 </p>
+ * （{@code TaskSignGuard}）。{@code GET /workflow/sign/policy} 是**同一份解释**
+ * 对前端的出口 —— 签名弹窗要靠它决定"这个节点允许手写还是预存"（PRD 8.2 的
+ * "允许方式"生效点 / AC-25）。原先以为前端能从任务的扩展变量里直接拿到，
+ * 实测拿不到（扩展属性在 BPMN 模型上，不在任务的 variable 里），故补该接口。 </p>
  *
  * @author 二开
  */
@@ -45,6 +48,21 @@ public class WorkflowSignController extends BaseController {
 
     @Autowired
     private IUserSignPresetService userSignPresetService;
+
+    @Autowired
+    private SignPolicyReader signPolicyReader;
+
+    /**
+     * 当前任务节点的签名策略（PRD 8.2 / 10.2-B、AC-25）。
+     *
+     * <p> 返回 {@code {signMode, signTypes[], signRequired}}；任务不存在或读不到模型时
+     * 返回 {@code OPTIONAL + [HANDWRITE, PRESET]}（PRD 默认值），**不报错** ——
+     * 前端据此只是决定显示哪几个 Tab，读不到不该让整个签名入口不可用。 </p>
+     */
+    @GetMapping("/policy")
+    public AjaxResult policy(@RequestParam("taskId") String taskId) {
+        return success(signPolicyReader.describe(taskId));
+    }
 
     /**
      * 提交签名。
