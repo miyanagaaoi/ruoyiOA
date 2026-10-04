@@ -209,6 +209,13 @@ export default {
         this.cacheKeys = response.data
         this.subLoading = false
         this.nowCacheName = cacheName
+      }).catch(err => {
+        // 原来这里没有 catch：失败后 subLoading 永远为 true，键名列表永久转圈且残留旧数据
+        this.cacheKeys = []
+        const d = describeError(err)
+        this.$modal.msgError("缓存键名加载失败：" + d.text)
+      }).finally(() => {
+        this.subLoading = false
       })
     },
     /** 刷新缓存键名列表 */

@@ -205,15 +205,14 @@ export default {
               this.$refs.taskForm.resetFields();
             }
           });
-
-          this.loading = false;
         }
       }).catch((err) => {
         // 弹窗里的节点数据，不是页面主表格：只补失败处理，不插横幅
-        this.loading = false;
         this.nextApprovers = [];
         const d = describeError(err);
         this.$modal.msgError("加载失败：" + d.text);
+      }).finally(() => {
+        this.loading = false;
       });
     },
     /** 选人 */
@@ -292,10 +291,15 @@ export default {
                 this.loading = false;
                 this.goBack();
               })
-              .catch((this.loading = false));
+              .catch((err) => {
+                this.loading = false;
+                this.$modal.msgError("提交失败：" + describeError(err).text);
+              });
           }
         })
-        .catch((this.loading = false));
+        .catch((err) => {
+          this.loading = false;
+        });
     },
     cancle() {
       this.loading = false;

@@ -181,10 +181,14 @@ export default {
                 this.$modal.msgSuccess("操作成功");
                 this.handleQuery();
                 this.selectedRow = null;
-                this.loading = false;
               }
             })
-            .catch((this.loading = false));
+            .catch((err) => {
+              this.$modal.msgError("取回失败：" + describeError(err).text);
+            })
+            .finally(() => {
+              this.loading = false;
+            });
         })
         .catch(() => console.info("操作取消"));
     },
@@ -204,10 +208,14 @@ export default {
                 this.$modal.msgSuccess("操作成功");
                 this.handleQuery();
                 this.selectedRow = null;
-                this.loading = false;
               }
             })
-            .catch((this.loading = false));
+            .catch((err) => {
+              this.$modal.msgError("催办失败：" + describeError(err).text);
+            })
+            .finally(() => {
+              this.loading = false;
+            });
         })
         .catch(() => console.info("操作取消"));
     },

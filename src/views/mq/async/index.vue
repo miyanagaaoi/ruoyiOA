@@ -116,16 +116,18 @@ export default {
             this.$set(item, "isDisabled", false);
           });
           this.total = res.total;
-          this.loading = false;
         }
       }).catch((err) => {
         // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
-        this.loading = false;
         this.asyncList = [];
         this.total = 0;
         const d = describeError(err);
         this.loadError = d.text;
         this.loadErrorCause = d.cause;
+      }).finally(() => {
+        // 复位必须无条件：请求成功但 res.rows 为空/为假时，if 分支不成立，
+        // 原来嵌在 if 里的 this.loading = false 不会执行，表格会永久转圈。
+        this.loading = false;
       });
     },
     /** 搜索按钮操作 */

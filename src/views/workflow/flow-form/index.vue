@@ -126,6 +126,7 @@ import { startFlow, commonSubmit } from "@/api/workflow/process";
 import { restoreSeal } from "@/api/workflow/mainText";
 import SelectUser from "./component/select-user";
 import DeleteMulti from "./component/delete-multi.vue";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "FlowForm",
@@ -455,23 +456,27 @@ export default {
         templateId: this.taskForm.templateId,
         formData: data,
       };
-      if (this.businessId) {
-        const result = await updateForm(formParams);
-        if (result.code === 200 && this.updateFormMsg) {
-          this.$modal.msgSuccess("保存成功");
-        }
-        this.loading = false;
-      } else {
-        const result = await addForm(formParams);
-        if (result.code == 200 && result.data) {
-          this.businessId = result.data;
-          this.taskForm.businessId = this.businessId;
-          this.$set(this.$route.query, "businessId", this.businessId);
-          if (this.updateFormMsg) {
+      try {
+        if (this.businessId) {
+          const result = await updateForm(formParams);
+          if (result.code === 200 && this.updateFormMsg) {
             this.$modal.msgSuccess("保存成功");
           }
-          this.loading = false;
+        } else {
+          const result = await addForm(formParams);
+          if (result.code == 200 && result.data) {
+            this.businessId = result.data;
+            this.taskForm.businessId = this.businessId;
+            this.$set(this.$route.query, "businessId", this.businessId);
+            if (this.updateFormMsg) {
+              this.$modal.msgSuccess("保存成功");
+            }
+          }
         }
+      } catch (err) {
+        this.$modal.msgError("提交失败：" + describeError(err).text);
+      } finally {
+        this.loading = false;
       }
     },
     /** 获取表单标题 */

@@ -43,7 +43,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="settingList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="settingList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="年度" align="center" prop="year" width="120" />
       <el-table-column label="关联节假日" align="left" prop="holidayName" width="200" />
@@ -101,12 +102,18 @@
 import { listSetting, getSetting, delSetting, addSetting, updateSetting } from "@/api/system/holidayWorkSetting";
 import { listYearHoliday } from "@/api/system/holidaySetting";
 import { parseTime } from "../../../utils/ruoyi";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 export default {
   name: "WorkSetting",
+  components: { DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非单个禁用
@@ -149,6 +156,8 @@ export default {
     /** 查询节假日补班设置列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       this.queryParams.params = {};
       if (null != this.daterangeCreateTime && "" != this.daterangeCreateTime) {
         this.queryParams.params["beginCreateTime"] = this.daterangeCreateTime[0];
@@ -158,6 +167,15 @@ export default {
         this.settingList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里**没有 catch**：请求一失败 loading 就永远停在 true，
+        // 表格永久转圈、且残留上一次的数据。修三件事，缺一不可。
+        this.loading = false;
+        this.settingList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     /**

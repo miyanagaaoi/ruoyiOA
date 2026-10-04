@@ -103,6 +103,7 @@ import { rename, sort, delFile } from "@/api/file/operate.js";
 import Base from "@/utils/base64";
 import { listAttachment, addAttachment, remove } from "@/api/workflow/attachment";
 import SparkMD5 from "spark-md5";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "FlowAttachment",
@@ -220,20 +221,26 @@ export default {
         this.loading = false;
         return;
       }
-      listAttachment(businessId).then((res) => {
-        if (res.code === 200 && res.data) {
-          this.tableList = res.data.map((file) => ({
-            uid: file.fileId,
-            name: file.fileName,
-            size: file.fileSize,
-            // status: file.status,
-            fileId: file.fileId,
-            identifier: file.identifier,
-            sort: file.sort,
-          }));
-        }
-        this.loading = false;
-      });
+      listAttachment(businessId)
+        .then((res) => {
+          if (res.code === 200 && res.data) {
+            this.tableList = res.data.map((file) => ({
+              uid: file.fileId,
+              name: file.fileName,
+              size: file.fileSize,
+              // status: file.status,
+              fileId: file.fileId,
+              identifier: file.identifier,
+              sort: file.sort,
+            }));
+          }
+        })
+        .catch((err) => {
+          this.$modal.msgError("附件加载失败：" + describeError(err).text);
+        })
+        .finally(() => {
+          this.loading = false;
+        });
     },
     // 删除
     deleteFile(file, index) {

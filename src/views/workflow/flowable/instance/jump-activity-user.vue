@@ -168,14 +168,14 @@ export default {
             initialValues[item.nodeId] = "";
           });
           this.formData.approvers = Object.assign({}, initialValues);
-          this.loading = false;
         }
       }).catch((err) => {
         // 弹窗里的节点数据，不是页面主表格：只补失败处理，不插横幅
-        this.loading = false;
         this.nextApprovers = [];
         const d = describeError(err);
         this.$modal.msgError("加载失败：" + d.text);
+      }).finally(() => {
+        this.loading = false;
       });
     },
     /** 选人 */
@@ -249,7 +249,10 @@ export default {
           this.completeOpen = false;
           this.$emit("jumpSuccessOper");
         })
-        .catch((this.loading = false));
+        .catch((err) => {
+          this.loading = false;
+          this.$modal.msgError("跳转失败：" + describeError(err).text);
+        });
     },
     cancle() {
       this.completeOpen = false;

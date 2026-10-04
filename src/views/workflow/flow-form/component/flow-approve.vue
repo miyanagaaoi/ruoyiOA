@@ -201,17 +201,20 @@ export default {
     urge(row) {
       this.$confirm("是否提醒对方加快办理？", "提示", { confirmButtonText: "确 认", cancelButtonText: "取 消" }).then(() => {
         this.loading = true;
-        urge({ taskId: row.taskId }).then((res) => {
-          if (res.code === 200) {
-            this.$modal.msgSuccess("催办成功！");
+        urge({ taskId: row.taskId })
+          .then((res) => {
+            if (res.code === 200) {
+              this.$modal.msgSuccess("催办成功！");
+            }
+          })
+          .catch((err) => {
+            // 催办是写操作：只复位本次操作自己打开的 loading 并提示失败，不清空列表数据
+            const d = describeError(err);
+            this.$modal.msgError("催办失败：" + d.text);
+          })
+          .finally(() => {
             this.loading = false;
-          }
-        }).catch((err) => {
-          // 催办是写操作：只复位本次操作自己打开的 loading 并提示失败，不清空列表数据
-          this.loading = false;
-          const d = describeError(err);
-          this.$modal.msgError("催办失败：" + d.text);
-        });
+          });
       });
     },
     // 计算合并规则（在获取数据后调用）

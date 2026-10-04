@@ -270,9 +270,14 @@ export default {
                 this.$modal.msgSuccess("操作成功");
                 this.getList();
               }
-              this.loading = false;
             })
-            .catch((this.loading = true));
+            .catch((err) => {
+              this.$modal.msgError("终止办理失败：" + describeError(err).text);
+            })
+            .finally(() => {
+              this.loading = false;
+              this.resetLoadingText();
+            });
         })
         .catch(() => console.info("操作取消"));
     },
