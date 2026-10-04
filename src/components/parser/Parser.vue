@@ -233,13 +233,32 @@ export default {
     return data;
   },
   methods: {
-    /** 初始化表单 */
+    /**
+     * 初始化表单：把"已保存的值"与"表单里配置的默认值"都落到模型里。
+     *
+     * ⚠ 默认值必须**同时写进模型**，否则默认值只画在控件上：
+     *   用户不碰那个字段 → 模型里没有这个键 → 提交时不会被保存、打印件与流程条件也拿不到。
+     *   （实测踩到：只读计算控件读的是模型，用默认值驱动时算不出来。）
+     * 两层优先级不变：库里已有值优先，其次才是表单默认值。
+     */
     initFormData(componentList, formData) {
       componentList.forEach((item) => {
         const config = item.__config__;
-        if (item.__vModel__ && formData && formData.hasOwnProperty(item.__vModel__)) config.defaultValue = formData[item.__vModel__];
+        if (item.__vModel__ && formData) {
+          if (formData.hasOwnProperty(item.__vModel__)) {
+            config.defaultValue = formData[item.__vModel__];
+          } else if (this.hasSeedValue(config.defaultValue)) {
+            formData[item.__vModel__] = config.defaultValue;
+          }
+        }
         if (config.children) this.initFormData(config.children, formData);
       });
+    },
+    /** 只有"有内容"的默认值才落模型：空串 / null / undefined / 空数组都不落（否则模型里全是空字段） */
+    hasSeedValue(value) {
+      if (value === undefined || value === null || value === "") return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+      return true;
     },
     /** 创建校验规则 */
     buildRules(componentList, rules) {
