@@ -231,6 +231,27 @@ table.p-attach th {
 
 /* ================= 打印媒体 ================= */
 @media print {
+  /*
+   * 只留纸面。
+   * 打印页现在是**顶层路由**（不套 Layout），正常情况下纸上只有 .print-page；
+   * 下面这组是"万一被套进 Layout"的兜底 —— 否则侧栏 / 顶栏 / 标签页会被一起打出来
+   * （实际踩过：打印件上印出了「首页 我的 流程管理 资讯公告…」整条侧边导航）。
+   */
+  .sidebar-container,
+  .drawer-bg,
+  .navbar,
+  .tags-view-container,
+  .fixed-header {
+    display: none !important;
+  }
+  .main-container,
+  .app-main {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
   /* 打印时把屏幕上的壳全部去掉：只留纸面 */
   .print-page {
     background: #fff;
