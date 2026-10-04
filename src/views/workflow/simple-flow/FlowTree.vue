@@ -18,6 +18,13 @@
             v-if="node.type !== 'start' && node.type !== 'end'"
             class="ft-type"
           >{{ d.typeLabel(node.type) }}</span>
+          <button
+            v-if="!d.isSys(node)"
+            class="ft-del"
+            type="button"
+            :title="'删除节点：' + (node.name || d.typeLabel(node.type))"
+            @click.stop="d.removeNode(p(i))"
+          >×</button>
         </div>
         <div class="ft-node-body">
           <span class="ft-name">{{ node.name || d.typeLabel(node.type) }}</span>
@@ -176,15 +183,14 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
   min-width: 220px;
   max-width: 340px;
   min-height: 62px;
   border: 1px solid #d8d8d8;
-  border-top: 3px solid #d8d8d8;
   border-radius: 6px;
   background: #fff;
-  padding: 6px 12px 10px;
+  padding: 0;
+  overflow: hidden;
   cursor: pointer;
   font-size: 13px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -193,32 +199,61 @@ export default {
   &:hover {
     border-color: #b5b5b5;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    .ft-del { opacity: 1; }
   }
   &.active {
     border-color: #e8820c;
     box-shadow: 0 0 0 3px rgba(232, 130, 12, 0.12);
+    .ft-del { opacity: 1; }
   }
 
-  /* 第一行：类型标签（对齐飞书"审批 / 审批人：xxx"的两行卡） */
+  /* 第一行：实色标题条（用底色编码节点类型，对齐飞书卡片） */
   .ft-node-head {
     display: flex;
     align-items: center;
     gap: 6px;
-    min-height: 18px;
+    min-height: 22px;
+    padding: 3px 8px 3px 10px;
+    background: #b9b9b9;
+    color: #fff;
   }
   .ft-badge {
     font-size: 11px;
-    line-height: 16px;
+    line-height: 15px;
     color: #fff;
-    background: #b9b9b9;
+    background: rgba(255, 255, 255, 0.28);
     border-radius: 3px;
-    padding: 0 6px;
+    padding: 0 5px;
     flex: none;
   }
   .ft-type {
     font-size: 11px;
-    color: #a8a8a8;
     letter-spacing: 0.5px;
+    color: #fff;
+    opacity: 0.95;
+  }
+  /* 右上角删除按钮：低透明度常驻，悬停/选中时全亮 */
+  .ft-del {
+    margin-left: auto;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    line-height: 14px;
+    text-align: center;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+
+    &:hover {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.28);
+    }
   }
 
   /* 第二行：节点名 + 摘要 */
@@ -227,6 +262,7 @@ export default {
     align-items: baseline;
     gap: 8px;
     min-width: 0;
+    padding: 8px 12px 10px;
   }
   .ft-name {
     font-weight: 500;
@@ -244,34 +280,24 @@ export default {
     text-overflow: ellipsis;
   }
 
-  /* 起止节点：灰蓝、无强调 */
+  /* 起止节点：灰蓝 */
   &.kind-sys {
-    background: #f4f6f8;
-    border-top-color: #9fb0c0;
-    .ft-badge { background: #9fb0c0; }
+    background: #f6f8fa;
+    .ft-node-head { background: #8a9bab; }
   }
   /* 审批：橙色（只给"要人做决定"的节点） */
-  &.kind-approve {
-    border-top-color: #e8820c;
-    .ft-badge { background: #e8820c; }
-  }
+  &.kind-approve .ft-node-head { background: #e8820c; }
   /* 办理 */
-  &.kind-handle {
-    border-top-color: #4a9e6f;
-    .ft-badge { background: #4a9e6f; }
-  }
-  /* 抄送：浅色虚线，无决策权 */
+  &.kind-handle .ft-node-head { background: #4a9e6f; }
+  /* 抄送：虚线边框 + 浅灰条，无决策权 */
   &.kind-cc {
     border-style: dashed;
-    border-top-style: dashed;
-    background: #fcfcfc;
-    color: #777;
+    .ft-node-head { background: #b9b9b9; }
   }
-  /* 容器本身（条件/并行）作为卡片出现时 */
+  /* 容器（条件/并行） */
   &.kind-container {
-    border-top-color: #5b7fbf;
     background: #f7f9fc;
-    .ft-badge { background: #5b7fbf; }
+    .ft-node-head { background: #5b7fbf; }
   }
 }
 

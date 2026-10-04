@@ -491,7 +491,9 @@ export default {
         addBranch: p => vm.addBranchAt(p),
         removeBranch: p => vm.removeBranchAt(p),
         editCondition: p => vm.openConditionAt(p),
-        toggleLane: p => vm.toggleLane(p)
+        toggleLane: p => vm.toggleLane(p),
+        isSys: n => vm.isSys(n),
+        removeNode: p => vm.removeNodeAt(p)
       }
     }
   },
@@ -621,6 +623,23 @@ export default {
       if (!this.isContainer(node)) return
       node.branches.splice(laneIdx, 1)
       this.selectPath(path.slice(0, -1))
+    },
+    /** 删除节点；起止节点不可删。删掉最后一个节点时把选中落回所属泳道 */
+    removeNodeAt(path) {
+      const idx = path[path.length - 1]
+      const nodes = this.siblingsOf(path)
+      if (!nodes) return
+      const node = nodes[idx]
+      if (!node || this.isSys(node)) return
+      nodes.splice(idx, 1)
+      const parent = path.slice(0, -1)
+      if (nodes.length) {
+        this.selectPath(parent.concat([Math.max(0, idx - 1)]))
+      } else if (parent.length) {
+        this.selectPath(parent)
+      } else {
+        this.selection = { path: [0] }
+      }
     },
     /** 打开图形化条件编辑器；path 为泳道路径 */
     openConditionAt(path) {
