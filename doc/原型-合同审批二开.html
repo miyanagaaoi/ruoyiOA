@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>集团合同审批（含用印）二开 · 低保真原型图 V1.0</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:26px 22px 70px;background:#f0f0f1;color:#333;
+  font:13px/1.65 "Microsoft YaHei","PingFang SC","Helvetica Neue",Arial,sans-serif}
+.doc-head{max-width:1200px;margin:0 auto 20px}
+h1{font-size:22px;margin:0 0 6px}
+.sub{color:#777;font-size:12px;margin:0 0 14px}
+.sub a{color:#0366d6}
+.legend{background:#fff;border:1px solid #ddd;padding:10px 14px;font-size:12px;color:#666;
+  display:flex;flex-wrap:wrap;gap:8px 22px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend b{color:#333;font-weight:400}
+.screen{max-width:1200px;margin:0 auto 24px;background:#fff;border:1px solid #ddd;padding:16px 18px 14px;page-break-inside:avoid}
+.screen>h2{font-size:15px;margin:0 0 3px;display:flex;align-items:center;gap:9px}
+.screen>h2 .no{background:#333;color:#fff;font-size:11px;padding:1px 7px;border-radius:2px;font-weight:400;letter-spacing:.5px}
+.desc{color:#888;font-size:12px;margin:0 0 12px}
+.desc code{background:#f2f2f2;padding:0 4px;color:#666}
+.frame{border:1px solid #bbb;background:#fafafa;padding:10px}
+.notes{margin:10px 0 0;padding-left:20px;color:#666;font-size:12px}
+.notes li{margin:2px 0}
+.notes b{color:#333}
+/* ---- wireframe atoms ---- */
+.box{border:1px solid #9a9a9a;background:#fff}
+.btn{display:inline-block;border:1px solid #999;background:#e4e4e4;padding:2px 12px;font-size:12px;color:#333;white-space:nowrap}
+.btn.pri{background:#8c8c8c;color:#fff;border-color:#8c8c8c}
+.btn.ghost{background:#fff;border-style:dashed;color:#666}
+.btn.sm{padding:1px 8px;font-size:11px}
+.inp{display:inline-block;border:1px solid #999;background:#fff;padding:2px 8px;font-size:12px;color:#aaa;min-width:70px}
+.sel{display:inline-flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid #999;background:#fff;padding:2px 8px;font-size:12px;color:#aaa;min-width:80px}
+.sel::after{content:"▾";color:#777}
+.chk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#555;margin-right:14px}
+.chk i{width:11px;height:11px;border:1px solid #999;background:#fff;display:inline-block;flex:0 0 auto}
+.chk.on i{background:#8c8c8c;border-color:#8c8c8c}
+.chk.rd i{border-radius:50%}
+.chk.rd.on i{background:radial-gradient(#fff 0 30%,#8c8c8c 32% 100%)}
+.imgph{border:1px dashed #bbb;
+  background-image:linear-gradient(to top right,transparent 49.4%,#cfcfcf 49.4%,#cfcfcf 50.6%,transparent 50.6%),
+                   linear-gradient(to bottom right,transparent 49.4%,#cfcfcf 49.4%,#cfcfcf 50.6%,transparent 50.6%)}
+.ph{color:#a9a9a9}
+.mut{color:#777}
+.tag{display:inline-block;border:1px solid #9a9a9a;background:#f2f2f2;font-size:11px;padding:0 6px;color:#555}
+.tag.ok{border-color:#8aa88a;background:#eef5ee;color:#4d7a4d}
+.tag.warn{border-color:#c9a86a;background:#fbf3e3;color:#8a6d1f}
+.tag.err{border-color:#c08a8a;background:#fbecec;color:#8a3b3b}
+.condchip{display:inline-block;border:1px solid #7f7f7f;border-radius:10px;background:#fff;font-size:11px;padding:0 8px;color:#333;white-space:nowrap}
+.a{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;
+  background:#c0392b;color:#fff;font-size:10px;font-style:normal;vertical-align:1px;margin-left:4px;flex:0 0 auto}
+.hr{height:1px;background:#ddd;margin:8px 0}
+.tb{width:100%;border-collapse:collapse;font-size:12px}
+.tb td,.tb th{border:1px solid #b5b5b5;padding:4px 6px;text-align:left;vertical-align:top;color:#555}
+.tb th{background:#f2f2f2;font-weight:400;color:#444;width:110px}
+.split{display:flex;gap:10px;align-items:stretch}
+.pane{flex:1;border:1px solid #c4c4c4;background:#fff;display:flex;flex-direction:column;min-width:0}
+.pane-h{border-bottom:1px solid #d8d8d8;background:#f4f4f4;padding:5px 9px;font-size:12px;color:#555;
+  display:flex;justify-content:space-between;align-items:center}
+.pane-b{padding:9px;flex:1;min-width:0}
+.node{border:1px solid #b5b5b5;background:#fff;padding:7px 9px;margin-bottom:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:#444}
+.node.sys{background:#f7f7f7;border-style:solid;color:#666}
+.node.sel{border:2px solid #6b6b6b;background:#fbfbfb}
+.node .idx{width:17px;height:17px;border-radius:50%;border:1px solid #999;background:#f0f0f0;color:#555;
+  display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex:0 0 auto}
+.node .sum{color:#999;font-size:11px}
+.node .grip{color:#bbb;letter-spacing:-1px;flex:0 0 auto}
+.node .dots{color:#999;margin-left:auto;flex:0 0 auto;letter-spacing:1px}
+.node .nm{flex:0 0 auto}
+.insline{display:flex;align-items:center;gap:8px;color:#999;font-size:11px;margin:2px 0 8px 26px}
+.insline .btn{padding:0 8px;font-size:11px}
+.f{border:1px solid #ccc;background:#fff;padding:10px 12px}
+.fgrp{border:1px solid #ddd;background:#fcfcfc;padding:8px 10px;margin-bottom:8px}
+.fgrp>.t{font-size:12px;color:#555;margin-bottom:6px;display:flex;justify-content:space-between}
+.frow{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+.frow>label{width:74px;color:#666;flex:0 0 auto;text-align:right}
+.frow .inp,.frow .sel{flex:1}
+.sk{border:1px dashed #bdbdbd;background:#fcfcfc;color:#a9a9a9;font-size:11px;padding:10px;text-align:center}
+.modal{border:2px solid #8c8c8c;background:#fff;box-shadow:0 2px 0 rgba(0,0,0,.08)}
+.modal-h{border-bottom:1px solid #ccc;background:#f0f0f0;padding:6px 10px;font-size:13px;display:flex;justify-content:space-between;color:#444}
+.modal-b{padding:12px}
+.modal-f{border-top:1px solid #ddd;padding:8px 10px;text-align:right;background:#fafafa}
+.tabs{display:flex;gap:0;border-bottom:1px solid #bbb;margin-bottom:10px}
+.tabs span{padding:5px 14px;border:1px solid #bbb;border-bottom:none;margin-right:-1px;background:#f4f4f4;font-size:12px;color:#666}
+.tabs span.on{background:#fff;color:#333;position:relative;top:1px}
+.a4{width:440px;background:#fff;border:1px solid #9a9a9a;padding:12px 13px;margin:0 auto;font-size:10px;color:#555}
+.a4 .t1{text-align:center;font-size:15px;color:#333;letter-spacing:2px;margin:2px 0 8px}
+.a4 .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.a4 .sig{border-top:1px dashed #c9c9c9;margin-top:5px;padding-top:4px;display:flex;justify-content:space-between;align-items:flex-end;color:#888}
+.a4 .signimg{width:64px;height:22px;border-bottom:1px solid #bbb}
+.pagefoot{border-top:1px solid #bbb;margin-top:8px;padding-top:4px;display:flex;justify-content:space-between;color:#888;font-size:10px}
+.qr{width:34px;height:34px;border:1px solid #999;background:repeating-linear-gradient(45deg,#ddd 0 2px,#fff 2px 4px)}
+.lg{width:52px;height:20px;border:1px solid #bbb;background:#f6f6f6;color:#aaa;font-size:9px;text-align:center;line-height:20px}
+.flex{display:flex;align-items:center;gap:8px}
+.wrap{display:flex;gap:16px;align-items:flex-start}
+.grow{flex:1;min-width:0}
+.annobar{font-size:12px;color:#666}
+.mini{font-size:11px;color:#999}
+@media print{
+  body{background:#fff;padding:0}
+  .screen{border:none;box-shadow:none;margin:0 0 10px;padding:0 0 8px}
+  .frame{background:#fff}
+  .legend{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="doc-head">
+  <h1>集团合同审批（含用印）二开 · 低保真原型图</h1>
+  <p class="sub">
+    配套文档：<a href="PRD-合同审批二开.md">PRD-合同审批二开.md</a>　｜　版本 V1.0　｜　2026-10-03　｜　RuoYi-Vue-OA 二次开发
+  </p>
+  <div class="legend">
+    <span><b>说明</b>：低保真线框，只表达<b>信息层级、字段构成与操作路径</b>，不代表视觉稿。</span>
+    <span><span class="inp" style="min-width:44px">输入</span><b>输入框</b></span>
+    <span><span class="sel" style="min-width:44px"></span><b>下拉</b></span>
+    <span><span class="btn sm">按钮</span><b>按钮</b></span>
+    <span><span class="chk on"><i></i>选中</span><b>勾选</b></span>
+    <span><span class="imgph" style="width:22px;height:14px;display:inline-block"></span><b>图片/占位</b></span>
+    <span><i class="a">1</i><b>注释点（见每屏下方说明）</b></span>
+  </div>
+</div>
+
+<!-- ================= S1 ================= -->
+<section class="screen" id="s1">
+  <h2><span class="no">S1</span>流程设计（简化版）· 主界面</h2>
+  <p class="desc">管理员在这里完成一条合同审批流程的<b>全部配置</b>，不进入 BPMN 画布。对应 PRD 6.2。</p>
+  <div class="frame">
+    <div class="box" style="padding:8px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="mut">流程名称</span><span class="inp" style="min-width:180px;color:#555">合同审批（含用印）</span>
+      <span class="mut">分类</span><span class="sel" style="min-width:90px;color:#555">合同</span>
+      <span class="tag ok">已发布 v3</span><i class="a">1</i>
+      <span style="flex:1"></span>
+      <span class="btn">预览</span><span class="btn">保存草稿</span><span class="btn pri">发布</span><span class="btn ghost">高级模式（BPMN）</span><i class="a">2</i>
+    </div>
+
+    <div class="split" style="margin-top:10px">
+      <!-- 左：节点清单 -->
+      <div class="pane" style="flex:0 0 43%">
+        <div class="pane-h"><span>节点清单<i class="a">3</i></span><span class="mini">拖动 ≡ 排序</span></div>
+        <div class="pane-b">
+          <div class="node sys">
+            <span style="color:#666">⬤</span><span class="nm">发起</span>
+            <span class="mut mini">提交范围</span><span class="sel" style="min-width:70px;color:#555">全员</span>
+            <span class="dots">＋抄送人</span>
+          </div>
+
+          <div class="node sel">
+            <span class="idx">1</span><span class="nm">责任部门审批</span>
+            <span class="sum">部门负责人 · 会签 · 需签名</span>
+            <span class="dots">⋮</span>
+          </div>
+          <div class="insline"><span class="btn">＋ 插入节点</span><span>在此处插入</span></div>
+
+          <div class="node">
+            <span class="idx">2</span><span class="nm">会审部门（并行）</span>
+            <span class="sum">经济 / 行政 · 或签</span>
+            <span class="dots">⋮</span>
+          </div>
+          <div class="insline"><span class="btn">＋ 插入节点</span></div>
+
+          <div class="node">
+            <span class="idx">3</span><span class="nm">集团分管领导</span>
+            <span class="sum">指定人员 · 单人 · 需签名</span>
+            <span class="dots">⋮</span>
+          </div>
+          <div class="insline"><span class="btn">＋ 插入节点</span></div>
+
+          <div class="node">
+            <span class="idx">4</span><span class="nm">集团董事长</span>
+            <span class="sum">指定人员 · 单人 · 需签名</span>
+            <span class="dots">⋮</span>
+          </div>
+          <div class="insline"><span class="btn">＋ 插入节点</span></div>
+
+          <div class="node">
+            <span class="idx">5</span><span class="nm">用印办理</span>
+            <span class="sum">办理人 · 盖章 + 签名</span>
+            <span class="dots">⋮</span>
+          </div>
+          <div class="insline"><span class="btn">＋ 插入节点</span></div>
+
+          <div class="node">
+            <span class="idx">6</span><span class="nm">抄送</span>
+            <span class="sum">财务 / 档案</span>
+            <span class="dots">⋮</span>
+          </div>
+
+          <div class="node sys" style="margin-top:6px">
+            <span style="color:#666">⬤</span><span class="nm">结束</span>
+            <span class="dots">＋抄送人</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：配置抽屉 -->
+      <div class="pane">
+        <div class="pane-h"><span>节点配置 — 责任部门审批</span><span class="mini">① 序号与清单一致</span></div>
+        <div class="pane-b">
+          <div class="fgrp">
+            <div class="t"><span>基本</span></div>
+            <div class="frow"><label>节点名称</label><span class="inp" style="color:#555">责任部门审批</span></div>
+            <div class="frow"><label>节点说明</label><span class="inp">选填，仅设计器内可见</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>参与人<i class="a">4</i></span></div>
+            <div class="frow"><label>来源</label><span class="sel" style="color:#555">部门负责人</span></div>
+            <div class="frow"><label>部门</label><span class="sel" style="color:#555">发起人所属部门</span>
+              <span class="mut mini">层级</span><span class="inp" style="min-width:34px;color:#555">1</span></div>
+            <div class="frow"><label>多人方式</label>
+              <span class="chk rd on"><i></i>会签（全部同意）</span>
+              <span class="chk rd"><i></i>或签（一人同意）</span>
+              <span class="chk rd"><i></i>依次审批</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>签名策略<i class="a">5</i></span></div>
+            <div class="frow"><label>签名要求</label>
+              <span class="chk rd"><i></i>不需要</span>
+              <span class="chk rd"><i></i>可选</span>
+              <span class="chk rd on"><i></i>必需</span></div>
+            <div class="frow"><label>允许方式</label>
+              <span class="chk on"><i></i>手写签名</span>
+              <span class="chk on"><i></i>预存签名</span>
+              <span class="chk"><i></i>电子印章</span></div>
+            <div class="frow"><label>复用上次</label>
+              <span class="chk on"><i></i>允许一键复用</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>权限<i class="a">6</i></span></div>
+            <div class="frow"><label>可用按钮</label>
+              <span class="chk on"><i></i>同意</span><span class="chk on"><i></i>退回</span>
+              <span class="chk"><i></i>驳回</span><span class="chk"><i></i>加签</span>
+              <span class="chk on"><i></i>转办</span><span class="chk on"><i></i>抄送</span>
+              <span class="chk on"><i></i>打印</span></div>
+            <div class="frow"><label>字段只读</label>
+              <span class="sel" style="color:#555">已选 5 个字段</span>
+              <span class="btn sm">选择字段</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>提醒与兜底</span></div>
+            <div class="frow"><label>超时提醒</label>
+              <span class="chk on"><i></i>开启</span>
+              <span class="inp" style="min-width:40px;color:#555">24</span><span class="mut">小时未处理 →</span>
+              <span class="sel" style="color:#555">提醒当前办理人</span></div>
+            <div class="frow"><label>审批人为空</label><span class="sel" style="color:#555">转流程管理员</span></div>
+            <div class="frow"><label>与发起人同人</label><span class="sel" style="color:#555">自动跳过</span></div>
+            <div class="frow"><label>审批人离职</label><span class="sel" style="color:#555">转直属上级</span></div>
+          </div>
+
+          <div style="text-align:right"><span class="btn">取消</span><span class="btn pri">确定</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 状态徽标：草稿 / 已发布 v3；点开可看历史版本并可回滚（PRD 6.2）。</li>
+    <li><b>②</b> 「高级模式（BPMN）」只在需要复杂分支时使用；被高级模式改过的流程，简化设计器转为只读。</li>
+    <li><b>③</b> 界面不出现"用户任务 / 网关 / 顺序流 / 表达式 / 多实例"等 BPMN 词汇。</li>
+    <li><b>④</b> 参与人来源下拉：指定人员 / 角色 / 部门负责人 / 直属上级 / 发起人本人 / 发起人自选 / 上一节点审批人。<b>第 1 个审批节点禁用"角色、发起人自选"</b>（引擎限制，灰置 + 原因提示）。</li>
+    <li><b>⑤</b> 签名策略按节点选配，这是"签名组件选配"的配置入口（PRD 8.2）。</li>
+    <li><b>⑥</b> 字段只读叠加在表单之上，服务端同样按白名单校验，防绕过前端。</li>
+  </ol>
+</section>
+
+<!-- ================= S2 ================= -->
+<section class="screen" id="s2">
+  <h2><span class="no">S2</span>发布校验未通过</h2>
+  <p class="desc">点「发布」后先校验（V-1~V-8），错误必须<b>定位到具体节点</b>。对应 PRD 6.7。</p>
+  <div class="frame" style="display:flex;justify-content:center">
+    <div class="modal" style="width:460px">
+      <div class="modal-h"><span>发布校验</span><span class="ph">✕</span></div>
+      <div class="modal-b">
+        <div class="flex" style="margin-bottom:10px">
+          <span style="width:16px;height:16px;border-radius:50%;background:#c08a8a;display:inline-block"></span>
+          <b style="color:#8a3b3b">校验未通过，共 3 项需要处理</b>
+        </div>
+        <table class="tb">
+          <tr>
+            <td style="width:70px"><span class="tag err">阻断</span></td>
+            <td>节点 <b>② 会审部门（并行）</b>：未配置参与人<br><span class="mini">V-2　每个审批 / 办理节点必须配置参与人</span></td>
+            <td style="width:88px;text-align:right"><span class="btn sm">定位到节点</span></td>
+          </tr>
+          <tr>
+            <td><span class="tag err">阻断</span></td>
+            <td>首个审批节点 <b>① 责任部门审批</b>：不支持"按角色 / 发起人自选"<br><span class="mini">V-3　引擎限制：首节点无法在发起时解析该变量</span></td>
+            <td style="text-align:right"><span class="btn sm">定位到节点</span></td>
+          </tr>
+          <tr>
+            <td><span class="tag warn">提示</span></td>
+            <td>流程仅 <b>1 个</b>审批节点：不会产生待办，是否继续？<br><span class="mini">V-1　建议至少 2 个审批节点</span></td>
+            <td style="text-align:right"><span class="btn sm">忽略</span></td>
+          </tr>
+        </table>
+      </div>
+      <div class="modal-f"><span class="btn">返回修改</span><span class="btn" style="opacity:.5">仍要发布（灰置）</span></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>「阻断」项不修完不允许发布；「提示」项可忽略后继续。</li>
+    <li>错误文案不出现技术名词，只描述业务后果（例："否则不会产生待办"）。</li>
+  </ol>
+</section>
+
+<!-- ================= S3 ================= -->
+<section class="screen" id="s3">
+  <h2><span class="no">S3</span>打印预览页（A4）</h2>
+  <p class="desc">版式对齐纸质《集团合同类文件流转审批单》；签批栏<b>按流程节点动态生成</b>。对应 PRD 7.4、7.8。</p>
+  <div class="frame">
+    <!-- 工具条 -->
+    <div class="box" style="padding:6px 10px;display:flex;align-items:center;gap:8px">
+      <span class="mut" style="font-size:12px">打印预览 — 合同审批（含用印）/ HT20260724-02</span>
+      <span style="flex:1"></span>
+      <span class="mini">共 2 页</span>
+      <span class="btn">刷新数据</span><span class="btn">导出 PDF</span><span class="btn pri">打印</span><span class="btn">关闭</span>
+    </div>
+
+    <!-- A4 -->
+    <div style="background:#eee;padding:14px 0;margin-top:8px">
+      <div class="a4">
+        <!-- 抬头 -->
+        <div class="hd">
+          <div class="lg">LOGO</div>
+          <div style="text-align:center;flex:1">
+            <div class="t1">集团合同类文件流转审批单</div>
+          </div>
+          <div style="text-align:right">
+            <div class="qr"></div>
+            <div style="font-size:9px;color:#999;margin-top:2px">HT20260724-02</div>
+          </div>
+        </div>
+        <i class="a">1</i>
+
+        <!-- 基本信息 -->
+        <table class="tb" style="margin-top:6px">
+          <tr>
+            <th>提报单位</th><td>智澐公司</td>
+            <th>责任部门</th><td>经发部</td>
+            <th>报送时间</th><td>2026-07-24</td>
+          </tr>
+          <tr>
+            <th>合同编号</th><td>HT20260724-02</td>
+            <th>扫描件编号</th><td>SM-0231</td>
+            <th>报送人</th><td>郑妍</td>
+          </tr>
+          <tr>
+            <th>合同全称</th><td colspan="5">忻州热力户端智能管控项目委托施工合同（龙展）</td>
+          </tr>
+          <tr>
+            <th>签订主体</th><td colspan="2">甲方：云羲（山西）数字科技有限公司</td>
+            <td colspan="3">乙方：龙展建设有限公司</td>
+          </tr>
+          <tr>
+            <th>合同金额</th><td>124,000.00<br><span class="mini">壹拾贰万肆仟元整</span></td>
+            <th>履约期限</th><td>2026-06-01 ~ 2026-06-15</td>
+            <th>签订时间</th><td>2026-06-01</td>
+          </tr>
+          <tr>
+            <th>附送材料</th><td colspan="5">合同正本 4 份（甲方 3 份 / 乙方 1 份）、企业资质文件</td>
+          </tr>
+          <tr>
+            <th>相关说明</th><td colspan="5">签约委托施工框架合同，进行旧管路拆除、过滤球阀、热量表、智能锁闭阀、测温球阀设备的安装与调试和系统录入…</td>
+          </tr>
+          <tr>
+            <th>其他会审部门</th>
+            <td colspan="5">
+              <span class="chk"><i></i>经营</span><span class="chk on"><i></i>经济</span>
+              <span class="chk"><i></i>人力</span><span class="chk on"><i></i>行政</span><span class="chk"><i></i>法务</span>
+            </td>
+          </tr>
+        </table>
+        <i class="a">2</i>
+
+        <!-- 签批栏 1 -->
+        <div style="border:1px solid #b5b5b5;border-top:none;padding:5px 7px">
+          <div style="color:#666"><b>① 责任部门审批</b></div>
+          <div>接收单位：经发部　接收人：郑妍　签收时间：2026-07-24 09:12</div>
+          <div>处理意见：同意报批，合同条款已复核。</div>
+          <div class="sig"><span class="mini">签名</span><span class="signimg imgph"></span></div>
+        </div>
+        <i class="a">3</i>
+
+        <!-- 签批栏 2（会签多人） -->
+        <div style="border:1px solid #b5b5b5;border-top:none;padding:5px 7px">
+          <div style="color:#666"><b>② 会审部门（经济）</b></div>
+          <div>接收单位：财务部　接收人：高磊　签收时间：2026-07-28 11:37</div>
+          <div>处理意见：已做合同台账管理。</div>
+          <div class="sig"><span class="mini">签名</span><span class="signimg imgph"></span></div>
+          <div style="border-top:1px dashed #ddd;margin-top:4px;padding-top:3px">
+            <div class="mini">（会签第二人）接收人：李玥洋　签收时间：2026-07-28 15:02</div>
+            <div class="mini">处理意见：同意。</div>
+            <div class="sig"><span class="mini">签名</span><span class="signimg imgph"></span></div>
+          </div>
+        </div>
+
+        <!-- 签批栏 3（未到达） -->
+        <div style="border:1px solid #b5b5b5;border-top:none;padding:5px 7px;color:#a9a9a9">
+          <div><b>③ 集团分管领导</b>　<span style="font-size:9px">（未到达）</span></div>
+          <div>接收单位：＿＿＿＿＿　接收人：＿＿＿＿＿　签收时间：＿＿＿＿＿＿</div>
+          <div>处理意见：＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿</div>
+          <div class="sig"><span class="mini">签名</span><span class="signimg"></span></div>
+        </div>
+        <i class="a">4</i>
+
+        <div class="sk" style="margin-top:6px">…（后续节点签批栏按流程继续）…</div>
+
+        <!-- 附件清单 -->
+        <table class="tb" style="margin-top:6px">
+          <tr><th colspan="4" style="width:auto;background:#f2f2f2">附件清单</th></tr>
+          <tr><td style="width:34px">1</td><td>施工合同-盖章版.pdf</td><td style="width:80px">郑妍</td><td style="width:110px">2026-07-24 09:02</td></tr>
+          <tr><td>2</td><td>企业资质文件.pdf</td><td>郑妍</td><td>2026-07-24 09:03</td></tr>
+        </table>
+
+        <!-- 页脚 -->
+        <div class="pagefoot">
+          <span>打印时间：2026-07-29 10:20　打印人：王佳琦</span>
+          <span>第 1 页 / 共 2 页</span>
+        </div>
+        <i class="a">5</i>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 抬头：标题可配（默认"集团合同类文件流转审批单"）+ Logo + 单据编号 + 二维码（扫码查单据）。</li>
+    <li><b>②</b> 基本信息区由<b>字段映射</b>生成；未填写的行整行不打印（不出现空白行或 null）。"其他会审部门"勾选态直接映射到纸质勾选框。</li>
+    <li><b>③</b> 签批栏 = 节点名 + 接收单位 / 接收人 / 签收时间 + 处理意见 + 签名图片。<b>会签多人时同一栏内按人分行</b>。</li>
+    <li><b>④</b> 未到达节点：留空栏供手写（或按模板配置打印浅色"未到达"）。整栏 `page-break-inside: avoid`，不跨页撕裂。</li>
+    <li><b>⑤</b> 页脚含打印人 / 打印时间 / 页码；开启水印时正文叠加"XXX 于 yyyy-MM-dd HH:mm 打印，仅供内部使用"。每次打印写 <code>t_print_log</code>。</li>
+  </ol>
+</section>
+
+<!-- ================= S4 ================= -->
+<section class="screen" id="s4">
+  <h2><span class="no">S4</span>打印模板 · 字段映射配置</h2>
+  <p class="desc">本期只做"系统模板 + 字段映射"（不做拖拽画布）。对应 PRD 7.7。</p>
+  <div class="frame">
+    <div class="box" style="padding:8px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="mut">模板名称</span><span class="inp" style="min-width:170px;color:#555">合同审批流转单（默认）</span>
+      <span class="mut">纸张</span><span class="sel" style="min-width:78px;color:#555">A4 纵向</span>
+      <span class="mut">单据标题</span><span class="inp" style="min-width:200px;color:#555">集团合同类文件流转审批单</span>
+      <span style="flex:1"></span>
+      <span class="btn">预览</span><span class="btn pri">保存</span>
+    </div>
+
+    <div class="box" style="padding:8px 10px;margin-top:8px;display:flex;gap:20px;flex-wrap:wrap;font-size:12px">
+      <span class="chk on"><i></i>打印签名</span>
+      <span class="chk on"><i></i>打印审批意见</span>
+      <span class="chk on"><i></i>打印附件清单</span>
+      <span class="chk"><i></i>抄送节点出栏</span>
+      <span class="chk on"><i></i>水印</span>
+      <span class="chk on"><i></i>二维码</span>
+      <span class="mut">Logo</span><span class="imgph" style="width:40px;height:16px;display:inline-block"></span>
+    </div>
+
+    <div class="split" style="margin-top:8px">
+      <div class="pane" style="flex:0 0 28%">
+        <div class="pane-h"><span>表单字段 / 内置变量</span></div>
+        <div class="pane-b mini" style="color:#666;line-height:2">
+          <div>▾ 申请详情</div>
+          <div style="padding-left:12px">contractName　合同全称</div>
+          <div style="padding-left:12px">contractNo　合同编号</div>
+          <div style="padding-left:12px">amount　合同金额</div>
+          <div style="padding-left:12px">startDate / endDate　履约期限</div>
+          <div>▾ 我方信息</div>
+          <div style="padding-left:12px">ourCompany　签订公司</div>
+          <div>▾ 对方信息</div>
+          <div style="padding-left:12px">counterpartyName　对方单位</div>
+          <div>▾ 内置变量</div>
+          <div style="padding-left:12px">$submitter　发起人</div>
+          <div style="padding-left:12px">$submitterDept　提报单位</div>
+          <div style="padding-left:12px">$businessNo　单据编号</div>
+          <div style="padding-left:12px">$submitTime　报送时间</div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="pane-h"><span>打印版式（行 → 单元格）</span><span class="mini">＋ 添加行</span></div>
+        <div class="pane-b">
+          <table class="tb">
+            <tr><th style="width:34px">序</th><th>单元格（标签 / 字段 / 占列）</th><th style="width:74px">操作</th></tr>
+            <tr>
+              <td>1</td>
+              <td><span class="mut">提报单位</span> = <span style="color:#555">$submitterDept</span> 占1列　｜　
+                  <span class="mut">责任部门</span> = <span style="color:#555">respDept</span> 占1列　｜　
+                  <span class="mut">报送时间</span> = <span style="color:#555">$submitTime</span> 占1列</td>
+              <td class="mini">编辑 / 删除</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td><span class="mut">合同全称</span> = <span style="color:#555">contractName</span> 占3列</td>
+              <td class="mini">编辑 / 删除</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td><span class="mut">合同金额</span> = <span style="color:#555">amount</span> 占1列
+                  <span class="tag warn">仅财务/管理员可打印</span></td>
+              <td class="mini">编辑 / 删除</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td style="background:#fbfbfb"><b>动态区：签批栏</b>（来源=流程节点，自动按节点顺序生成）</td>
+              <td class="mini">不可删</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td style="background:#fbfbfb"><b>动态区：附件清单</b></td>
+              <td class="mini">可关</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>字段映射决定"哪个字段落在哪一行、占几列"；字段改名不影响映射（映射按 <code>__vModel__</code>）。</li>
+    <li>签批栏与附件清单是<b>动态区</b>，内容由运行时数据决定，不在这里逐行配置。</li>
+    <li>敏感字段（如金额）可设置"仅特定角色可打印"，无权限时该格打印 <code>***</code>。</li>
+  </ol>
+</section>
+
+<!-- ================= S5 ================= -->
+<section class="screen" id="s5">
+  <h2><span class="no">S5</span>合同审批 · 填写 / 审批页（含签名区）</h2>
+  <p class="desc">在现有 <code>flow-form</code> 页面上扩展：右下角审批卡片增加<b>签名区</b>，顶部按钮条增加<b>打印</b>。对应 PRD 8.6、7.2。</p>
+  <div class="frame">
+    <div class="box" style="padding:8px 10px;display:flex;align-items:center;gap:8px">
+      <span style="color:#555">合同审批（含用印）— ① 责任部门审批</span>
+      <span class="tag">审批中</span>
+      <span style="flex:1"></span>
+      <span class="btn">保存</span><span class="btn">签收</span><span class="btn">打印</span><span class="btn">盖章</span><span class="btn">抄送</span>
+      <i class="a">1</i>
+    </div>
+
+    <div class="tabs" style="margin-top:8px">
+      <span class="on">基本信息</span><span>正文</span><span>附件</span><span>办理过程</span><span>流程定义</span>
+    </div>
+
+    <div class="split">
+      <!-- 表单 -->
+      <div class="pane" style="flex:0 0 62%">
+        <div class="pane-b">
+          <div class="fgrp">
+            <div class="t"><span>申请详情</span></div>
+            <div class="frow"><label>合同名称 <span style="color:#c0392b">*</span></label><span class="inp" style="color:#555">忻州热力户端智能管控项目委托施工合同</span></div>
+            <div class="frow"><label>合同类型 <span style="color:#c0392b">*</span></label><span class="sel" style="color:#555">经济类</span></div>
+            <div class="frow"><label>合同描述 <span style="color:#c0392b">*</span></label><span class="sk" style="flex:1;text-align:left">多行文本（合同内容摘要）</span></div>
+            <div class="frow"><label>合同编号</label><span class="inp" style="color:#555">HT20260724-02</span><span class="mini">自动生成，可修改</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>合同有效期 <i class="a">2</i></span></div>
+            <div class="frow"><label>开始时间 <span style="color:#c0392b">*</span></label><span class="inp" style="color:#555">2026-06-01</span></div>
+            <div class="frow"><label>结束时间 <span style="color:#c0392b">*</span></label><span class="inp" style="color:#555">2026-06-15</span></div>
+            <div class="frow"><label>时长（天）</label><span class="inp" style="color:#888;background:#f2f2f2">15（自动计算，只读）</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>我方信息 / 对方信息 <i class="a">3</i></span></div>
+            <div class="frow"><label>签订公司 <span style="color:#c0392b">*</span></label><span class="inp" style="color:#555">云羲（山西）数字科技有限公司</span></div>
+            <div class="frow"><label>对方单位 <span style="color:#c0392b">*</span></label><span class="inp" style="color:#555">龙展建设有限公司</span></div>
+            <div class="frow"><label>对方联系方式</label><span class="inp">请输入</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>附件</span></div>
+            <div class="frow"><label>附件 <span style="color:#c0392b">*</span></label>
+              <span class="btn">上传文件</span><span class="mini">上限 30 个，单文件 ≤500MB　已上传 2 个</span></div>
+            <div class="frow"><label>盖章备案上传</label><span class="btn">上传文件</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 审批卡片 -->
+      <div class="pane">
+        <div class="pane-h"><span>流程审批</span><span class="mini">意见必填</span></div>
+        <div class="pane-b">
+          <div class="mini" style="margin-bottom:4px">审批意见 <span style="color:#c0392b">*</span></div>
+          <div class="sk" style="height:64px;text-align:left">请输入意见…</div>
+          <div class="mini" style="margin:6px 0 4px">常用意见：<span class="tag">同意。</span> <span class="tag">不同意。</span> <span class="tag">+ 添加</span></div>
+
+          <div class="hr"></div>
+
+          <div class="fgrp" style="margin-bottom:6px">
+            <div class="t"><span>签名 <i class="a">4</i></span><span class="tag warn">本节点：必需签名</span></div>
+            <div class="flex" style="gap:10px">
+              <span class="signimg imgph" style="width:96px;height:34px;display:inline-block"></span>
+              <div>
+                <div><span class="btn sm">使用默认预存签名</span></div>
+                <div style="margin-top:4px"><span class="btn sm">手写签名</span> <span class="btn sm">重签</span></div>
+              </div>
+            </div>
+            <div class="mini" style="margin-top:4px">签名将与本人、节点、时间、单据内容哈希一并留痕，且不可修改。</div>
+          </div>
+
+          <div style="text-align:right">
+            <span class="btn">退回</span><span class="btn">驳回</span><span class="btn pri">同意</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 顶部按钮按节点权限动态渲染；无权限的按钮不出现（不是灰置）。</li>
+    <li><b>②</b> "时长（天）"为只读计算控件（新增控件 <code>design-calc</code>），跨月/跨年需计算正确。</li>
+    <li><b>③</b> 分组标题控件（新增 <code>design-section</code>）；现有表单设计器没有该控件，需补。</li>
+    <li><b>④</b> 签名区按<b>节点签名策略</b>显示："不需要"则不出现；"必需"时未签名点"同意"会被阻断 并提示。</li>
+  </ol>
+</section>
+
+<!-- ================= S6 ================= -->
+<section class="screen" id="s6">
+  <h2><span class="no">S6</span>手写签名弹窗</h2>
+  <p class="desc">PC 鼠标 / H5 触屏通用；输出透明 PNG，宽度归一化后上传。对应 PRD 8.3。</p>
+  <div class="frame" style="display:flex;justify-content:center">
+    <div class="modal" style="width:520px">
+      <div class="modal-h"><span>签名 — ① 责任部门审批</span><span class="ph">✕</span></div>
+      <div class="modal-b">
+        <div class="tabs"><span class="on">手写签名</span><span>预存签名（2）</span></div>
+
+        <div style="border:1px dashed #9a9a9a;background:#fff;height:170px;position:relative">
+          <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#c4c4c4;font-size:13px">在此处签名</span>
+          <span style="position:absolute;left:14px;bottom:12px;color:#ddd;font-size:26px;font-style:italic">签名笔迹区</span>
+        </div>
+
+        <div class="flex" style="margin-top:8px">
+          <span class="mini">笔粗</span>
+          <span class="chk rd"><i></i>细</span><span class="chk rd on"><i></i>中</span><span class="chk rd"><i></i>粗</span>
+          <span style="flex:1"></span>
+          <span class="btn sm">撤销</span><span class="btn sm">清空</span>
+        </div>
+
+        <div class="flex" style="margin-top:8px">
+          <span class="chk on"><i></i>同时保存为我的预存签名</span>
+        </div>
+      </div>
+      <div class="modal-f">
+        <span class="btn">取消</span><span class="btn pri">确定签名</span>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>签名区 <code>touch-action: none</code>，H5 上书写不带动页面滚动；竖屏高度 ≥240px。</li>
+    <li>空白签名（像素占比低于阈值）点"确定"被拒绝。</li>
+    <li>确认后回显缩略图 + "重签"；重签生成<b>新记录</b>，旧记录保留（只追加）。</li>
+  </ol>
+</section>
+
+<!-- ================= S7 ================= -->
+<section class="screen" id="s7">
+  <h2><span class="no">S7</span>我的签名（预存签名管理）</h2>
+  <p class="desc">个人中心 → 我的签名。对应 PRD 8.4。</p>
+  <div class="frame">
+    <div class="box" style="padding:8px 10px;display:flex;align-items:center;gap:8px">
+      <span style="color:#555">我的签名</span>
+      <span class="mini">用于审批时一键调用，默认签名唯一</span>
+      <span style="flex:1"></span>
+      <span class="btn">上传图片</span><span class="btn pri">手写新增</span>
+    </div>
+
+    <table class="tb" style="margin-top:8px">
+      <tr><th style="width:120px">签名预览</th><th>名称</th><th style="width:90px">默认</th><th style="width:90px">状态</th><th style="width:150px">操作</th></tr>
+      <tr>
+        <td><span class="signimg imgph" style="width:92px;height:30px;display:inline-block"></span></td>
+        <td>常用签名</td>
+        <td><span class="tag ok">默认</span></td>
+        <td><span class="tag ok">启用</span></td>
+        <td class="mini">停用 / 删除</td>
+      </tr>
+      <tr>
+        <td><span class="signimg imgph" style="width:92px;height:30px;display:inline-block"></span></td>
+        <td>签字版（繁体）</td>
+        <td>—</td>
+        <td><span class="tag ok">启用</span></td>
+        <td class="mini">设为默认 / 停用 / 删除</td>
+      </tr>
+      <tr style="color:#aaa">
+        <td><span class="imgph" style="width:92px;height:30px;display:inline-block"></span></td>
+        <td>旧的签名</td>
+        <td>—</td>
+        <td><span class="tag">已停用</span></td>
+        <td class="mini">启用 / 删除</td>
+      </tr>
+    </table>
+  </div>
+  <ol class="notes">
+    <li>一人可维护多枚签名，设默认时自动取消其他默认。</li>
+    <li>上传图片支持 PNG / JPG ≤2MB，白底自动转透明。</li>
+    <li>删除为逻辑删；已被单据引用的签名图片不做物理删除（签名记录只追加）。</li>
+  </ol>
+</section>
+
+<!-- ================= S8 ================= -->
+<section class="screen" id="s8">
+  <h2><span class="no">S8</span>用印办理节点（盖章 + 签名）</h2>
+  <p class="desc">办理节点：先选印章盖章到正文，再签名，最后"完成"。对应 PRD 8.8、6.3。</p>
+  <div class="frame">
+    <div class="box" style="padding:8px 10px;display:flex;align-items:center;gap:8px">
+      <span style="color:#555">合同审批（含用印）— ⑤ 用印办理</span>
+      <span class="tag warn">办理节点（不做审批结论）</span>
+      <span style="flex:1"></span>
+      <span class="btn">打印</span><span class="btn">还原印章</span><span class="btn pri">完成</span>
+    </div>
+
+    <div class="split" style="margin-top:8px">
+      <div class="pane" style="flex:0 0 58%">
+        <div class="pane-h"><span>正文预览（PDF）</span><span class="mini">第 1 / 6 页　缩放 100%</span></div>
+        <div class="pane-b" style="display:flex;gap:12px">
+          <div class="imgph" style="width:190px;height:250px"></div>
+          <div class="mini" style="color:#888;line-height:2">
+            <div>拖动印章到签字位置 →</div>
+            <div>或选择「关键字定位」（合同签署页/乙方处）</div>
+            <div style="margin-top:8px">当前印章：</div>
+            <div><span class="imgph" style="width:54px;height:54px;display:inline-block"></span> 公章</div>
+            <div><span class="imgph" style="width:54px;height:54px;display:inline-block"></span> 合同章</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="pane-h"><span>用印与签名</span></div>
+        <div class="pane-b">
+          <div class="fgrp">
+            <div class="t"><span>盖章</span><span class="tag ok">已盖 1 枚</span></div>
+            <div class="frow"><label>印章</label><span class="sel" style="color:#555">公章（集团）</span><span class="btn sm">预览</span></div>
+            <div class="frow"><label>定位方式</label>
+              <span class="chk rd on"><i></i>手动拖拽</span><span class="chk rd"><i></i>关键字定位</span></div>
+            <div class="frow"><label>骑缝章</label><span class="chk"><i></i>加盖骑缝章（P1）</span></div>
+            <div class="frow"><label>水印</label><span class="chk"><i></i>添加防伪水印（P1）</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>签名 <span class="tag warn">必需</span></span></div>
+            <div class="flex" style="gap:10px">
+              <span class="signimg imgph" style="width:96px;height:34px;display:inline-block"></span>
+              <span class="btn sm">手写签名</span><span class="btn sm">预存签名</span>
+            </div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>办理说明</span></div>
+            <div class="sk" style="height:56px;text-align:left">用印时间 / 经办说明…</div>
+            <div class="mini" style="margin-top:4px">盖章后 <code>stamp_status=1</code>、记录盖章人 / 时间；需重盖先「还原印章」。</div>
+          </div>
+
+          <div style="text-align:right"><span class="btn">暂存</span><span class="btn pri">完成</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>办理节点<b>不能拒绝</b>，语义是"执行业务动作后完成"。</li>
+    <li>盖章复用现有链路：<code>POST /workfile/main/stamp</code>（可多枚章），回写 <code>t_workflow_main_text</code>。</li>
+    <li>骑缝章 / 水印底层已实现但链路未打通，标为 P1（REQ-SIGN-008）。</li>
+  </ol>
+</section>
+
+<!-- ================= S9 ================= -->
+<section class="screen" id="s9">
+  <h2><span class="no">S9</span>发起人填写页（对齐参考件版式）</h2>
+  <p class="desc">对齐 <code>参考文档/合同审批表单填写页面.jpg</code> 的信息分组与必填口径；增加"保存草稿"。</p>
+  <div class="frame" style="display:flex;justify-content:center">
+    <div class="box" style="width:520px">
+      <div class="box" style="padding:6px 10px;display:flex;align-items:center;gap:8px;border:none;border-bottom:1px solid #ddd">
+        <span class="ph">←</span><span style="flex:1;text-align:center;color:#555">合同审批（含用印）</span>
+        <span class="btn sm">保存草稿</span><span class="mini">草稿箱 (16)</span><i class="a">1</i>
+      </div>
+      <div style="padding:10px 12px">
+        <div class="box" style="border-color:#cfcfcf;background:#f7f7f7;padding:5px 8px;font-size:12px;color:#666">
+          ⓘ 有上次编辑记录　<span style="float:right">继续编辑　删除</span>
+        </div>
+        <div style="margin:10px 0 4px;color:#444">合同审批（含用印）</div>
+        <div class="mini">用于合同签订申请</div>
+
+        <div class="fgrp" style="margin-top:8px">
+          <div class="t"><span>申请详情</span></div>
+          <div class="frow"><label>合同名称 <span style="color:#c0392b">*</span></label><span class="inp">请输入</span></div>
+          <div class="frow"><label>合同类型 <span style="color:#c0392b">*</span></label><span class="sel">请选择</span></div>
+          <div class="frow"><label>合同类别 <span style="color:#c0392b">*</span></label><span class="sel">请选择</span><i class="a">2</i></div>
+          <div class="frow"><label>合同描述 <span style="color:#c0392b">*</span></label><span class="sk" style="flex:1;text-align:left">合同内容</span></div>
+          <div class="frow"><label>合同编号</label><span class="inp">请输入</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>合同有效期 ▾</span></div>
+          <div class="frow"><label>开始时间 <span style="color:#c0392b">*</span></label><span class="inp">请选择</span></div>
+          <div class="frow"><label>结束时间 <span style="color:#c0392b">*</span></label><span class="inp">请选择</span></div>
+          <div class="frow"><label>时长（天）<span style="color:#c0392b">*</span></label><span class="inp" style="color:#999;background:#f2f2f2">自动计算</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>我方信息</span></div>
+          <div class="frow"><label>签订公司 <span style="color:#c0392b">*</span></label><span class="inp">请输入</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>对方信息</span></div>
+          <div class="frow"><label>对方单位 <span style="color:#c0392b">*</span></label><span class="inp">请输入</span></div>
+          <div class="frow"><label>联系方式</label><span class="inp">请输入</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>附件</span></div>
+          <div class="frow"><label>附件 <span style="color:#c0392b">*</span></label><span class="btn">上传文件</span></div>
+          <div class="frow"><label>盖章备案</label><span class="btn">上传文件</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>审批流程 ▴</span><span class="mini">必填信息填写完整后显示</span></div>
+          <div class="mini" style="color:#999">① 责任部门 → ② 会审部门（经济/行政） → ③ 集团分管领导 → ④ 集团董事长 → ⑤ 用印办理</div>
+        </div>
+
+        <div style="text-align:center;margin-top:10px">
+          <span class="btn pri" style="padding:3px 26px">提交</span>
+          <span class="btn" style="padding:3px 26px">取消</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 顶部"保存草稿"：现有实现进入发起页会<b>自动发起流程实例</b>（每刷新一次多一个实例），本 PRD 要求改为显式"保存草稿 / 提交"（PRD 5.5 P-3）。</li>
+    <li><b>②</b> 参考件原图中"合同类型"重复出现两次，落地时保留一个"合同类型"，另一个改为"合同类别"（或删除）。</li>
+    <li>分组标题（申请详情 / 合同有效期 / 我方信息 / 对方信息）需要新增 <code>design-section</code> 控件。</li>
+  </ol>
+</section>
+
+<!-- ================= S10 ================= -->
+<section class="screen" id="s10">
+  <h2><span class="no">S10</span>表单设计器 · 主界面</h2>
+  <p class="desc">沿用现有 form-generator 三栏外壳（<code>views/tool/build/</code>），<b>新增 5 个业务控件</b>、字段属性增加"打印设置"。对应 PRD 4.2、9.3、REQ-FORM-001。</p>
+  <div class="frame">
+    <!-- 顶部工具条 -->
+    <div class="box" style="padding:8px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="mut">表单名称</span><span class="inp" style="min-width:150px;color:#555">合同审批表单</span>
+      <span class="mut">表单标识</span><span class="inp" style="min-width:120px;color:#555">contract_form</span>
+      <span class="mut">备注</span><span class="inp" style="min-width:140px">选填</span>
+      <span style="flex:1"></span>
+      <span class="btn">预览</span><span class="btn">JSON</span><span class="btn">清空</span><span class="btn pri">保存</span>
+    </div>
+
+    <div class="split" style="margin-top:10px">
+      <!-- 左：控件库 -->
+      <div class="pane" style="flex:0 0 21%">
+        <div class="pane-h"><span>控件库</span><span class="mini">点击或拖拽</span></div>
+        <div class="pane-b" style="font-size:12px;color:#666">
+          <div class="mini" style="color:#888;margin-bottom:4px">业务控件 <span class="tag warn">本期新增</span><i class="a">1</i></div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px;border-color:#c9a86a;background:#fdf8ee">金额（design-amount）</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px;border-color:#c9a86a;background:#fdf8ee">分组标题（design-section）</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px;border-color:#c9a86a;background:#fdf8ee">说明文字（design-text）</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px;border-color:#c9a86a;background:#fdf8ee">只读计算（design-calc）</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:10px;border-color:#c9a86a;background:#fdf8ee">签名控件（design-signature）<span class="mini">P1</span></div>
+
+          <div class="mini" style="color:#888;margin-bottom:4px">输入型</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px">单行文本 · 多行文本 · 密码 · 计数器 · 编辑器</div>
+          <div class="mini" style="color:#888;margin-bottom:4px">选择型</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px">下拉 · 级联 · 单选 · 多选 · 开关 · 滑块 · 日期 · 日期范围 · 时间 · 评分 · 颜色 · 上传</div>
+          <div class="mini" style="color:#888;margin-bottom:4px">布局型</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px">行容器 · 按钮</div>
+          <div class="mini" style="color:#888;margin-bottom:4px">机构及选人</div>
+          <div class="box" style="padding:4px 8px;margin-bottom:4px">选人 · 选部门</div>
+          <div class="mini" style="color:#888;margin-bottom:4px">编号</div>
+          <div class="box" style="padding:4px 8px">流水号</div>
+        </div>
+      </div>
+
+      <!-- 中：画布 -->
+      <div class="pane">
+        <div class="pane-h"><span>表单画布 — 合同审批表单</span><span class="mini">拖动 ⇅ 排序 · 点击选中</span></div>
+        <div class="pane-b">
+          <!-- 分组标题 -->
+          <div class="box" style="padding:4px 8px;margin-bottom:6px;background:#f2f2f2;color:#555;font-size:12px">申请详情　<span class="mini">分组标题</span></div>
+
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">合同名称 <span style="color:#c0392b">*</span></span>
+            <span class="inp" style="flex:1">请输入</span>
+          </div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">合同类型 <span style="color:#c0392b">*</span></span>
+            <span class="sel" style="flex:1">请选择</span>
+          </div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">合同类别 <span style="color:#c0392b">*</span></span>
+            <span class="sel" style="flex:1">请选择</span>
+          </div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">合同描述 <span style="color:#c0392b">*</span></span>
+            <span class="sk" style="flex:1;text-align:left;height:34px">多行文本</span>
+          </div>
+
+          <!-- 选中态：金额 -->
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px;border:2px solid #6b6b6b;background:#fbfbfb;position:relative">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">合同金额 <span style="color:#c0392b">*</span></span>
+            <span class="inp" style="flex:1;color:#555">0.00　（大写自动生成）</span>
+            <span class="tag warn">design-amount</span>
+            <span class="mini" style="position:absolute;right:6px;top:-11px;background:#6b6b6b;color:#fff;padding:0 6px;font-size:10px">复制 · 删除 · 拖动 ⇅</span>
+          </div>
+          <div class="mini" style="text-align:right;margin:-2px 0 6px;color:#8a6d1f">← 选中控件，右侧编辑属性<i class="a">2</i></div>
+
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">合同编号</span>
+            <span class="inp" style="flex:1;color:#555">HT20260724-02（流水号自动生成，可改）</span>
+            <span class="tag">流水号</span>
+          </div>
+
+          <!-- 分组标题 -->
+          <div class="box" style="padding:4px 8px;margin-bottom:6px;background:#f2f2f2;color:#555;font-size:12px">合同有效期　<span class="mini">分组标题（可折叠）</span></div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">开始时间 <span style="color:#c0392b">*</span></span>
+            <span class="inp" style="flex:1">请选择日期</span>
+          </div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">结束时间 <span style="color:#c0392b">*</span></span>
+            <span class="inp" style="flex:1">请选择日期</span>
+          </div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">时长（天）</span>
+            <span class="inp" style="flex:1;background:#f2f2f2;color:#999">自动计算 = 结束时间 − 开始时间</span>
+            <span class="tag warn">design-calc</span>
+          </div>
+
+          <div class="box" style="padding:4px 8px;margin-bottom:6px;background:#f2f2f2;color:#555;font-size:12px">我方信息</div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">签订公司 <span style="color:#c0392b">*</span></span>
+            <span class="inp" style="flex:1;color:#555">默认带出发起人所属公司</span>
+          </div>
+
+          <div class="box" style="padding:4px 8px;margin-bottom:6px;background:#f2f2f2;color:#555;font-size:12px">对方信息</div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">对方单位 <span style="color:#c0392b">*</span></span>
+            <span class="inp" style="flex:1">请输入</span>
+          </div>
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">联系方式</span>
+            <span class="inp" style="flex:1">请输入</span>
+          </div>
+
+          <div class="box" style="padding:5px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">附件 <span style="color:#c0392b">*</span></span>
+            <span class="btn sm">上传文件</span><span class="mini">上限 30 个，单文件 ≤500MB</span>
+          </div>
+          <div class="box" style="padding:5px 8px;display:flex;align-items:center;gap:8px">
+            <span style="width:88px;text-align:right;color:#666;font-size:12px">盖章备案上传</span>
+            <span class="btn sm">上传文件</span><span class="mini">上传项名称可自定义</span>
+          </div>
+
+          <div class="sk" style="margin-top:8px">点击或拖拽左侧控件至此处</div>
+        </div>
+      </div>
+
+      <!-- 右：字段属性（摘要） -->
+      <div class="pane" style="flex:0 0 25%">
+        <div class="pane-h"><span>字段属性 — 合同金额</span></div>
+        <div class="pane-b" style="font-size:12px;color:#666">
+          <div class="frow"><label>标签</label><span class="inp" style="color:#555">合同金额</span></div>
+          <div class="frow"><label>字段名</label><span class="inp" style="color:#555">amount</span></div>
+          <div class="frow"><label>占宽</label><span class="sel" style="color:#555">一行（24）</span></div>
+          <div class="frow"><label>必填</label><span class="chk on"><i></i>是</span></div>
+          <div class="hr"></div>
+          <div class="mini" style="color:#8a6d1f">校验：小数位 2 · 千分位 · 大写 ☑ · 范围 ≥0</div>
+          <div class="mini" style="color:#8a6d1f;margin-top:4px">打印：打印 ☑ · 标签「合同金额」· 占 1 列 · 仅财务/管理员可见</div>
+          <div class="hr"></div>
+          <div style="text-align:right"><span class="btn sm">更多设置 →</span></div>
+          <div class="mini" style="margin-top:6px;color:#999">完整属性见 S11</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 控件库新增一个「业务控件」分组，把 5 个新控件集中放置，与既有控件区分（现有 <code>config.js</code> 只有输入型/选择型/布局型/机构及选人/编号五组）。</li>
+    <li><b>②</b> 选中控件后右侧出属性面板；画布上每个控件带"复制 · 删除 · 拖动排序"浮层（现有 <code>DraggableItem.vue</code> 已有此形态）。</li>
+    <li>分组标题、金额、只读计算是合同表单的硬需求：现有设计器<b>没有</b>这三类控件，是本期必须补的（PRD 9.3 / D10）。</li>
+    <li>表单保存后写入 <code>t_template_dynamic_form.content</code>，并以 <code>t_template.form_id</code> 关联单据模板。</li>
+  </ol>
+</section>
+
+<!-- ================= S11 ================= -->
+<section class="screen" id="s11">
+  <h2><span class="no">S11</span>字段属性面板（以「合同金额」为例）</h2>
+  <p class="desc">在现有"基础设置"之外，新增 <b>校验设置</b> 与 <b>打印设置</b> 两组。对应 PRD 7.7、9.3。</p>
+  <div class="frame" style="display:flex;justify-content:center">
+    <div class="modal" style="width:460px">
+      <div class="modal-h"><span>字段属性 — 合同金额 <span class="mini">design-amount</span></span><span class="ph">✕</span></div>
+      <div class="modal-b">
+        <div class="fgrp">
+          <div class="t"><span>基础设置</span></div>
+          <div class="frow"><label>标签</label><span class="inp" style="color:#555">合同金额</span></div>
+          <div class="frow"><label>字段名</label><span class="inp" style="color:#555">amount</span>
+            <span class="mini">打印模板按此映射，保存后勿随意改<i class="a">1</i></span></div>
+          <div class="frow"><label>占宽</label><span class="sel" style="color:#555">一行（24）</span></div>
+          <div class="frow"><label>必填</label><span class="chk on"><i></i>是</span>
+            <span class="chk"><i></i>只读</span></div>
+          <div class="frow"><label>提示语</label><span class="inp">请输入合同金额</span></div>
+          <div class="frow"><label>默认值</label><span class="inp">无</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>校验设置</span><span class="tag warn">本期新增</span></div>
+          <div class="frow"><label>币种</label><span class="sel" style="color:#555">人民币 CNY</span></div>
+          <div class="frow"><label>小数位</label><span class="inp" style="min-width:40px;color:#555">2</span>
+            <span class="chk on"><i></i>千分位</span>
+            <span class="chk on"><i></i>生成大写</span></div>
+          <div class="frow"><label>金额范围</label><span class="inp" style="min-width:60px;color:#555">0</span>
+            <span class="mut">~</span><span class="inp" style="min-width:60px">不限</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>打印设置</span><span class="tag warn">本期新增</span><i class="a">2</i></div>
+          <div class="frow"><label>是否打印</label><span class="chk on"><i></i>打印该字段</span>
+            <span class="mini">不勾选则打印件整行不出现</span></div>
+          <div class="frow"><label>打印标签</label><span class="inp" style="color:#555">合同金额</span>
+            <span class="mini">默认取字段标签</span></div>
+          <div class="frow"><label>打印占列</label><span class="sel" style="min-width:70px;color:#555">1 列</span>
+            <span class="mini">决定在打印表格里占几格</span></div>
+          <div class="frow"><label>可见角色</label><span class="sel" style="color:#555">全部角色</span>
+            <span class="mini">受限时打印为 ***<i class="a">3</i></span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>显隐设置</span><span class="mini">P1</span></div>
+          <div class="mini" style="color:#999">满足条件时显示 / 隐藏本字段（条件组内为「且」，组间为「或」）</div>
+          <div style="margin-top:6px"><span class="btn sm">＋ 添加条件组</span></div>
+        </div>
+      </div>
+      <div class="modal-f"><span class="btn">取消</span><span class="btn pri">确定</span></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 字段名（<code>__vModel__</code>）是打印模板、节点字段权限、流程条件三处的共同锚点，改名会导致引用失效——PRD 建议保存后只允许"带影响提示"的改名。</li>
+    <li><b>②</b> 打印设置直接写进 schema 的 <code>__config__.printable / printLabel / printSpan</code>，与打印模板的字段映射同源（PRD 7.7）。</li>
+    <li><b>③</b> 受限字段打印为 <code>***</code>，避免把金额泄露给无权限的阅览者。</li>
+  </ol>
+</section>
+
+<!-- ================= S12 ================= -->
+<section class="screen" id="s12">
+  <h2><span class="no">S12</span>新增控件规格（设计器 ↔ 引擎 ↔ 打印 三方对齐）</h2>
+  <p class="desc">这 5 个控件横跨三处代码，缺一处就会"能填不能存"或"能存不能打"。对应 PRD 9.3。</p>
+  <div class="frame">
+    <table class="tb">
+      <tr>
+        <th style="width:110px">分组</th><th style="width:130px">控件</th><th style="width:130px">tag</th>
+        <th style="width:90px">状态</th><th>用途 / 落地要点</th>
+      </tr>
+      <tr>
+        <td rowspan="5" style="background:#fdf8ee;color:#8a6d1f">业务控件<br><span class="mini">本期新增</span></td>
+        <td><b>金额</b></td><td><code>design-amount</code></td><td><span class="tag warn">新增</span></td>
+        <td>千分位、小数位、币种、范围、<b>自动生成大写</b>；打印时数字与大写同行</td>
+      </tr>
+      <tr>
+        <td><b>分组标题</b></td><td><code>design-section</code></td><td><span class="tag warn">新增</span></td>
+        <td>表单分节（申请详情 / 我方信息 / 对方信息），可折叠；<b>打印件不输出该行</b></td>
+      </tr>
+      <tr>
+        <td><b>说明文字</b></td><td><code>design-text</code></td><td><span class="tag warn">新增</span></td>
+        <td>纯展示文本（≤500 字），不可填写；默认 <code>printable=false</code></td>
+      </tr>
+      <tr>
+        <td><b>只读计算</b></td><td><code>design-calc</code></td><td><span class="tag warn">新增</span></td>
+        <td>内置公式：日期区间 → 天数；金额小写 → 大写。只读、不可手填</td>
+      </tr>
+      <tr>
+        <td><b>签名控件</b></td><td><code>design-signature</code></td><td><span class="tag">P1</span></td>
+        <td>表单内嵌手写签名位（发起人手签场景），值存 <code>fileId</code></td>
+      </tr>
+      <tr>
+        <td>输入型 / 选择型 / 布局型 / 机构选人 / 编号</td>
+        <td colspan="2">沿用现有控件</td><td><span class="tag ok">已有</span></td>
+        <td>单行文本、多行文本、下拉、单选、多选、日期、日期范围、上传、选人、选部门、流水号等（表格控件目前被注释，本期不启用）</td>
+      </tr>
+    </table>
+
+    <div class="box" style="margin-top:10px;padding:8px 10px;font-size:12px;color:#666">
+      <b style="color:#333">三处必改（否则控件是"死"的）</b>
+      <table class="tb" style="margin-top:6px">
+        <tr><th style="width:230px">位置</th><th>改什么</th></tr>
+        <tr><td><code>ruoyi-vue-oa-ui-master</code><br><code>utils/generator/config.js</code></td><td>注册 5 个新控件（拖拽源 + 默认属性）</td></tr>
+        <tr><td><code>components/parser/Parser.vue</code>、<br><code>views/tool/build/RightPanel.vue</code></td><td>补"可编辑 / 只读"两态渲染</td></tr>
+        <tr><td><code>ruoyi-vue-oa-master</code><br><code>ruoyi-biz-sdk/.../enums/ComponentTypeEnum.java</code></td><td>补 <code>design-amount</code> / <code>design-signature</code> 分支；<b>不补会走 UNKNOWN 只透传</b>，导致大写、标签转换失效（<code>BizFormServiceImpl.java:258-260</code>）</td></tr>
+      </table>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>新控件 tag 独立，存量表单 schema 不含它们，因此<b>不影响既有模板渲染</b>（AC-39 回归范围）。</li>
+    <li>字段级"是否打印"默认开启，与现有表单设计器"新增字段即参与打印"的直觉一致。</li>
+  </ol>
+</section>
+
+<!-- ================= S13 ================= -->
+<section class="screen" id="s13">
+  <h2><span class="no">S13</span>表单 Schema（设计器输出 / 前后端契约）</h2>
+  <p class="desc">设计器保存的 JSON 结构；<code>printable / printLabel / printSpan</code> 与 <code>printTemplateId</code> 为本期新增。对应 PRD 9.3。</p>
+  <div class="frame">
+    <div class="split">
+      <div class="pane" style="flex:0 0 58%">
+        <div class="pane-h"><span>JSON 抽屉（现有 JsonDrawer 形态）</span><span class="mini">只读 / 可复制</span></div>
+        <div class="pane-b">
+<pre style="margin:0;font:11px/1.7 Consolas,Monaco,monospace;color:#555;white-space:pre-wrap">{
+  "formConf": {
+    "formRef": "elForm", "formModel": "formData", "formRules": "rules",
+    "labelWidth": 100, "gutter": 15, "span": 24,
+    "printTemplateId": "pt_contract_01"        // ← 新增
+  },
+  "fields": [
+    { "__config__": { "label": "合同名称", "tag": "el-input",
+        "required": true, "span": 24,
+        "printable": true, "printLabel": "合同全称", "printSpan": 3 },
+      "__vModel__": "contractName", "placeholder": "请输入" },
+
+    { "__config__": { "label": "合同金额", "tag": "design-amount",
+        "required": true, "span": 24,
+        "amountOption": { "currency": "CNY", "decimals": 2,
+                          "thousand": true, "capital": true, "min": 0 },
+        "printable": true, "printLabel": "合同金额", "printSpan": 1,
+        "printRoles": ["finance", "admin"] },   // 受限角色
+      "__vModel__": "amount" },
+
+    { "__config__": { "label": "合同有效期", "tag": "design-section",
+        "collapsible": true, "printable": false },
+      "__vModel__": "sectionPeriod" },
+
+    { "__config__": { "label": "时长（天）", "tag": "design-calc",
+        "readonly": true,
+        "calc": { "expr": "dateDiff(endDate, startDate, 'day')" } },
+      "__vModel__": "durationDays" }
+  ]
+}</pre>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="pane-h"><span>字段说明</span></div>
+        <div class="pane-b">
+          <table class="tb">
+            <tr><th style="width:130px">字段</th><th>含义</th></tr>
+            <tr><td><code>__config__.label</code></td><td>表单上显示的标签</td></tr>
+            <tr><td><code>__vModel__</code></td><td><b>字段唯一锚点</b>：打印映射、节点字段权限、流程条件都用它</td></tr>
+            <tr><td><code>__config__.tag</code></td><td>控件类型（决定渲染与后端值转换）</td></tr>
+            <tr><td><code>__config__.required</code></td><td>设计期静态必填（全节点一致）</td></tr>
+            <tr><td><code>__config__.printable</code> <span class="tag warn">新</span></td><td>是否打印，默认 true</td></tr>
+            <tr><td><code>__config__.printLabel</code> <span class="tag warn">新</span></td><td>打印件上的标签（默认取 label）</td></tr>
+            <tr><td><code>__config__.printSpan</code> <span class="tag warn">新</span></td><td>打印表格中占几列</td></tr>
+            <tr><td><code>__config__.printRoles</code> <span class="tag warn">新</span></td><td>可打印该字段的角色；受限时打印 <code>***</code></td></tr>
+            <tr><td><code>formConf.printTemplateId</code> <span class="tag warn">新</span></td><td>默认打印模板（t_template_print_template）</td></tr>
+          </table>
+          <div class="mini" style="margin-top:8px;color:#999">保存落库：<code>t_template_dynamic_form.content</code>；单据数据落 <code>t_workflow_form.form_data</code> 的 <code>{formData, valData}</code>。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>在途单据提交时已把当时的 schema 一并落库，因此<b>表单改动不会改变在途单据的展示</b>（事实冻结）；表单版本列（P1）用于显式追溯。</li>
+    <li><code>design-section</code> 的 <code>printable</code> 恒为 false——打印件用表格行表达分组，不重复输出标题。</li>
+  </ol>
+</section>
+
+<!-- ================= S14 ================= -->
+<section class="screen" id="s14">
+  <h2><span class="no">S14</span>并行会审 · 设计器配置（分支数量由表单决定）</h2>
+  <p class="desc">会审部门不是设计期写死的，是<b>提交人在表单里勾的</b>（"其他会审部门"多选）。所以这里配的是"<b>按表单多选字段动态生成分支</b>"，而不是画几条固定分支。</p>
+  <div class="frame" style="display:flex;justify-content:center">
+    <div class="modal" style="width:500px">
+      <div class="modal-h"><span>节点配置 — ② 会审部门（并行）</span><span class="ph">✕</span></div>
+      <div class="modal-b">
+
+        <div class="fgrp">
+          <div class="t"><span>基本</span></div>
+          <div class="frow"><label>节点名称</label><span class="inp" style="color:#555">会审部门（并行）</span></div>
+          <div class="frow"><label>分支标题</label><span class="inp" style="color:#555">会审 · {部门}</span>
+            <span class="mini">打印件签批栏标题<i class="a">1</i></span></div>
+        </div>
+
+        <div class="fgrp" style="border-color:#c9a86a;background:#fdf8ee">
+          <div class="t"><span>分支来源</span><span class="tag warn">关键配置</span></div>
+          <div class="frow"><label>&nbsp;</label>
+            <span class="chk rd"><i></i>固定分支（设计期指定几支）</span>
+            <span class="mini" style="color:#8a6d1f">← 法务走这里：不依赖提交人勾选<i class="a">6</i></span></div>
+          <div class="frow"><label>&nbsp;</label>
+            <span class="chk rd on"><i></i>按表单多选字段动态生成</span><i class="a">2</i></div>
+          <div class="frow"><label>表单字段</label><span class="sel" style="color:#555">其他会审部门 jointDepts</span></div>
+          <div class="frow"><label>选项来源</label><span class="sel" style="color:#555">数据字典：会审部门</span>
+            <span class="mini">经营 / 经济 / 人力 / 行政（<b>不含法务</b>）</span></div>
+          <div class="frow"><label>分支上限</label><span class="inp" style="min-width:40px;color:#555">5</span>
+            <span class="mini">勾选数即分支数，超出按上限截断并提示</span></div>
+        </div>
+
+        <div class="fgrp">
+          <div class="t"><span>每支的审批人</span></div>
+          <div class="frow"><label>来源</label><span class="sel" style="color:#555">该分支对应部门的负责人</span><i class="a">3</i></div>
+          <div class="frow"><label>&nbsp;</label><span class="mini" style="color:#8a6d1f">运行时：分支变量「经济」→ 解析为财务部负责人；「行政」→ 行政部负责人</span></div>
+          <div class="frow"><label>分支内多人</label>
+            <span class="chk rd on"><i></i>单人</span>
+            <span class="chk rd"><i></i>会签</span>
+            <span class="chk rd"><i></i>或签</span>
+            <span class="chk rd"><i></i>依次</span></div>
+          <div class="frow"><label>同一审批人</label>
+            <span class="chk rd on"><i></i>每次都审</span>
+            <span class="chk rd"><i></i>同一人自动通过</span><i class="a">7</i></div>
+          <div class="frow"><label>&nbsp;</label><span class="mini" style="color:#8a6d1f">预留配置项（默认「每次都审」）：同一人兼任两个会审部门时，第二个待办是否自动通过</span></div>
+        </div>
+
+          <div class="fgrp">
+            <div class="t"><span>合流规则</span><span class="tag ok">已确认</span></div>
+            <div class="frow"><label>&nbsp;</label>
+              <span class="chk rd on"><i></i>全部部门批完才继续（默认）</span><i class="a">4</i></div>
+            <div class="frow"><label>&nbsp;</label>
+              <span class="chk rd"><i></i>任一部门批完即继续（其余分支自动作废）</span>
+              <span class="mini">可选配置，非默认</span></div>
+            <div class="frow"><label>驳回时</label>
+              <span class="mini" style="color:#8a6d1f">其余分支任务置「已作废」，<b>已提交意见保留留痕</b>，打印件仍出栏并标注"（已作废）"</span></div>
+          </div>
+
+        <div class="fgrp">
+          <div class="t"><span>未勾选任何部门时</span></div>
+          <div class="frow"><label>&nbsp;</label>
+            <span class="chk rd on"><i></i>自动跳过本节点</span>
+            <span class="chk rd"><i></i>转流程管理员</span>
+            <span class="chk rd"><i></i>阻断提交</span><i class="a">5</i></div>
+        </div>
+
+        <div class="fgrp" style="border-color:#c08a8a;background:#fbecec">
+          <div class="t"><span style="color:#8a3b3b">引擎约束提示</span></div>
+          <div class="mini" style="color:#8a3b3b">
+            本节点为多实例任务（前方只有一条流入），不设并行网关。若改为"并行网关 + 多条分支"，则受现有引擎限制：
+            <b>并行网关前必须唯一用户任务、多对多时无法撤回</b>——这正是本方案不采用网关的原因。
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-f"><span class="btn">取消</span><span class="btn pri">确定</span></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 分支标题带占位符 <code>{部门}</code>，运行期替换为实际部门名，直接用作打印件签批栏标题。</li>
+    <li><b>②</b> 选"按表单多选字段动态生成"后，设计期<b>不画分支</b>——分支数 = 提交时勾选数，2 个就是 2 支，3 个就是 3 支。</li>
+    <li><b>③</b> 分支审批人是"该分支对应部门的负责人"：经济 → 财务部负责人，行政 → 行政部负责人。需要在引擎侧把分支变量（部门）解析成人。</li>
+    <li><b>④</b> 合流默认"全部批完"；若要"任一部门批完即继续"，用多实例完成条件 <code>${nrOfCompletedInstances &gt;= 1}</code>（PRD REQ-FLOW-003 的"或签"补齐）。</li>
+    <li><b>⑤</b> 都不勾选时<b>引擎会自动跳过本节点</b>（<span class="tag ok">已实测确认</span>）。但注意：<b>集合变量必须存在</b>——若提交时该字段没写进流程变量，引擎会直接报 <code>Variable 'jointDepts' was not found</code>，所以<b>空值也要写成空数组</b>。</li>
+    <li><b>⑥</b> <b>法务不走提交人勾选</b>：由管理员用「固定分支」（或主链固定节点）把法务固定进流程——系统<b>不预置</b>"哪些合同必须法审"的规则，判断权留在流程配置里（Q4 确认）。因此提交人的"其他会审部门"多选<b>不含法务</b>。</li>
+    <li><b>⑦</b> <b>同一审批人开关</b>是预留配置项，默认「每次都审」＝不自动通过；同一人兼任两个会审部门时仍产生两个待办（Q3 确认）。</li>
+  </ol>
+</section>
+
+<!-- ================= S15 ================= -->
+<section class="screen" id="s15">
+  <h2><span class="no">S15</span>并行会审 · 运行期流转示意</h2>
+  <p class="desc">以「提交人勾选 <b>经济 + 行政</b>」为例：两条分支同时产生待办，各自独立审批，全部完成后合流。</p>
+  <div class="frame">
+    <div class="box" style="padding:16px 12px;display:flex;align-items:center;gap:10px;overflow-x:auto">
+      <div class="node" style="flex-direction:column;text-align:center;flex:0 0 auto">
+        <span>发起</span><span class="mini">郑妍</span>
+      </div>
+      <span style="color:#999;flex:0 0 auto">→</span>
+      <div class="node" style="flex:0 0 auto">
+        <span class="idx">1</span><span class="nm">责任部门审批</span>
+      </div>
+      <span style="color:#999;flex:0 0 auto">→</span>
+
+      <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto">
+        <div class="node" style="border-color:#8a6d1f;background:#fdf8ee">
+          <span class="idx">2</span><span class="nm">会审 · 经济</span>
+          <span class="sum">财务部负责人 高磊</span>
+        </div>
+        <div class="node" style="border-color:#8a6d1f;background:#fdf8ee">
+          <span class="idx">2</span><span class="nm">会审 · 行政</span>
+          <span class="sum">行政部负责人 张敏</span>
+        </div>
+        <div class="mini" style="text-align:center;color:#8a6d1f">↑ 由「其他会审部门」勾选值动态生成</div>
+      </div>
+
+      <span style="color:#999;flex:0 0 auto">→</span>
+      <div class="node sys" style="flex:0 0 auto;flex-direction:column;text-align:center">
+        <span>合流</span><span class="mini">全部完成</span>
+      </div>
+      <span style="color:#999;flex:0 0 auto">→</span>
+      <div class="node" style="flex:0 0 auto">
+        <span class="idx">3</span><span class="nm">集团分管领导</span>
+      </div>
+      <span style="color:#999;flex:0 0 auto">→</span>
+      <div class="node sys" style="flex:0 0 auto"><span>结束</span></div>
+    </div>
+
+    <table class="tb" style="margin-top:10px">
+      <tr>
+        <th style="width:170px">提交人勾选情况</th>
+        <th style="width:120px">生成分支</th>
+        <th>节点行为</th>
+        <th style="width:210px">合流</th>
+      </tr>
+      <tr>
+        <td>☑ 经济　☑ 行政</td>
+        <td><b>2 支并行</b></td>
+        <td>财务部负责人、行政部负责人<b>同时</b>收到待办，互不阻塞</td>
+        <td rowspan="3" style="vertical-align:middle">按合流规则：<br>全部完成（默认）<br>或<br>任一完成（或签）</td>
+      </tr>
+      <tr>
+        <td>☑ 经济（仅一个）</td>
+        <td><b>1 支</b></td>
+        <td>只有财务部负责人收到待办，等价于一个普通审批节点</td>
+      </tr>
+      <tr>
+        <td>☐ 一个都不勾</td>
+        <td><b>0 支</b></td>
+        <td>按配置自动跳过本节点直达合流（推荐），不产生任何待办</td>
+      </tr>
+      <tr>
+        <td>☑ 经济 ☑ 行政 ☑ 法务</td>
+        <td><b>3 支</b></td>
+        <td>分支数跟着勾选数走，<b>管理员不需要改流程</b></td>
+        <td class="mini">超过"分支上限"时按上限截断并提示提交人</td>
+      </tr>
+    </table>
+
+    <div class="box" style="margin-top:10px;padding:8px 10px;font-size:12px;color:#666">
+      <b style="color:#333">为什么不用"并行网关"画固定几条分支？</b>
+      <div style="margin-top:4px">
+        ① 会审部门是<b>提交人现场勾的</b>，画死了就没法支持"这次只审经济、下次审经济+法务"；<br>
+        ② 现有引擎限制：并行网关前必须唯一用户任务，且多对多时无法撤回（PRD 5.5 P-8）；<br>
+        ③ 用<b>多实例任务 + 集合 = 表单多选字段</b>，分支数由数据决定，流程定义本身不用变——撤回/退回的限制也自动满足。
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>并行分支之间<b>互相不可见对方的意见</b>（各自只看到自己的待办），但都能看到同一张表单与附件。</li>
+    <li>任一支退回：退回发起人后重提，<b>所有分支重新生成</b>（已完成的分支不保留）——这条要在 UAT 里明确确认。</li>
+    <li>超时提醒按分支独立计时（每个部门各自算 24 小时）。</li>
+  </ol>
+</section>
+
+<!-- ================= S16 ================= -->
+<section class="screen" id="s16">
+  <h2><span class="no">S16</span>并行会审 · 在待办 / 办理过程 / 打印件里的呈现</h2>
+  <p class="desc">同一个节点、多个人，三处界面的表达方式必须一致，否则用户会以为"重复了"。</p>
+  <div class="frame">
+
+    <!-- 1. 待办 -->
+    <div class="mini" style="color:#888;margin-bottom:4px">① 待办列表 —— 每个会审部门各一条待办<i class="a">1</i></div>
+    <table class="tb">
+      <tr>
+        <th style="width:150px">单据标题</th><th style="width:170px">当前环节</th>
+        <th style="width:110px">办理人</th><th style="width:120px">到达时间</th><th>时限</th>
+      </tr>
+      <tr>
+        <td>忻州热力户端智能管控项目委托施工合同</td>
+        <td><span class="tag warn">② 会审 · 经济</span></td>
+        <td>高磊（财务部）</td><td>2026-07-28 09:12</td><td class="mini">剩 21 小时</td>
+      </tr>
+      <tr>
+        <td>忻州热力户端智能管控项目委托施工合同</td>
+        <td><span class="tag warn">② 会审 · 行政</span></td>
+        <td>张敏（行政部）</td><td>2026-07-28 09:12</td><td class="mini">剩 21 小时</td>
+      </tr>
+    </table>
+    <div class="mini" style="margin:4px 0 12px;color:#8a6d1f">同一张单据出现两行，环节名带「会审 · 部门」后缀做区分</div>
+
+    <!-- 2. 办理过程 -->
+    <div class="mini" style="color:#888;margin-bottom:4px">② 办理过程 —— 同一环节下多人多行（现有列表会按环节合并单元格）<i class="a">2</i></div>
+    <table class="tb">
+      <tr><th style="width:170px">流程环节</th><th style="width:140px">部门</th><th style="width:110px">办理人</th><th style="width:150px">办理时间</th><th>办理意见</th></tr>
+      <tr><td>① 责任部门审批</td><td>经发部</td><td>郑妍</td><td>2026-07-24 09:20</td><td>同意报批，合同条款已复核。</td></tr>
+      <tr><td rowspan="2" style="vertical-align:middle;background:#fdf8ee"><b>② 会审部门</b></td>
+        <td>财务部</td><td>高磊</td><td>2026-07-28 11:37</td><td>已做合同台账管理。</td></tr>
+      <tr><td>行政部</td><td>张敏</td><td>2026-07-28 15:20</td><td>用印流程已登记。</td></tr>
+      <tr><td>③ 集团分管领导</td><td>—</td><td>李玥洋</td><td>2026-07-28 16:02</td><td>同意，按合同执行。</td></tr>
+    </table>
+    <div class="mini" style="margin:4px 0 12px;color:#8a6d1f">两行合并在同一个"流程环节"下，视觉上就是一节两人办</div>
+
+    <!-- 3. 打印件 -->
+    <div class="mini" style="color:#888;margin-bottom:4px">③ 打印件 —— 每个会审部门各自一栏，标题带部门名<i class="a">3</i></div>
+    <div style="background:#eee;padding:12px 0">
+      <div class="a4" style="width:400px">
+        <div style="border:1px solid #b5b5b5;padding:5px 7px">
+          <div style="color:#666"><b>① 责任部门审批</b></div>
+          <div>接收单位：经发部　接收人：郑妍　签收时间：2026-07-24 09:12</div>
+          <div>处理意见：同意报批，合同条款已复核。</div>
+          <div class="sig"><span class="mini">签名</span><span class="signimg imgph"></span></div>
+        </div>
+        <div style="border:1px solid #b5b5b5;border-top:none;padding:5px 7px;background:#fdf8ee">
+          <div style="color:#666"><b>② 会审部门 · 经济</b></div>
+          <div>接收单位：财务部　接收人：高磊　签收时间：2026-07-28 09:12</div>
+          <div>处理意见：已做合同台账管理。</div>
+          <div class="sig"><span class="mini">签名</span><span class="signimg imgph"></span></div>
+        </div>
+        <div style="border:1px solid #b5b5b5;border-top:none;padding:5px 7px;background:#fdf8ee">
+          <div style="color:#666"><b>② 会审部门 · 行政</b></div>
+          <div>接收单位：行政部　接收人：张敏　签收时间：2026-07-28 09:12</div>
+          <div>处理意见：用印流程已登记。</div>
+          <div class="sig"><span class="mini">签名</span><span class="signimg imgph"></span></div>
+        </div>
+        <div style="border:1px solid #b5b5b5;border-top:none;padding:5px 7px;color:#a9a9a9">
+          <div><b>③ 集团分管领导</b>　<span style="font-size:9px">（未到达）</span></div>
+          <div>接收单位：＿＿＿＿　接收人：＿＿＿＿　签收时间：＿＿＿＿＿＿</div>
+          <div class="sig"><span class="mini">签名</span><span class="signimg"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="mini" style="margin-top:4px;color:#8a6d1f">每一位会审人占一栏，与纸质流转单"每个部门一段"的写法一致（对应 PRD 7.8 第 15 行）</div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 待办按"人 × 任务"生成，所以同一单据出现多行——这是并行会审的正常表现，不需要合并。</li>
+    <li><b>②</b> 办理过程按环节合并单元格展示（现有 <code>flow-approve.vue</code> 已有 <code>span-method</code> 合并逻辑，按 <code>taskId</code> 相同合并，可直接复用）。</li>
+    <li><b>③</b> 打印件按分支逐栏输出，栏标题用"分支标题"模板替换部门名；<b>有几支就出几栏</b>，未勾选的部门不出现空栏。</li>
+    <li>抄送人（如各部门分管领导）不出签批栏，只在"抄送"区列名。</li>
+  </ol>
+</section>
+
+<!-- ================= S17 ================= -->
+<section class="screen" id="s17">
+  <h2><span class="no">S17</span>条件分支 · 节点与分支配置</h2>
+  <p class="desc">条件分支是**排他路由**：满足条件的分支<b>只有一条</b>会被执行，兜底由系统生成。对应 PRD 6.3 / 6.3.1、REQ-DESIGN-008。</p>
+  <div class="frame">
+    <div class="box" style="padding:8px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="mut">流程名称</span><span class="inp" style="min-width:170px;color:#555">合同审批（含用印）</span>
+      <span class="tag ok">已发布 v4</span>
+      <span style="flex:1"></span>
+      <span class="btn">预览</span><span class="btn">保存草稿</span><span class="btn pri">发布</span><span class="btn ghost">高级模式（BPMN）</span>
+    </div>
+
+    <div class="split" style="margin-top:10px">
+      <!-- 左：节点清单（含条件分支展开） -->
+      <div class="pane" style="flex:0 0 46%">
+        <div class="pane-h"><span>节点清单<i class="a">1</i></span><span class="mini">条件分支以内嵌子清单表达</span></div>
+        <div class="pane-b">
+          <div class="node sys"><span style="color:#666">⬤</span><span class="nm">发起</span><span class="dots">＋抄送人</span></div>
+
+          <div class="node"><span class="idx">1</span><span class="nm">责任部门审批</span><span class="sum">部门负责人 · 会签</span><span class="dots">⋮</span></div>
+
+          <!-- 条件分支：内嵌子清单 -->
+          <div class="box" style="border:2px solid #6b6b6b;background:#fbfbfb;padding:8px;margin-bottom:6px">
+            <div class="flex" style="justify-content:space-between">
+              <span><span class="idx" style="border-color:#6b6b6b">2</span> <b>条件分支</b> <span class="sum">合同类型路由</span></span>
+              <span class="dots">⋮</span>
+            </div>
+            <div style="margin:8px 0 0 12px;border-left:2px dashed #c9a86a;padding-left:10px">
+              <div class="mini" style="color:#8a6d1f">分支 1　当 <b>合同类型</b> 等于 <b>经营</b>　<span style="text-decoration:underline">编辑条件</span></div>
+              <div class="node" style="margin:4px 0 8px 12px"><span class="nm">经发负责人审批</span><span class="sum">指定人员</span></div>
+
+              <div class="mini" style="color:#8a6d1f">分支 2　当 <b>合同金额</b> 大于 <b>500000</b>　<span style="text-decoration:underline">编辑条件</span></div>
+              <div class="node" style="margin:4px 0 8px 12px"><span class="nm">财务复核</span><span class="sum">部门负责人</span></div>
+
+              <div class="mini" style="color:#999">其他情况（系统兜底，不可编辑、不可删除）</div>
+              <div class="node" style="margin:4px 0 0 12px;border-style:dashed"><span class="nm">行政审批</span><span class="sum">→ 法务审批 → 财务审批</span></div>
+            </div>
+            <div class="mini" style="margin-top:8px">＋ 添加分支（最多 5 条）　·　拖动分支调整优先级</div>
+          </div>
+
+          <div class="node"><span class="idx">3</span><span class="nm">集团分管领导</span><span class="sum">指定人员 · 需签名</span><span class="dots">⋮</span></div>
+          <div class="node"><span class="idx">4</span><span class="nm">用印办理</span><span class="sum">办理人 · 盖章 + 签名</span><span class="dots">⋮</span></div>
+          <div class="node sys"><span style="color:#666">⬤</span><span class="nm">结束</span></div>
+        </div>
+      </div>
+
+      <!-- 右：分支配置 -->
+      <div class="pane">
+        <div class="pane-h"><span>节点配置 — 条件分支（合同类型路由）</span></div>
+        <div class="pane-b">
+          <div class="fgrp">
+            <div class="t"><span>基本</span></div>
+            <div class="frow"><label>节点名称</label><span class="inp" style="color:#555">合同类型路由</span></div>
+          </div>
+
+          <div class="fgrp" style="border-color:#c9a86a;background:#fdf8ee">
+            <div class="t"><span>分支列表</span><span class="mini">顺序 = 优先级</span></div>
+            <table class="tb">
+              <tr><th style="width:26px">≡</th><th style="width:70px">分支</th><th>进入条件</th><th style="width:130px">分支内容</th><th style="width:74px">操作</th></tr>
+              <tr>
+                <td class="mini">≡</td><td><b>分支 1</b></td>
+                <td><span class="condchip">当 合同类型 等于 经营</span></td>
+                <td class="mini">经发负责人审批</td>
+                <td class="mini">编辑条件<br>删除</td>
+              </tr>
+              <tr>
+                <td class="mini">≡</td><td><b>分支 2</b></td>
+                <td><span class="condchip">当 合同金额 大于 500000</span></td>
+                <td class="mini">财务复核</td>
+                <td class="mini">编辑条件<br>删除</td>
+              </tr>
+              <tr style="background:#f4f4f4">
+                <td class="mini">—</td><td><b>其他情况</b></td>
+                <td class="mini">系统兜底：以上条件都不满足时进入<i class="a">2</i></td>
+                <td class="mini">行政 → 法务 → 财务</td>
+                <td class="mini">—</td>
+              </tr>
+            </table>
+            <div style="margin-top:6px"><span class="btn sm">＋ 添加分支</span><span class="mini" style="margin-left:8px">最多 5 条</span></div>
+          </div>
+
+          <div class="fgrp">
+            <div class="t"><span>执行规则（只读）</span></div>
+            <div class="mini" style="color:#666">
+              · <b>排他</b>：按分支顺序取<b>第一条条件为真</b>的分支执行，其余分支<b>不执行</b><i class="a">3</i><br>
+              · 全部条件都为假 → 进入「其他情况」<br>
+              · 条件只允许在「表单设计」中设为<b>必填</b>的字段上建立
+            </div>
+          </div>
+
+          <div class="fgrp" style="border-color:#c08a8a;background:#fbecec">
+            <div class="t"><span style="color:#8a3b3b">不要与「并行分支」混淆</span></div>
+            <div class="mini" style="color:#8a3b3b">
+              条件分支＝<b>选一条</b>；并行分支＝<b>全部执行</b>。并行分支不设「其他情况」，且必须显式配置合流规则（全部完成 / 任一完成）。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 条件分支在纵向节点清单里用<b>内嵌子清单</b>表达：分支横向并列、分支内部仍是一条纵向子链，汇合后回到主清单继续。这是清单式编辑器承载分支的关键设计。</li>
+    <li><b>②</b> 「其他情况」由系统自动生成，不可编辑条件、不可删除 —— 保证条件全部不满足时单据不会卡死。</li>
+    <li><b>③</b> 排他语义必须写进编译产物（经排他网关），否则 BPMN 原生"多条条件为真 → 并行执行"会让它悄悄变成并行分支（PRD 6.8 编译硬约束）。</li>
+  </ol>
+</section>
+
+<!-- ================= S18 ================= -->
+<section class="screen" id="s18">
+  <h2><span class="no">S18</span>图形化条件组组件（核心）</h2>
+  <p class="desc">业务管理员不写一行代码表达"当 A 且 B，或 C 时走这条分支"。对应 PRD 6.3.1、REQ-DESIGN-010。</p>
+  <div class="frame">
+    <div class="split">
+      <!-- 左：条件编辑弹窗 -->
+      <div class="pane" style="flex:0 0 62%">
+        <div class="pane-h"><span>编辑分支条件 — 分支 1</span><span class="mini">不提供表达式 / 脚本入口</span></div>
+        <div class="pane-b">
+
+          <!-- 自然语言回显 -->
+          <div class="box" style="border-color:#8aa88a;background:#eef5ee;padding:8px 10px;font-size:12px;color:#3d5a3d">
+            <b>当前条件读作：</b>当 <b>(合同类型 等于 经营)</b> 或 <b>(合同金额 大于 500000)</b> 时，进入本分支<i class="a">1</i>
+          </div>
+
+          <!-- 条件组 1 -->
+          <div class="fgrp" style="margin-top:10px">
+            <div class="t"><span>条件组 1</span><span class="mini">组内为「且」</span></div>
+            <div class="frow">
+              <span class="sel" style="flex:2;color:#555">合同类型 ▾</span>
+              <span class="sel" style="flex:1;color:#555">等于 ▾</span>
+              <span class="sel" style="flex:2;color:#555">经营 ▾</span>
+              <span class="mini">×</span>
+            </div>
+            <div class="frow">
+              <span class="sel" style="flex:2;color:#555">合同金额 ▾</span>
+              <span class="sel" style="flex:1;color:#555">大于 ▾</span>
+              <span class="inp" style="flex:2;color:#555">500000</span>
+              <span class="mini">×</span>
+            </div>
+            <div><span class="btn sm">＋ 添加条件</span><span class="mini" style="margin-left:8px">组内最多 5 条</span></div>
+          </div>
+
+          <!-- 条件组 2 -->
+          <div class="fgrp">
+            <div class="t"><span>条件组 2</span><span class="mini">组间为「或」</span></div>
+            <div class="frow">
+              <span class="sel" style="flex:2">请选择字段 ▾</span>
+              <span class="sel" style="flex:1">比较符 ▾</span>
+              <span class="inp" style="flex:2">请选择值</span>
+              <span class="mini">×</span>
+            </div>
+            <div><span class="btn sm">＋ 添加条件</span></div>
+          </div>
+
+          <div><span class="btn sm">＋ 添加条件组</span><span class="mini" style="margin-left:8px">组间为「或」：形如 (A 且 B) 或 (C 且 D)</span></div>
+
+          <div class="hr"></div>
+          <div class="mini" style="color:#8a6d1f">
+            字段下拉里<b>只列出表单中已设为「必填」的字段</b>；<code>合同描述</code> 因未设为必填而置灰 → 「去表单设计设为必填」<i class="a">2</i>
+          </div>
+
+          <div style="text-align:right;margin-top:12px"><span class="btn">取消</span><span class="btn pri">确定</span></div>
+        </div>
+      </div>
+
+      <!-- 右：比较符随字段类型变化 -->
+      <div class="pane">
+        <div class="pane-h"><span>比较符随字段类型变化<i class="a">3</i></span></div>
+        <div class="pane-b">
+          <table class="tb">
+            <tr><th style="width:96px">字段类型</th><th>可用比较符</th></tr>
+            <tr><td>单选</td><td>等于 / 不等于 / 属于 / 不属于</td></tr>
+            <tr><td>多选</td><td>包含任一 / 包含全部 / 不包含 / 为空 / 不为空</td></tr>
+            <tr><td>单行文本</td><td>等于 / 不等于 / 包含 / 不包含 / 为空 / 不为空</td></tr>
+            <tr><td>数字 / 金额</td><td>等于 / 不等于 / 大于 / 大于等于 / 小于 / 小于等于 / 介于 / 为空</td></tr>
+            <tr><td>日期</td><td>等于 / 早于 / 晚于 / 介于 / 为空</td></tr>
+            <tr><td>日期区间</td><td>包含某日期 / 与区间相交 / 完全包含于 / 为空</td></tr>
+            <tr><td>部门</td><td>属于 / 不属于 / 包含下级 / 为空</td></tr>
+            <tr><td>选人</td><td>包含 / 不包含 / 为空</td></tr>
+            <tr><td>提交人</td><td>属于某部门 / 不属于某部门 / 等于某人</td></tr>
+            <tr style="color:#aaa"><td>流水号 / 附件 / 说明文字 / 分组标题</td><td>不可作为条件</td></tr>
+          </table>
+          <div class="mini" style="margin-top:8px;color:#999">
+            值的输入控件随字段类型切换：选项→多选下拉、数字/金额→数字框（介于时两个）、日期→日期选择、部门→组织选择器。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>①</b> 自然语言回显是防错的关键交互 —— 管理员最容易在"且/或"上理解错，回显一句话把逻辑说清楚。</li>
+    <li><b>②</b> <b>只列必填字段</b>：字段可空会让条件可能恒假、单据静默掉进兜底分支，所以非必填字段在条件里直接不给选。</li>
+    <li><b>③</b> 比较符不自由输入，按字段类型给集合；避免出现"用 > 比较文本"这类无意义条件。</li>
+    <li>禁用表达式框与脚本（现状 <code>conditionPanel.vue:33-50</code> 有）：表达式能绕过字段校验与权限，且业务管理员写不出来。</li>
+    <li>选项类字段按 <b>label</b> 比较 —— 提交时选项已转成中文 label 写入流程变量，编译与求值口径必须一致。</li>
+  </ol>
+</section>
+
+<!-- ================= S19 ================= -->
+<section class="screen" id="s19">
+  <h2><span class="no">S19</span>条件分支 · 运行期与打印呈现</h2>
+  <p class="desc">排他语义意味着：一张单子<b>只走一条分支</b>，另外两条根本不会产生待办。</p>
+  <div class="frame">
+    <table class="tb">
+      <tr>
+        <th style="width:240px">单据情况</th><th style="width:130px">命中分支</th>
+        <th>实际产生的节点</th><th style="width:190px">未进入的分支</th>
+      </tr>
+      <tr>
+        <td>合同类型 = <b>经营</b></td>
+        <td><span class="tag warn">分支 1</span></td>
+        <td>经发负责人审批 → 集团分管领导 → 用印办理</td>
+        <td class="mini">分支 2、其他情况：<b>不产生任何待办</b></td>
+      </tr>
+      <tr>
+        <td>合同类型 = 经济<br>且 合同金额 = 800,000</td>
+        <td><span class="tag warn">分支 2</span></td>
+        <td>财务复核 → 集团分管领导 → 用印办理</td>
+        <td class="mini">分支 1、其他情况：不产生待办</td>
+      </tr>
+      <tr>
+        <td>合同类型 = 行政<br>且 合同金额 = 120,000</td>
+        <td><span class="tag">其他情况</span></td>
+        <td>行政审批 → 法务审批 → 财务审批 → 集团分管领导 → 用印办理</td>
+        <td class="mini">分支 1、分支 2：不产生待办</td>
+      </tr>
+    </table>
+
+    <div class="box" style="margin-top:10px;padding:10px 12px;font-size:12px;color:#666">
+      <b style="color:#333">三处呈现的一致性</b>
+      <table class="tb" style="margin-top:6px">
+        <tr><th style="width:150px">位置</th><th>表现</th></tr>
+        <tr><td>待办列表</td><td>只出现<b>一条</b>待办，环节名 = 命中分支内的节点名（如"经发负责人审批"），不带分支前缀</td></tr>
+        <tr><td>办理过程</td><td>只列出<b>实际走过</b>的节点；未进入的分支不出现（避免阅览者误以为漏审）</td></tr>
+        <tr><td>打印件签批栏</td><td>只输出实际走过的节点签批栏，<b>未进入的分支不出现空栏</b></td></tr>
+        <tr><td>流程预览（设计器）</td><td>展示全部分支（含未进入的），并标注"排他：按顺序取第一条为真"</td></tr>
+      </table>
+    </div>
+
+    <div class="box" style="margin-top:10px;padding:8px 10px;font-size:12px;color:#8a3b3b;border-color:#c08a8a;background:#fbecec">
+      <b>必须写进验收标准的四个边界</b>
+      <div style="margin-top:4px">
+        ① 两条分支条件<b>同时为真</b> → 只走<b>第一条</b>，不得产生两个待办（这是与并行分支的分水岭）；<br>
+        ② 条件全部为假 → 走「其他情况」；<br>
+        ③ 走完某分支后<b>退回发起人重提</b>，若条件未变则仍走同一分支，已处理记录保留；<br>
+        ④ 分支内的节点同样可配签名策略、超时提醒、字段只读，行为与普通审批节点一致。
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>排他分支下"漏审"的风险来自<b>条件配错</b>，所以发布校验（V-5/V-9/V-10/V-11）和自然语言回显是主要防线。</li>
+    <li>若业务确实需要"经营类合同既要经发负责人、又要财务复核"，那不是条件分支，应改用<b>并行分支</b>（PRD P1）或直接串两个节点。</li>
+  </ol>
+</section>
+
+<p style="max-width:1200px;margin:0 auto;color:#999;font-size:12px">
+  共 19 屏：S1 简化流程设计器主界面 · S2 发布校验 · S3 打印预览 · S4 打印模板映射 · S5 审批/填写页 · S6 手写签名 · S7 我的签名 · S8 用印办理 · S9 发起人填写页 ·
+  S10 表单设计器主界面 · S11 字段属性面板 · S12 新增控件规格 · S13 表单 Schema ·
+  S14 并行会审配置 · S15 并行流转示意 · S16 并行在待办/过程/打印件的呈现 ·
+  <b style="color:#777">S17 条件分支节点与分支配置 · S18 图形化条件组组件 · S19 条件分支运行期与打印呈现</b>。
+  低保真稿仅用于评审信息层级与操作路径，字段与文案以 <a href="PRD-合同审批二开.md">PRD-合同审批二开.md</a> 为准。
+</p>
+
+</body>
+</html>

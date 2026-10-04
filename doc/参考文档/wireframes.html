@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>飞书审批设计器 · 低保真原型</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font:13px/1.55 "Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;color:#333}
+.screen{width:1280px;height:820px;overflow:hidden;position:relative;background:#fff}
+.cap{height:34px;background:#2f2f2f;color:#fff;font-size:12px;display:flex;align-items:center;padding:0 22px 0 12px;gap:10px}
+.cap span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap .spacer{flex:1;min-width:0}
+.cap .tag{background:#fff;color:#222;border-radius:2px;padding:0 6px;font-weight:700}
+.app{height:786px;display:flex;flex-direction:column;border:1px solid #ccc;border-top:0}
+.topbar{height:56px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;padding:0 14px;gap:10px;background:#fafafa;flex:none}
+.logo{width:26px;height:26px;border:1px solid #999;border-radius:4px;background:#eee;flex:none}
+.title{font-weight:700;font-size:14px}
+.pill{border:1px solid #bbb;border-radius:12px;padding:1px 10px;font-size:12px;background:#fff;color:#666}
+.spacer{flex:1}
+.steps{height:44px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;gap:24px;padding:0 16px;background:#fff;font-size:13px;color:#9a9a9a;flex:none}
+.steps .on{color:#111;font-weight:700}
+.steps .no{display:inline-flex;width:18px;height:18px;border:1px solid #aaa;border-radius:50%;align-items:center;justify-content:center;font-size:11px;margin-right:6px}
+.steps .on .no{background:#333;color:#fff;border-color:#333}
+.body{flex:1;display:flex;overflow:hidden}
+.main{flex:1;padding:14px;overflow:hidden;position:relative}
+.side{width:250px;border-right:1px solid #e3e3e3;padding:10px;background:#fcfcfc;overflow:hidden;flex:none}
+.panel{width:340px;border-left:1px solid #d8d8d8;background:#fbfbfb;padding:12px;overflow:hidden;flex:none}
+.ghost{opacity:.35;filter:grayscale(1)}
+.inp{height:28px;border:1px solid #c4c4c4;border-radius:3px;background:#fafafa;color:#aaa;font-size:12px;display:flex;align-items:center;padding:0 8px}
+.btn{border:1px solid #a8a8a8;border-radius:4px;background:#f2f2f2;font-size:12px;padding:3px 10px;display:inline-flex;align-items:center;white-space:nowrap}
+.btn.pri{background:#d5d5d5;border-color:#8a8a8a;font-weight:700}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.lbl{width:104px;color:#555;font-size:12.5px;flex:none}
+.chip{border:1px dashed #b5b5b5;border-radius:4px;background:#fdfdfd;color:#555;font-size:12px;padding:5px 6px;text-align:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.sec{font-size:11.5px;color:#8a8a8a;margin:10px 0 6px;letter-spacing:.5px}
+.field{border:1px solid #dcdcdc;border-left:3px solid #b5b5b5;border-radius:3px;background:#fff;padding:7px 9px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.field .h{color:#c0c0c0;font-size:12px}
+.field .n{font-size:12.5px}
+.req{color:#c00}
+.dash{border:1px dashed #bbb;border-radius:4px;color:#999;font-size:12px;display:flex;align-items:center;justify-content:center;background:#fcfcfc;text-align:center;padding:8px}
+.note{background:#fff8d6;border:1px dashed #c9a227;color:#6b5410;font-size:12px;padding:5px 8px;border-radius:4px}
+.note.g{background:#eef4ee;border-color:#8aa88a;color:#3d5a3d}
+.tabs{display:flex;gap:18px;border-bottom:1px solid #e0e0e0;margin-bottom:12px;font-size:12.5px;color:#8a8a8a}
+.tabs .on{color:#111;font-weight:700;border-bottom:2px solid #333;padding-bottom:5px}
+.node{border:1px solid #9a9a9a;border-radius:5px;background:#fff;padding:5px 10px;font-size:12.5px;min-width:120px;text-align:center}
+.node .sub{font-size:11px;color:#8a8a8a}
+.node.hl{border-width:2px;background:#efefef;box-shadow:0 0 0 3px #f4f4f4}
+.node.cc{background:#f7f7f7}
+.node.hd{border-style:dashed}
+.vline{width:1px;height:14px;background:#b5b5b5;margin:0 auto}
+.compact .node{padding:2px 10px}
+.compact .node .sub{font-size:10px;line-height:1.3}
+.compact .vline{height:6px}
+.compact .lane{padding:5px}
+.compact .branchbox{padding:6px 8px 8px}
+.hline{height:1px;background:#b5b5b5;flex:1}
+.branch{display:flex;gap:12px;align-items:flex-start}
+.lane{border:1px solid #cfcfcf;border-radius:4px;padding:8px;background:#fafafa;flex:1}
+.branchbox{border:1px dashed #9a9a9a;border-radius:6px;padding:8px 10px 10px;background:#fbfbfb}
+.branchbox-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.branchbox-head .t{font-size:11.5px;color:#777;letter-spacing:.5px;font-weight:700}
+.condchip{border:1px solid #7f7f7f;border-radius:10px;background:#fff;font-size:11.5px;padding:1px 9px;color:#333;white-space:nowrap}
+.addbtn{border:1px dashed #9a9a9a;border-radius:4px;background:#fff;font-size:11.5px;padding:2px 8px;color:#555}
+.split{position:relative;height:18px}
+.split-bar{position:absolute;top:0;left:25%;right:25%;height:1px;background:#b5b5b5}
+.stubs{display:flex;height:18px}
+.stubs span{flex:1;display:flex;justify-content:center}
+.stubs span:before{content:"";width:1px;height:18px;background:#b5b5b5;display:block}
+.merge{position:relative;height:18px}
+.merge-bar{position:absolute;bottom:0;left:25%;right:25%;height:1px;background:#b5b5b5}
+.plus{width:20px;height:20px;border:1px solid #9a9a9a;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:13px;color:#555}
+.modal{position:absolute;inset:0;background:rgba(0,0,0,.16);display:flex;align-items:center;justify-content:center;z-index:5}
+.mbox{background:#fff;border:1px solid #a8a8a8;border-radius:6px;display:flex;flex-direction:column;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.mhead{height:48px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;padding:0 16px;font-weight:700;gap:8px}
+.mbody{padding:14px 16px;overflow:hidden}
+.mfoot{height:52px;border-top:1px solid #e3e3e3;display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:0 16px}
+.card{border:1px solid #d5d5d5;border-radius:5px;background:#fdfdfd;padding:10px}
+.qr{width:150px;height:150px;border:1px solid #999;background:repeating-conic-gradient(#dcdcdc 0% 25%, #fff 0% 50%) 0 0/14px 14px}
+.radio{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#444;margin-right:14px;white-space:nowrap}
+.radio i{width:12px;height:12px;border:1px solid #999;border-radius:50%;display:inline-block;flex:none}
+.radio i.on{background:#555;box-shadow:inset 0 0 0 2px #fff}
+.sw{width:34px;height:18px;border-radius:9px;background:#ccc;position:relative;display:inline-block;flex:none}
+.sw:after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:1px;left:2px;border:1px solid #aaa}
+.sw.on{background:#8f8f8f}
+.sw.on:after{left:auto;right:2px}
+.list-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid #eee;font-size:12.5px}
+.tag2{font-size:11px;border:1px solid #aaa;border-radius:3px;padding:0 5px;color:#666}
+.tag2.act{background:#333;color:#fff;border-color:#333}
+.small{font-size:11.5px;color:#999}
+.cbox{border:1px solid #c4c4c4;border-radius:4px;background:#fff;padding:10px}
+</style>
+</head>
+<body>
+
+<!-- ============ S01 基础信息 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S01</span><span>① 基础信息（向导第 1 步）</span><span class="spacer" style="flex:1"></span><span>飞书审批后台 · 审批定义编辑器</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同审批（含用印）</div>
+      <span class="pill">草稿（保存于 1 分钟前）▾</span>
+      <div class="spacer"></div>
+      <span class="btn">预览</span><span class="btn pri">发布</span>
+    </div>
+    <div class="steps">
+      <span class="on"><span class="no">1</span>基础信息</span>
+      <span><span class="no">2</span>表单设计</span>
+      <span><span class="no">3</span>流程设计</span>
+      <span><span class="no">4</span>更多设置</span>
+    </div>
+    <div class="body">
+      <div class="main" style="padding:20px 240px 0 60px">
+        <div class="row"><div class="lbl">图标</div><div class="logo" style="width:40px;height:40px"></div><span class="btn">修改</span></div>
+        <div class="row"><div class="lbl">名称</div><div class="inp" style="flex:1">请输入名称</div></div>
+        <div class="row"><div class="lbl">说明</div><div class="inp" style="flex:1">说明</div></div>
+        <div class="row"><div class="lbl">分组</div><div class="inp" style="flex:1">请选择分组 ▾</div></div>
+        <div class="row" style="align-items:flex-start">
+          <div class="lbl" style="padding-top:5px">谁可以提交该审批</div>
+          <div>
+            <div style="margin-bottom:8px">
+              <span class="radio"><i class="on"></i>全员</span>
+              <span class="radio"><i></i>指定人员</span>
+              <span class="btn">添加</span>
+            </div>
+            <div class="small">实测两种取值：全员 / 指定人员（指定人员时用「添加」选成员）</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <div class="lbl"></div>
+          <label class="radio" style="white-space:normal"><i></i>禁止企业管理员/审批应用管理员/子管理员 管理流程与数据</label>
+        </div>
+        <div class="row"><div class="lbl">流程管理员</div><span class="btn">+ 添加</span></div>
+
+        <div class="note" style="margin-top:22px">
+          注解：提交范围（可见性 + 可发起）与流程内的审批人无关；「流程管理员」是数据/流程管理权限，建议拆成 submit_scope / admin_scope 两个维度。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S02 表单设计 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S02</span><span>② 表单设计（向导第 2 步）</span><span style="flex:1"></span><span>控件面板 + 画布 + 打印模板</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同审批（含用印）</div>
+      <span class="pill">草稿（保存于 1 分钟前）▾</span>
+      <div class="spacer"></div>
+      <span class="btn">预览</span><span class="btn pri">发布</span>
+    </div>
+    <div class="steps">
+      <span><span class="no">1</span>基础信息</span>
+      <span class="on"><span class="no">2</span>表单设计</span>
+      <span><span class="no">3</span>流程设计</span>
+      <span><span class="no">4</span>更多设置</span>
+    </div>
+    <div class="body">
+      <div class="side">
+        <div class="tabs"><span class="on">控件</span><span>控件组</span></div>
+        <div class="sec">飞书云文档</div>
+        <div class="grid2"><div class="chip">文档</div></div>
+        <div class="sec">文本</div>
+        <div class="grid2"><div class="chip">单行文本</div><div class="chip">多行文本</div><div class="chip">说明</div></div>
+        <div class="sec">数值</div>
+        <div class="grid2"><div class="chip">数字</div><div class="chip">金额</div><div class="chip">计算公式</div></div>
+        <div class="sec">选项</div>
+        <div class="grid2"><div class="chip">单选</div><div class="chip">多选</div></div>
+        <div class="sec">日期</div>
+        <div class="grid2"><div class="chip">日期</div><div class="chip">日期区间</div></div>
+        <div class="sec">其他</div>
+        <div class="grid3">
+          <div class="chip">明细/表格</div><div class="chip">引用多维表格<br><span class="small">NEW</span></div><div class="chip">图片/视频</div>
+          <div class="chip">附件</div><div class="chip">部门</div><div class="chip">联系人</div>
+          <div class="chip">关联审批</div><div class="chip">地址</div><div class="chip">定位</div>
+          <div class="chip">收款账户</div><div class="chip">电话</div><div class="chip">流水号</div>
+        </div>
+      </div>
+      <div class="main">
+        <div style="display:flex;align-items:center;margin-bottom:10px">
+          <div class="small">画布（按添加顺序自上而下，可拖拽改序）</div>
+          <div class="spacer"></div>
+          <span class="btn">配置打印模板</span>
+        </div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">合同名称</span><span class="spacer"></span><span class="inp" style="width:200px">请输入</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">合同类型</span><span class="spacer"></span><span class="inp" style="width:200px">请选择 ▾</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">合同描述<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:200px">多行文本</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">合同内容</span><span class="spacer"></span><span class="inp" style="width:200px">多行文本</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">合同编号</span><span class="spacer"></span><span class="inp" style="width:200px">请输入</span></div>
+        <div class="field" style="display:block">
+          <div style="display:flex;align-items:center;gap:8px"><span class="h">⋮⋮</span><span class="n">合同有效期</span><span class="small">日期区间</span></div>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <span class="inp" style="flex:1">开始时间</span><span class="inp" style="flex:1">结束时间</span><span class="inp" style="flex:1">时长（天）自动计算</span>
+          </div>
+        </div>
+        <div class="field" style="background:#f7f7f7"><span class="n"><b>我方信息</b></span><span class="small">分组/分节标题</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">签订公司</span><span class="spacer"></span><span class="inp" style="width:200px">请输入</span></div>
+        <div class="field" style="background:#f7f7f7"><span class="n"><b>对方信息</b></span><span class="small">分组/分节标题</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">对方单位名称</span><span class="spacer"></span><span class="inp" style="width:200px">请输入</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">对方联系方式</span><span class="spacer"></span><span class="inp" style="width:200px">请输入</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">附件<span class="req">*</span></span><span class="small">上传项名：盖章备案上传</span><span class="spacer"></span><span class="btn">选择文件</span></div>
+        <div class="dash" style="height:44px;margin-top:8px">点击或拖拽左侧控件至此处</div>
+      </div>
+      <div class="panel">
+        <div class="small" style="margin-bottom:8px">选中控件后出现的属性面板</div>
+        <div class="dash" style="height:120px">基础设置<br>标题 / 提示语 / 默认值 / 必填 / 打印</div>
+        <div class="dash" style="height:120px;margin-top:8px">显隐设置（显示条件）<br>条件组内「且」，组间「或」</div>
+        <div class="dash" style="height:80px;margin-top:8px">校验 / 选项 / 公式（按控件类型变化）</div>
+        <div class="note" style="margin-top:10px">⚠️ 属性面板本次未在页面上逐项实测，此处为结构占位</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S03 流程设计 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S03</span><span>③ 流程设计（向导第 3 步）</span><span style="flex:1"></span><span>画布 + 节点配置面板</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同审批（含用印）</div>
+      <span class="pill">草稿（保存于 1 分钟前）▾</span>
+      <div class="spacer"></div>
+      <span class="btn">创建限时审批</span><span class="btn">创建自动化</span><span class="btn">预览</span><span class="btn pri">发布</span>
+    </div>
+    <div class="steps">
+      <span><span class="no">1</span>基础信息</span>
+      <span><span class="no">2</span>表单设计</span>
+      <span class="on"><span class="no">3</span>流程设计</span>
+      <span><span class="no">4</span>更多设置</span>
+    </div>
+    <div class="body">
+      <div class="main compact" style="padding:6px 16px">
+        <div style="display:flex;gap:14px;justify-content:center">
+          <div style="width:560px">
+            <div class="node" style="margin:0 auto">提交<div class="sub">提交人：全员可提交 · 可设置抄送人</div></div>
+            <div class="vline"></div>
+            <div class="node hl" style="margin:0 auto">审批<div class="sub">审批人：直属部门负责人</div></div>
+            <div class="vline"></div>
+            <div class="split"><div class="split-bar"></div></div>
+            <div class="stubs"><span></span><span></span></div>
+            <div class="branchbox">
+              <div class="branchbox-head"><span class="t">并行分支</span><span class="addbtn">+ 添加并行分支</span><span class="small">每个分支可各自设置进入条件</span></div>
+              <div class="branch">
+                <div class="lane">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+                    <span class="small">并行分支 1</span>
+                    <span class="condchip">当 <b>合同类型</b> 等于 <b>经营</b></span>
+                  </div>
+                  <div class="node" style="width:100%">审批<div class="sub">审批人：经发负责人</div></div>
+                </div>
+                <div class="lane">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                    <span class="small">其他情况</span><span class="small">系统兜底</span>
+                  </div>
+                  <div class="node" style="width:100%">审批<div class="sub">审批人：行政</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="stubs"><span></span><span></span></div>
+            <div class="merge"><div class="merge-bar"></div></div>
+            <div class="vline"></div>
+            <div class="node" style="margin:0 auto">审批<div class="sub">审批人：法务</div></div>
+            <div class="vline"></div>
+            <div class="node" style="margin:0 auto">审批<div class="sub">审批人：行政</div></div>
+            <div class="vline"></div>
+            <div class="node" style="margin:0 auto">审批<div class="sub">审批人：财务</div></div>
+            <div class="vline"></div>
+            <div class="node" style="margin:0 auto">审批<div class="sub">审批人：副总经理</div></div>
+            <div class="vline"></div>
+            <div class="node cc" style="margin:0 auto">抄送<div class="sub">提交人自选，王佳琦，李玥洋，樊娟娟</div></div>
+            <div class="vline"></div>
+            <div class="node hd" style="margin:0 auto">办理盖章上传备案<div class="sub">办理人：郑妍</div></div>
+            <div class="vline"></div>
+            <div class="node" style="margin:0 auto;border-radius:16px">结束<div class="sub">抄送人：提交人自选，…</div></div>
+          </div>
+          <div style="width:250px;padding-top:6px">
+            <div class="note">点击节点之间的 <b>+</b> 可插入：审批人 / 办理人 / 条件分支 / 并行分支</div>
+            <div class="note g" style="margin-top:8px">「其他情况」为系统兜底分支，不可删除</div>
+            <div class="note" style="margin-top:8px">画布右下角：缩放控件（实测 100%）</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="tabs"><span class="on">设置审批人</span><span>表单权限</span><span>操作权限</span></div>
+        <div class="sec">审批类型</div>
+        <div style="margin-bottom:8px">
+          <span class="radio"><i class="on"></i>人工审批</span><span class="radio"><i></i>自动通过</span><span class="radio"><i></i>自动拒绝</span>
+        </div>
+        <div class="row"><span class="radio"><i></i>不计入审批效率统计</span></div>
+        <div class="sec">审批人来源（可多选类型）</div>
+        <div class="grid3" style="font-size:11.5px">
+          <div class="chip">指定成员</div><div class="chip">角色</div><div class="chip">用户组</div>
+          <div class="chip">上级</div><div class="chip">部门负责人</div><div class="chip">提交人自选</div>
+          <div class="chip">提交人本人</div><div class="chip">节点审批人</div><div class="chip">连续多级上级</div>
+          <div class="chip">连续多级部门负责人</div><div class="chip">指定审批层级</div><div class="chip">表单内联系人</div>
+          <div class="chip">表单内部门</div><div class="chip">提交人的直属部门负责人</div><div class="chip">…</div>
+        </div>
+        <div class="row" style="margin-top:10px"><span class="inp" style="flex:1">搜索成员/角色/用户组</span><span class="btn">添加审批人</span></div>
+        <div class="sec">审批人为空时</div>
+        <div style="margin-bottom:8px"><span class="radio"><i class="on"></i>自动通过</span><span class="radio"><i></i>指定人员审批</span><span class="radio"><i></i>转交审批管理员</span></div>
+        <div class="sec">审批人与提交人为同一人时</div>
+        <div class="grid2" style="font-size:11.5px">
+          <span class="radio"><i class="on"></i>由提交人对自己审批</span><span class="radio"><i></i>自动跳过</span>
+          <span class="radio"><i></i>转交直属上级审批</span><span class="radio"><i></i>转交部门负责人审批</span>
+        </div>
+        <div class="note" style="margin-top:10px">提示：审批人离职自动转交其上级；同一审批人重复出现默认只审批一次（可在「更多设置」修改）</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S03A 分支与条件在画布上的呈现 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S03A</span><span>流程设计 · 分支与条件在画布上的呈现（放大）</span><span class="spacer"></span><span>实测</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn">创建限时审批</span><span class="btn">创建自动化</span><span class="btn pri">发布</span></div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body">
+      <div class="main" style="padding:14px 26px">
+        <div style="display:flex;gap:24px">
+          <div style="width:600px">
+            <div class="node" style="margin:0 auto;width:430px">审批<div class="sub">审批人：直属部门负责人</div></div>
+            <div class="vline"></div>
+            <div class="split"><div class="split-bar"></div></div>
+            <div class="stubs"><span></span><span></span></div>
+            <div class="branchbox">
+              <div class="branchbox-head"><span class="t">并行分支</span><span class="addbtn">+ 添加并行分支</span><span class="small">每个分支可各自设置进入条件</span></div>
+              <div class="branch">
+                <div class="lane">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                    <span class="small">并行分支 1</span>
+                    <span class="condchip">当 <b>合同类型</b> 等于 <b>经营</b></span>
+                    <span class="small" style="text-decoration:underline">编辑条件</span>
+                  </div>
+                  <div class="node" style="width:100%">审批<div class="sub">审批人：经发负责人</div></div>
+                </div>
+                <div class="lane">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span class="small">其他情况</span><span class="small">（系统兜底分支）</span>
+                  </div>
+                  <div class="node" style="width:100%">审批<div class="sub">审批人：行政</div></div>
+                  <div class="small" style="margin-top:6px">如存在未满足其他分支条件的情况，则进入此分支</div>
+                </div>
+              </div>
+            </div>
+            <div class="stubs"><span></span><span></span></div>
+            <div class="merge"><div class="merge-bar"></div></div>
+            <div class="vline"></div>
+            <div class="node" style="margin:0 auto;width:430px">审批<div class="sub">审批人：法务（分支汇合后继续）</div></div>
+          </div>
+          <div style="flex:1">
+            <div class="sec">画布上的分支元素</div>
+            <div class="note">① <b>分支容器</b>：并行分支可有多条，右上角「+ 添加并行分支」继续加分支</div>
+            <div class="note" style="margin-top:8px">② <b>条件标签</b>直接挂在分支头上（当 &lt;字段&gt; 等于 &lt;值&gt;），点击即进入条件编辑面板</div>
+            <div class="note" style="margin-top:8px">③「<b>其他情况</b>」是系统兜底分支：不可编辑、不可删除，其他条件都不满足时进入</div>
+            <div class="note g" style="margin-top:8px">④ 条件逻辑：条件组<b>内</b>为「且」，条件组<b>之间</b>为「或」，形如 (A 且 B) 或 (C 且 D)</div>
+            <div class="note g" style="margin-top:8px">⑤ 可用作条件的字段，必须先在「表单设计」中设为<b>必填</b></div>
+            <div class="dash" style="height:92px;margin-top:12px">条件编辑面板（条件组 / 添加条件 / 添加条件组）<br>详见 S07</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S03B 插入节点菜单 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S03B</span><span>流程设计 · 节点之间「+」插入节点</span><span class="spacer"></span><span>📘 官方文档描述，未在页面实测</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn">创建限时审批</span><span class="btn">创建自动化</span><span class="btn pri">发布</span></div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body">
+      <div class="main ghost" style="padding:24px 0">
+        <div class="node" style="width:230px;margin:0 auto">审批<div class="sub">审批人：直属部门负责人</div></div>
+        <div class="vline" style="height:26px"></div>
+        <div class="plus">+</div>
+        <div class="vline" style="height:26px"></div>
+        <div class="node" style="width:230px;margin:0 auto">审批<div class="sub">审批人：法务</div></div>
+        <div class="vline" style="height:26px"></div>
+        <div class="plus">+</div>
+        <div class="vline" style="height:26px"></div>
+        <div class="node" style="width:230px;margin:0 auto">抄送</div>
+      </div>
+      <div style="position:absolute;left:540px;top:246px;width:360px;background:#fff;border:1px solid #9a9a9a;border-radius:6px;box-shadow:0 8px 22px rgba(0,0,0,.2);z-index:6">
+        <div style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;color:#777">插入节点</div>
+        <div class="list-row">审批人<div class="spacer"></div><span class="small">需人工同意 / 拒绝</span></div>
+        <div class="list-row">办理人<div class="spacer"></div><span class="small">业务办理：打款、盖章</span></div>
+        <div class="list-row">条件分支<div class="spacer"></div><span class="small">按条件走不同分支</span></div>
+        <div class="list-row" style="background:#f4f4f4">并行分支<div class="spacer"></div><span class="small">多分支同时流转</span></div>
+      </div>
+      <div style="position:absolute;left:150px;top:640px;width:420px">
+        <div class="note">插入后即成为画布上的一个节点 / 分支容器；分支容器自带「其他情况」兜底分支</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S04 更多设置 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S04</span><span>④ 更多设置（向导第 4 步）</span><span style="flex:1"></span><span>全局策略项</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同审批（含用印）</div>
+      <span class="pill">草稿（保存于 1 分钟前）▾</span>
+      <div class="spacer"></div>
+      <span class="btn">预览</span><span class="btn pri">发布</span>
+    </div>
+    <div class="steps">
+      <span><span class="no">1</span>基础信息</span>
+      <span><span class="no">2</span>表单设计</span>
+      <span><span class="no">3</span>流程设计</span>
+      <span class="on"><span class="no">4</span>更多设置</span>
+    </div>
+    <div class="body">
+      <div class="main" style="padding:16px 40px">
+        <div class="note" style="margin-bottom:12px">⚠️ 本步骤未能在页面上逐项实测，以下清单来自飞书官方「更多设置」目录</div>
+        <div class="cbox" style="margin-bottom:10px">
+          <div class="row" style="margin:0"><div class="lbl" style="width:140px">审批撤销规则</div><div class="inp" style="flex:1">提交后 N 分钟内可撤销 ▾</div></div>
+        </div>
+        <div class="cbox" style="margin-bottom:10px">
+          <div class="row" style="margin:0"><div class="lbl" style="width:140px">审批修改规则</div><div class="inp" style="flex:1">允许提交人修改已提交的审批单 ▾</div></div>
+        </div>
+        <div class="cbox" style="margin-bottom:10px">
+          <div class="row" style="margin:0"><div class="lbl" style="width:140px">代他人提交</div><span class="radio"><i></i>允许</span><span class="radio"><i class="on"></i>不允许</span></div>
+        </div>
+        <div class="cbox" style="margin-bottom:10px">
+          <div class="row" style="margin:0"><div class="lbl" style="width:140px">审批人批量审批</div><span class="radio"><i class="on"></i>允许</span><span class="radio"><i></i>不允许</span></div>
+        </div>
+        <div class="cbox" style="margin-bottom:10px">
+          <div class="lbl" style="width:140px;margin-bottom:8px">审批人去重</div>
+          <div class="radio" style="display:flex;margin-bottom:6px"><i class="on"></i>① 仅审批一次，后续重复节点自动同意（默认）</div>
+          <div class="radio" style="display:flex;margin-bottom:6px"><i></i>② 仅针对连续审批的节点自动同意</div>
+          <div class="radio" style="display:flex"><i></i>③ 不自动同意，每个节点都要审批</div>
+        </div>
+        <div class="cbox" style="margin-bottom:10px">
+          <div class="row" style="margin:0"><div class="lbl" style="width:140px">允许审批人撤回</div><span class="sw on"></span></div>
+        </div>
+        <div class="cbox" style="margin-bottom:10px">
+          <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:140px">打印模板</div><span class="small">表单控件需勾选「打印」才会输出（默认勾选）</span></div>
+          <div class="grid2">
+            <div class="chip" style="padding:10px">系统模板<br><span class="small">免费 · 样式不可自定义 · 可另存 PDF</span></div>
+            <div class="chip" style="padding:10px">自定义配置<br><span class="small">三方应用 · 付费 · 可拖拽排版/Logo/抬头</span></div>
+          </div>
+        </div>
+        <div class="cbox">
+          <div class="row" style="margin:0"><div class="lbl" style="width:140px">审批转发范围</div><div class="inp" style="flex:1">指定可转发范围 ▾</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S05 草稿与版本历史 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S05</span><span>草稿与版本历史（点击顶部「草稿」展开）</span><span style="flex:1"></span><span>实测面板</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同审批（含用印）</div>
+      <span class="pill" style="background:#333;color:#fff;border-color:#333">草稿（保存于 1 分钟前）▴</span>
+      <div class="spacer"></div>
+      <span class="btn">预览</span><span class="btn pri">发布</span>
+    </div>
+    <div class="steps">
+      <span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span>
+      <span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span>
+    </div>
+    <div class="body">
+      <div class="main ghost" style="padding:20px">
+        <div class="node" style="width:160px;margin:0 auto">提交</div><div class="vline"></div>
+        <div class="node" style="width:160px;margin:0 auto">审批</div><div class="vline"></div>
+        <div class="node" style="width:160px;margin:0 auto">审批</div>
+      </div>
+      <div style="position:absolute;left:120px;top:150px;width:520px;background:#fff;border:1px solid #a8a8a8;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:6">
+        <div style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:700">版本</div>
+        <div class="list-row" style="background:#f4f4f4"><b style="width:150px">草稿</b><span class="tag2 act">设计中</span><span class="small">宫鑫</span><span class="spacer"></span><span class="small">保存于 1 分钟前</span></div>
+        <div class="list-row"><span style="width:150px">9月9日 09:44 版本</span><span class="tag2 act">启用中</span><span class="small">聂东南</span><span class="spacer"></span><span class="small">发布</span></div>
+        <div class="list-row"><span style="width:150px">9月9日 09:42 版本</span><span class="tag2">历史</span><span class="small">聂东南</span><span class="spacer"></span><span class="small">发布</span></div>
+        <div class="list-row"><span style="width:150px">9月7日 19:27 版本</span><span class="tag2">历史</span><span class="small">聂东南</span><span class="spacer"></span><span class="small">发布</span></div>
+        <div class="list-row"><span style="width:150px">8月27日 08:39 版本</span><span class="tag2">历史</span><span class="small">李佳杰</span><span class="spacer"></span><span class="small">发布</span></div>
+        <div class="list-row"><span style="width:150px">…</span><span class="tag2">历史</span><span class="small">…</span><span class="spacer"></span><span class="small">发布</span></div>
+        <div style="padding:10px 14px" class="note">设计要点：草稿与已发布版本分离；在途单据冻结在发起时的版本上</div>
+      </div>
+      <div style="position:absolute;left:680px;top:150px;width:460px;background:#fff;border:1px solid #a8a8a8;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:6">
+        <div style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:700">进入编辑器时的草稿提示（实测）</div>
+        <div style="padding:16px 14px">
+          <div style="margin-bottom:6px">是否打开上次编辑的草稿</div>
+          <div class="small" style="margin-bottom:14px">最近保存于 1 分钟前</div>
+          <div style="display:flex;gap:10px;justify-content:flex-end"><span class="btn">放弃草稿</span><span class="btn pri">打开草稿</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S06 审批节点设置 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S06</span><span>节点配置 · 审批节点（点击画布中的「审批」节点）</span><span style="flex:1"></span><span>实测面板</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span>
+      <div class="spacer"></div><span class="btn">创建限时审批</span><span class="btn">创建自动化</span><span class="btn pri">发布</span>
+    </div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body">
+      <div class="main ghost" style="padding:20px">
+        <div class="node" style="width:180px;margin:0 auto">提交</div><div class="vline"></div>
+        <div class="node hl" style="width:180px;margin:0 auto">审批<div class="sub">直属部门负责人</div></div><div class="vline"></div>
+        <div class="node" style="width:180px;margin:0 auto">审批</div><div class="vline"></div>
+        <div class="node" style="width:180px;margin:0 auto">抄送</div>
+      </div>
+      <div class="panel" style="width:420px">
+        <div class="tabs"><span class="on">设置审批人</span><span>表单权限</span><span>操作权限</span></div>
+        <div class="sec">审批类型</div>
+        <div style="margin-bottom:8px"><span class="radio"><i class="on"></i>人工审批</span><span class="radio"><i></i>自动通过</span><span class="radio"><i></i>自动拒绝</span><span class="radio"><i></i>不计入审批效率统计</span></div>
+        <div class="sec">审批人</div>
+        <div class="grid3" style="font-size:11.5px">
+          <div class="chip">上级</div><div class="chip">部门负责人</div><div class="chip">角色</div>
+          <div class="chip">用户组</div><div class="chip">指定成员</div><div class="chip">提交人自选</div>
+          <div class="chip">提交人本人</div><div class="chip">节点审批人</div><div class="chip">连续多级上级</div>
+          <div class="chip">连续多级部门负责人</div><div class="chip">表单内联系人</div><div class="chip">表单内部门</div>
+          <div class="chip">指定审批层级</div><div class="chip">提交人的直属部门负责人</div><div class="chip">…</div>
+        </div>
+        <div class="row" style="margin-top:10px"><span class="inp" style="flex:1">搜索</span><span class="btn">添加审批人</span></div>
+        <div class="row"><span class="small">已选：直属部门负责人 ×</span></div>
+        <div class="sec">多人审批方式</div>
+        <div style="margin-bottom:8px"><span class="radio"><i class="on"></i>会签</span><span class="radio"><i></i>或签</span><span class="radio"><i></i>依次审批</span></div>
+        <div class="sec">审批人为空时</div>
+        <div style="margin-bottom:8px"><span class="radio"><i class="on"></i>自动通过</span><span class="radio"><i></i>指定人员审批</span><span class="radio"><i></i>转交给审批管理员</span></div>
+        <div class="sec">审批人与提交人为同一人时</div>
+        <div class="grid2" style="font-size:11.5px">
+          <span class="radio"><i class="on"></i>由提交人对自己审批</span><span class="radio"><i></i>自动跳过</span>
+          <span class="radio"><i></i>转交直属上级审批</span><span class="radio"><i></i>转交部门负责人审批</span>
+        </div>
+        <div class="note" style="margin-top:10px">若审批人离职，会自动转交给审批人的上级代为处理。<br>若同一审批人在流程中重复出现，默认只审批一次，可前往「更多设置」修改。</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px"><span class="btn">取消</span><span class="btn pri">保存</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S07 条件分支 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S07</span><span>节点配置 · 条件分支</span><span style="flex:1"></span><span>实测面板</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn pri">发布</span></div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body">
+      <div class="main ghost" style="padding:20px">
+        <div class="node" style="width:180px;margin:0 auto">审批</div><div class="vline"></div>
+        <div class="branch">
+          <div class="lane"><div class="node" style="width:100%">审批<div class="sub">经发负责人</div></div></div>
+          <div class="lane"><div class="node" style="width:100%">其他情况</div></div>
+        </div>
+      </div>
+      <div class="panel" style="width:480px">
+        <div style="margin-bottom:12px">
+          <b>1　满足以下条件时进入当前分支</b>
+          <div class="small" style="text-decoration:underline;margin-top:3px">如何设置条件 ?</div>
+        </div>
+        <div class="card" style="margin-bottom:10px">
+          <div class="small" style="margin-bottom:8px">条件组 1</div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <span class="inp" style="flex:2">合同类型 ▾</span>
+            <span class="inp" style="flex:1">等于 ▾</span>
+            <span class="inp" style="flex:2">经营 ▾</span>
+            <span class="small">×</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="inp" style="flex:2">请选择字段 ▾</span>
+            <span class="inp" style="flex:1">条件 ▾</span>
+            <span class="inp" style="flex:2">请选择值</span>
+            <span class="small">×</span>
+          </div>
+          <div style="margin-top:8px;color:#888;font-size:12px">+ 添加条件（组内为「且」）</div>
+        </div>
+        <div class="card" style="margin-bottom:10px">
+          <div class="small" style="margin-bottom:8px">条件组 2</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="inp" style="flex:2">请选择字段 ▾</span><span class="inp" style="flex:1">条件 ▾</span><span class="inp" style="flex:2">请选择值</span>
+          </div>
+        </div>
+        <div style="color:#666;font-size:12.5px;margin-bottom:12px">+ 添加条件组（组间为「或」）　逻辑形如 (A 且 B) 或 (C 且 D)</div>
+        <div class="note">可用字段：数字/金额/计算公式/单选/多选/日期/日期区间/部门/联系人/地址/明细汇总 + 提交人；且该字段在表单中必须设为「必填」</div>
+        <div class="lane" style="margin-top:10px">
+          <div class="small">其他情况（系统兜底分支，不可编辑、不可删除）</div>
+          <div style="font-size:12.5px;margin-top:4px">如存在未满足其他分支条件的情况，则进入此分支</div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px"><span class="btn">取消</span><span class="btn pri">确定</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S08 抄送节点 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S08</span><span>节点配置 · 抄送人</span><span style="flex:1"></span><span>实测面板</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn pri">发布</span></div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body">
+      <div class="main ghost" style="padding:20px">
+        <div class="node" style="width:180px;margin:0 auto">审批</div><div class="vline"></div>
+        <div class="node cc" style="width:200px;margin:0 auto">抄送</div><div class="vline"></div>
+        <div class="node" style="width:180px;margin:0 auto">结束</div>
+      </div>
+      <div class="panel" style="width:430px">
+        <div class="tabs"><span class="on">抄送人</span><span>表单权限</span></div>
+        <div class="sec">抄送人来源</div>
+        <div class="grid3" style="font-size:11.5px">
+          <div class="chip">上级</div><div class="chip">部门负责人</div><div class="chip">角色</div>
+          <div class="chip">用户组</div><div class="chip">指定成员</div><div class="chip">提交人自选</div>
+          <div class="chip">提交人本人</div><div class="chip">节点抄送人</div><div class="chip">表单内联系人</div>
+          <div class="chip">表单内部门</div><div class="chip">指定层级</div><div class="chip">提交人的直属上级</div>
+        </div>
+        <div class="row" style="margin-top:10px"><span class="inp" style="flex:1">搜索</span><span class="btn">添加抄送人</span></div>
+        <div class="row"><span class="small">已选：提交人自选，王佳琦，李玥洋，樊娟娟</span></div>
+        <div class="sec">抄送时机（中间节点）</div>
+        <div class="row"><span class="radio"><i class="on"></i>仅同意时抄送</span><span class="small">取消勾选则同意/拒绝都通知</span></div>
+        <div class="note" style="margin-top:12px">提示：抄送的人数最多支持 100 人以内</div>
+        <div class="note" style="margin-top:8px">提示：为避免部分员工未设置上级导致流程错误，可前往飞书管理后台检查</div>
+        <div class="note g" style="margin-top:8px">发起时 / 结束时抄送：无「仅同意时抄送」开关</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px"><span class="btn">取消</span><span class="btn pri">保存</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S09 办理人节点 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S09</span><span>节点配置 · 办理人</span><span style="flex:1"></span><span>实测面板</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn pri">发布</span></div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body">
+      <div class="main ghost" style="padding:20px">
+        <div class="node" style="width:180px;margin:0 auto">抄送</div><div class="vline"></div>
+        <div class="node hd" style="width:220px;margin:0 auto">办理盖章上传备案<div class="sub">办理人：郑妍</div></div><div class="vline"></div>
+        <div class="node" style="width:180px;margin:0 auto">结束</div>
+      </div>
+      <div class="panel" style="width:440px">
+        <div class="tabs"><span class="on">设置办理人</span><span>表单权限</span><span>操作权限</span></div>
+        <div class="card" style="margin-bottom:10px;font-size:12.5px">
+          当流程中某个节点不需要审批，但需要对审批单进行业务办理时，可设置办理人节点，场景如财务打款、处理盖章等。<br>
+          <span style="text-decoration:underline;color:#666">与审批人的区别？</span>
+        </div>
+        <div class="row"><span class="inp" style="flex:1">搜索</span><span class="btn">添加办理人</span></div>
+        <div class="row"><span class="small">已选：郑妍 ×</span></div>
+        <div class="sec">多人办理方式</div>
+        <div style="margin-bottom:8px"><span class="radio"><i class="on"></i>会签</span><span class="radio"><i></i>或签</span><span class="radio"><i></i>依次办理</span></div>
+        <div class="sec">办理人为空时</div>
+        <div><span class="radio"><i class="on"></i>指定人员办理</span><span class="radio"><i></i>转交给审批管理员</span></div>
+        <div class="note" style="margin-top:12px">办理人不涉及审批人去重设置，不同节点相同的办理人仍需要执行。</div>
+        <div class="note" style="margin-top:8px">若办理人离职，会自动转交给办理人的上级代为处理。</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px"><span class="btn">取消</span><span class="btn pri">保存</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S10 限时审批 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S10</span><span>弹窗 · 创建限时审批</span><span style="flex:1"></span><span>实测弹窗</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn">创建限时审批</span><span class="btn">创建自动化</span><span class="btn pri">发布</span></div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body" style="background:#f2f2f2"></div>
+    <div class="modal">
+      <div class="mbox" style="width:860px">
+        <div class="mhead">限时审批<div class="spacer"></div><span class="small">限时规则 1　流程到达节点后，超…未处理则发送提醒</span></div>
+        <div class="mbody">
+          <div style="display:flex;gap:14px">
+            <div style="flex:1.15">
+              <div class="sec">执行动作</div>
+              <div style="margin-bottom:10px"><span class="inp" style="width:100%">自动提醒 ▾</span></div>
+              <div class="sec">时间条件</div>
+              <div class="row"><span>流程到达节点后，超</span><span class="inp" style="width:90px">1-720</span><span>小时未处理则发送提醒</span></div>
+              <div class="sec">节点范围</div>
+              <div style="margin-bottom:10px;font-size:12px">
+                <span class="radio"><i class="on"></i>全部节点</span><span class="radio"><i></i>全部审批节点</span><span class="radio"><i></i>全部办理节点</span><span class="radio"><i></i>指定节点</span>
+              </div>
+              <div class="sec">被提醒人</div>
+              <div style="font-size:12px">
+                <span class="radio"><i class="on"></i>当前审批人/办理人</span><span class="radio"><i></i>提交人</span><span class="radio"><i></i>指定成员</span>
+              </div>
+            </div>
+            <div style="flex:1">
+              <div class="sec">提醒效果预览</div>
+              <div class="card" style="margin-bottom:8px">
+                <div class="small">审批人 / 办理人</div>
+                <div style="font-size:12.5px;margin-top:4px">请尽快处理"对公支出申请"</div>
+                <div class="small">提醒原因：流程到达"直属上级"节点 24 小时未处理，自动提醒你（管理员配置规则触发）</div>
+                <div class="small" style="margin-top:4px">申请人 @张三 · 产品设计部门 · 办公用品：电脑设备</div>
+                <div style="margin-top:6px"><span class="btn">同意</span> <span class="btn">拒绝</span></div>
+              </div>
+              <div class="card" style="margin-bottom:8px">
+                <div class="small">提交人</div>
+                <div style="font-size:12.5px;margin-top:4px">请提醒审批人，尽快处理"对公支出申请"</div>
+                <div class="small">提醒原因：流程到达"直属上级"节点 24 小时未处理，自动提醒你</div>
+                <div style="margin-top:6px"><span class="btn">查看详情</span></div>
+              </div>
+              <div class="card">
+                <div class="small">指定成员</div>
+                <div style="font-size:12.5px;margin-top:4px">请提醒审批人，尽快处理"对公支出申请"</div>
+                <div style="margin-top:6px"><span class="btn">查看详情</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mfoot"><span class="btn">取消</span><span class="btn pri">保存</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S11 自动化 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S11</span><span>弹窗 · 创建自动化</span><span style="flex:1"></span><span>实测弹窗</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn">创建限时审批</span><span class="btn">创建自动化</span><span class="btn pri">发布</span></div>
+    <div class="steps"><span><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span class="on"><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body" style="background:#f2f2f2"></div>
+    <div class="modal">
+      <div class="mbox" style="width:820px">
+        <div class="mhead">自动化<div class="spacer"></div><span class="small">流程 1　当…时，将执行…动作</span></div>
+        <div class="mbody">
+          <div style="display:flex;gap:14px">
+            <div style="flex:1">
+              <div class="cbox" style="text-align:center;font-size:12.5px">当触发以下条件时<br><span class="small">在右侧选择触发条件</span></div>
+              <div style="height:22px"></div>
+              <div class="cbox" style="text-align:center;font-size:12.5px">将执行以下动作<br><span class="small">在右侧选择执行动作</span></div>
+            </div>
+            <div style="width:250px">
+              <div class="sec">触发条件</div>
+              <div class="chip" style="margin-bottom:6px;text-align:left">流程通过</div>
+              <div class="chip" style="margin-bottom:6px;text-align:left">流程拒绝</div>
+              <div class="chip" style="margin-bottom:12px;text-align:left">流程撤回</div>
+              <div class="sec">执行动作</div>
+              <div class="chip" style="margin-bottom:6px;text-align:left;color:#aaa">（本次未实测动作清单）</div>
+              <div class="chip" style="text-align:left;color:#aaa">调用/发送类动作 ▾</div>
+            </div>
+          </div>
+          <div style="margin-top:12px"><span class="btn" style="opacity:.5">添加动作</span> <span class="small">未选择触发条件时禁用</span></div>
+        </div>
+        <div class="mfoot"><span class="btn">取消</span><span class="btn pri">保存</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S12 预览（扫码） ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S12</span><span>弹窗 · 预览（移动端扫码）</span><span style="flex:1"></span><span>实测弹窗</span></div>
+  <div class="app">
+    <div class="topbar"><div class="logo"></div><div class="title">合同审批（含用印）</div><span class="pill">草稿 ▾</span><div class="spacer"></div><span class="btn">预览</span><span class="btn pri">发布</span></div>
+    <div class="steps"><span class="on"><span class="no">1</span>基础信息</span><span><span class="no">2</span>表单设计</span><span><span class="no">3</span>流程设计</span><span><span class="no">4</span>更多设置</span></div>
+    <div class="body" style="background:#f2f2f2"></div>
+    <div class="modal">
+      <div class="mbox" style="width:440px">
+        <div class="mhead">合同审批（含用印）预览</div>
+        <div class="mbody" style="text-align:center;padding:24px">
+          <div class="qr" style="margin:0 auto 14px"></div>
+          <div style="font-size:13px">打开手机飞书，扫描二维码预览审批流程</div>
+          <div class="small" style="margin-top:10px">提示：预览需填写完整测试数据，才会按分支显示实际审批人</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
