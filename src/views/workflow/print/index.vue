@@ -3,7 +3,7 @@
     <!-- 屏幕上的工具条：打印时整条隐藏（.no-print） -->
     <div class="print-toolbar no-print">
       <span class="tb-title">{{ title }}</span>
-      <span class="tb-hint">A4 纵向 · 共 {{ pageCount }} 页</span>
+      <span class="tb-hint">A4 纵向 · 仅表单信息 · 共 {{ pageCount }} 页</span>
       <el-button type="primary" size="mini" icon="el-icon-printer" :loading="printing" @click="doPrint">打印</el-button>
       <el-button size="mini" icon="el-icon-refresh" @click="load">刷新数据</el-button>
       <el-button size="mini" @click="closeWin">关闭</el-button>
@@ -25,10 +25,9 @@
 
         <!-- A. 抬头区 -->
         <div class="p-title">{{ title }}</div>
+        <!-- 抬头：只保留表单侧信息（不打印模板名等内部元数据） -->
         <div class="p-headline">
-          <div class="p-hl-left">
-            <span v-if="data.printTemplate && data.printTemplate.name">模板：{{ data.printTemplate.name }}</span>
-          </div>
+          <div class="p-hl-left"></div>
           <div class="p-hl-right">单据编号：{{ data.businessNo || '—' }}</div>
         </div>
 
@@ -44,23 +43,25 @@
           </tbody>
         </table>
 
-        <!-- C. 签批栏区：按流程节点生成 -->
-        <div class="p-section-title">公文接收及处理</div>
-        <div v-if="!nodes.length" class="p-empty-tip">（暂无办理记录）</div>
-        <div v-for="(n, i) in nodes" :key="'n' + i" class="sign-block">
-          <div class="sb-head">{{ cn(i + 1) }} {{ n.nodeName || '（未命名节点）' }}</div>
-          <div class="sb-meta">
-            <span>接收单位：{{ n.deptName || '—' }}</span>
-            <span>接收人：{{ n.assigneeName || '—' }}</span>
-            <span>签收时间：{{ fmt(n.receiveTime) }}</span>
-            <span v-if="n.finishTime">办结时间：{{ fmt(n.finishTime) }}</span>
+        <!-- C. 签批栏区（默认不打印；模板 showSignature='1' 才输出） -->
+        <template v-if="showSignature">
+          <div class="p-section-title">公文接收及处理</div>
+          <div v-if="!nodes.length" class="p-empty-tip">（暂无办理记录）</div>
+          <div v-for="(n, i) in nodes" :key="'n' + i" class="sign-block">
+            <div class="sb-head">{{ cn(i + 1) }} {{ n.nodeName || '（未命名节点）' }}</div>
+            <div class="sb-meta">
+              <span>接收单位：{{ n.deptName || '—' }}</span>
+              <span>接收人：{{ n.assigneeName || '—' }}</span>
+              <span>签收时间：{{ fmt(n.receiveTime) }}</span>
+              <span v-if="n.finishTime">办结时间：{{ fmt(n.finishTime) }}</span>
+            </div>
+            <div v-if="showComment" class="sb-comment">{{ n.comment || '' }}</div>
+            <div class="sb-sign">
+              <img v-if="signUrls[n.taskId]" :src="signUrls[n.taskId]" alt="签名" />
+              <span v-else class="sb-sign-empty">（签名）</span>
+            </div>
           </div>
-          <div v-if="showComment" class="sb-comment">{{ n.comment || '' }}</div>
-          <div class="sb-sign">
-            <img v-if="signUrls[n.taskId]" :src="signUrls[n.taskId]" alt="签名" />
-            <span v-else class="sb-sign-empty">（签名）</span>
-          </div>
-        </div>
+        </template>
 
         <!-- D. 附件清单区（只打印清单，不打印文件内容） -->
         <template v-if="showAttachment">
@@ -155,11 +156,29 @@ export default {
     tpl() {
       return (this.data && this.data.printTemplate) || {}
     },
+    /**
+     * 是否为**内置系统模板**（库中无对应记录时后端返回 id=null 的兜底模板）。
+     * 内置模板的 showSignature / showAttachment 是服务端硬编码的默认值，
+     * 并非管理员的显式选择 —— 因此内置模板**永远只打印表单信息**。
+     */
+    isBuiltinTpl() {
+      return !this.tpl.id
+    },
+    /**
+     * 签批栏 / 附件清单：**默认不打印**。
+     * 打印件定位是「表单信息」——签批与附件属流程侧数据。
+     *  - 内置系统模板：一律不打印（见 isBuiltinTpl）
+     *  - 管理员自建模板：需显式打开（showSignature='1' / showAttachment='1'）
+     * 注：原先 showAttachment 用 `!== '0'`（默认打印），与「只打印表单信息」相反，已翻转。
+     */
+    showSignature() {
+      return !this.isBuiltinTpl && this.tpl.showSignature === '1'
+    },
     showComment() {
       return this.tpl.showComment !== '0'
     },
     showAttachment() {
-      return this.tpl.showAttachment !== '0'
+      return !this.isBuiltinTpl && this.tpl.showAttachment === '1'
     },
     footerNote() {
       return this.tpl.footerNote || ''
