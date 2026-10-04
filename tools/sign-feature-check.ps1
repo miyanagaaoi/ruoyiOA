@@ -146,7 +146,20 @@ function Api([string]$method, [string]$url, $body, [string]$user = 'superAdmin')
 }
 
 function MsgOf($res) { if ($res -and $res.msg) { return [string]$res.msg } return '' }
-function PresetList() { $res = Api 'GET' '/workflow/sign/preset/list' $null; if ($res.data) { return @($res.data) } return @() }
+<#
+  预存签名列表，**恒定返回数组**。
+
+  ⚠ 必须用逗号 `return ,$rows`：PowerShell 输出集合时会"解包"，
+     单元素数组会变成标量对象，调用方拿到的 `$list.Count` 就是空的
+     （实测：库里恰好只有 1 枚预存签名时，"用例前已有预存签名 N 枚"打不出来，
+       于是 hadAny 被判成 false，默认签名那条断言跟着误报）。
+#>
+function PresetList() {
+    $res = Api 'GET' '/workflow/sign/preset/list' $null
+    $rows = @()
+    if ($res -and $res.data) { $rows = @($res.data) }
+    return ,$rows
+}
 function PresetDefault() { return (Api 'GET' '/workflow/sign/preset/default' $null).data }
 <# 某任务节点的签名策略 #>
 function PolicyOf([string]$taskId) { return (Api 'GET' "/workflow/sign/policy?taskId=$taskId" $null).data }
