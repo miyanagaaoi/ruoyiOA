@@ -11,9 +11,18 @@
         @click="d.select(p(i))"
         @keyup.enter="d.select(p(i))"
       >
-        <span class="ft-badge">{{ d.nodeBadge(node) }}</span>
-        <span class="ft-name">{{ node.name || d.typeLabel(node.type) }}</span>
-        <span class="ft-sum">{{ d.summary(node) }}</span>
+        <div class="ft-node-head">
+          <span class="ft-badge">{{ d.nodeBadge(node) }}</span>
+          <!-- 起止节点不显示类型标签（名称本身就是"发起"/"结束"，避免重复） -->
+          <span
+            v-if="node.type !== 'start' && node.type !== 'end'"
+            class="ft-type"
+          >{{ d.typeLabel(node.type) }}</span>
+        </div>
+        <div class="ft-node-body">
+          <span class="ft-name">{{ node.name || d.typeLabel(node.type) }}</span>
+          <span class="ft-sum">{{ d.summary(node) }}</span>
+        </div>
       </div>
 
       <!-- ============ 容器：分支并列泳道 ============ -->
@@ -165,15 +174,17 @@ export default {
 /* ---------- 节点卡片 ---------- */
 .ft-node {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 190px;
-  max-width: 320px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 220px;
+  max-width: 340px;
+  min-height: 62px;
   border: 1px solid #d8d8d8;
   border-top: 3px solid #d8d8d8;
   border-radius: 6px;
   background: #fff;
-  padding: 8px 12px;
+  padding: 6px 12px 10px;
   cursor: pointer;
   font-size: 13px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -188,17 +199,41 @@ export default {
     box-shadow: 0 0 0 3px rgba(232, 130, 12, 0.12);
   }
 
+  /* 第一行：类型标签（对齐飞书"审批 / 审批人：xxx"的两行卡） */
+  .ft-node-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 18px;
+  }
   .ft-badge {
     font-size: 11px;
+    line-height: 16px;
     color: #fff;
     background: #b9b9b9;
     border-radius: 3px;
-    padding: 1px 6px;
+    padding: 0 6px;
     flex: none;
+  }
+  .ft-type {
+    font-size: 11px;
+    color: #a8a8a8;
+    letter-spacing: 0.5px;
+  }
+
+  /* 第二行：节点名 + 摘要 */
+  .ft-node-body {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
   }
   .ft-name {
     font-weight: 500;
     color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .ft-sum {
     margin-left: auto;
