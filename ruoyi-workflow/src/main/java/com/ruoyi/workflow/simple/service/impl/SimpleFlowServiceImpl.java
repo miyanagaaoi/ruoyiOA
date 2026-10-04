@@ -14,6 +14,11 @@ import com.ruoyi.workflow.simple.model.SimpleFlowDef;
 import com.ruoyi.workflow.simple.service.ISimpleFlowService;
 import com.ruoyi.workflow.simple.validate.SimpleFlowValidator;
 import com.ruoyi.workflow.simple.validate.SimpleFlowValidator.Issue;
+import com.ruoyi.template.domain.Template;
+import com.ruoyi.template.domain.TemplateNodeFieldAuth;
+import com.ruoyi.template.service.ITemplateNodeFieldAuthService;
+import com.ruoyi.template.service.ITemplateService;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +54,12 @@ public class SimpleFlowServiceImpl extends FlowServiceFactory implements ISimple
 
     @Autowired
     private IFlowDefinitionService flowDefinitionService;
+
+    @Autowired
+    private ITemplateService templateService;
+
+    @Autowired
+    private ITemplateNodeFieldAuthService nodeFieldAuthService;
 
     @Override
     public List<FlowSimple> selectList(FlowSimple query) {
@@ -197,7 +208,63 @@ public class SimpleFlowServiceImpl extends FlowServiceFactory implements ISimple
         upd.setUpdateBy(SecurityUtils.getUsername());
         flowSimpleMapper.update(upd);
 
+        // 7) 节点级字段权限落库（AC-12）
+        //    设计器把「本节点只读字段」写在流程 JSON 的 node.fieldReadonly 里，
+        //    发布时**同时落库**，供提交时做服务端强制 —— 只靠前端置灰不算通过。
+        syncNodeFieldAuth(def);
+
         return flowSimpleMapper.selectById(db.getId());
+    }
+
+    /**
+     * 把流程定义里各节点的只读字段配置回写到 {@code t_template_node_field_auth}。
+     *
+     * <p> 一个 defKey 可能被多个模板绑定（模板才是发起入口，字段权限也按 template_id 存），
+     * 所以对每个绑定模板各建一份，避免共用同一批对象导致主键/模板ID 被反复覆盖。 </p>
+     */
+    private void syncNodeFieldAuth(SimpleFlowDef def) {
+        Template query = new Template();
+        query.setDefKey(def.getKey());
+        List<Template> templates = templateService.listTemplate(query);
+        if (CollectionUtils.isEmpty(templates)) {
+            // 还没建模板时发布也是合法流程（模板可后补），此处不算失败
+            return;
+        }
+        for (Template template : templates) {
+            List<TemplateNodeFieldAuth> rows = new ArrayList<>();
+            collectReadonly(def.getNodes(), rows);
+            nodeFieldAuthService.rebuildByTemplate(template.getId(), rows);
+        }
+    }
+
+    /**
+     * 递归收集节点上的只读字段；条件分支内部的节点也要收（它们同样是可办理节点）。
+     */
+    private void collectReadonly(List<SimpleFlowDef.Node> nodes, List<TemplateNodeFieldAuth> out) {
+        if (CollectionUtils.isEmpty(nodes)) {
+            return;
+        }
+        for (SimpleFlowDef.Node node : nodes) {
+            if (node.getFieldReadonly() != null) {
+                for (String field : node.getFieldReadonly()) {
+                    if (StringUtils.isBlank(field)) {
+                        continue;
+                    }
+                    TemplateNodeFieldAuth row = new TemplateNodeFieldAuth();
+                    row.setTaskDefKey(node.getId());
+                    row.setFieldVmodel(field.trim());
+                    row.setReadonly("1");
+                    row.setRequired("0");
+                    row.setHidden("0");
+                    out.add(row);
+                }
+            }
+            if (CollectionUtils.isNotEmpty(node.getBranches())) {
+                for (SimpleFlowDef.Branch branch : node.getBranches()) {
+                    collectReadonly(branch.getNodes(), out);
+                }
+            }
+        }
     }
 
     @Override

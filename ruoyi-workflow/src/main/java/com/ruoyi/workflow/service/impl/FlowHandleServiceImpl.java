@@ -99,6 +99,8 @@ public class FlowHandleServiceImpl implements IFlowHandleService {
     private ISysUserService sysUserService;
     @Autowired
     private ITemplateMessageNoticeService templateMessageNoticeService;
+    @Autowired
+    private com.ruoyi.workflow.sign.guard.TaskSignGuard taskSignGuard;
 
     /**
      * 启动流程
@@ -144,6 +146,11 @@ public class FlowHandleServiceImpl implements IFlowHandleService {
     @Transactional(rollbackFor = Exception.class)
     public void completeTask(FlowTaskVo flowTaskVo, String createId) {
         validateCompleteTaskParam(flowTaskVo);
+        // AC-26 兜底：同步入口（DynamicFlowSubmitDataImpl#beforeSubmit）已经校验过一次，
+        // 这里再拦一道，防止绕过 /biz/flow/submit 直接调 /workflow/handle/complete。
+        // ⚠ 本方法运行在 MQ 消费端，此处抛异常时用户侧**已经收到「提交成功」**，
+        //   所以它只是兜底，不能替代同步段的校验（否则就是"提示成功但单据没动"）。
+        taskSignGuard.requireSigned(flowTaskVo.getTaskId(), flowTaskVo.getBusinessId());
         // 从流程变量中处理委托关系
         handleEntrustByVariable(flowTaskVo);
         // 完成任务，新增审批意见

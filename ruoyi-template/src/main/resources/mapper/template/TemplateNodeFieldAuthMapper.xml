@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.template.mapper.TemplateNodeFieldAuthMapper">
+
+    <!-- 显式 resultMap：不依赖全局 map-underscore-to-camel-case，
+         否则一旦该开关没开，字段会静默映射成 null，服务端校验会"看起来通过但实际没生效" -->
+    <resultMap type="com.ruoyi.template.domain.TemplateNodeFieldAuth" id="TemplateNodeFieldAuthResult">
+        <result property="id"          column="id"/>
+        <result property="templateId"  column="template_id"/>
+        <result property="taskDefKey"  column="task_def_key"/>
+        <result property="fieldVmodel" column="field_vmodel"/>
+        <result property="readonly"    column="readonly"/>
+        <result property="required"    column="required"/>
+        <result property="hidden"      column="hidden"/>
+        <result property="createTime"  column="create_time"/>
+        <result property="updateTime"  column="update_time"/>
+    </resultMap>
+
+    <sql id="selectVo">
+        select id, template_id, task_def_key, field_vmodel, readonly, required, hidden, create_time, update_time
+        from t_template_node_field_auth
+    </sql>
+
+    <select id="selectReadonlyFields" resultMap="TemplateNodeFieldAuthResult">
+        <include refid="selectVo"/>
+        where template_id = #{templateId}
+          and task_def_key = #{taskDefKey}
+          and readonly = '1'
+    </select>
+
+    <select id="selectByTemplateId" resultMap="TemplateNodeFieldAuthResult">
+        <include refid="selectVo"/>
+        where template_id = #{templateId}
+    </select>
+
+    <delete id="deleteByTemplateId">
+        delete from t_template_node_field_auth where template_id = #{templateId}
+    </delete>
+
+    <insert id="batchInsert">
+        insert into t_template_node_field_auth
+            (id, template_id, task_def_key, field_vmodel, readonly, required, hidden, create_time, update_time)
+        values
+        <foreach collection="list" item="it" separator=",">
+            (#{it.id}, #{it.templateId}, #{it.taskDefKey}, #{it.fieldVmodel},
+             #{it.readonly}, #{it.required}, #{it.hidden}, sysdate(), sysdate())
+        </foreach>
+    </insert>
+
+</mapper>
