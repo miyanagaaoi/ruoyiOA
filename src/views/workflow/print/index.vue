@@ -104,6 +104,7 @@
 <script>
 import StateBlock from '@/components/StateBlock'
 import { getPrintData, addPrintLog, getFileBlob } from '@/api/workflow/print'
+import { amountWithUpper, formatAmount } from '@/utils/money'
 import { describeError } from '@/utils/errorMessage'
 
 /** A4 版心高度（297mm - 上下各 12mm）换算成 96dpi 下的像素，用于估算页数 */
@@ -400,14 +401,25 @@ export default {
       return one(v)
     },
 
-    /** 金额类字段加千分位（el-input-number） */
+    /**
+     * 金额类字段的打印形态。
+     *
+     * design-amount（AC-36）：千分位 + 小数位 + **中文大写** ——
+     *   大写与数字必须一致，所以这里用的是与表单控件同一份实现（utils/money.js），
+     *   而不是在这里再写一遍换算。
+     * el-input-number：只加千分位（它没有"金额"语义，不该硬塞大写）。
+     */
     fmtNumber(field, n) {
       const f = this.schemaFields.find(x => x.__vModel__ === field)
       const tag = f && f.__config__ ? f.__config__.tag : ''
-      if (tag === 'el-input-number' || tag === 'design-amount') {
-        return n.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+      if (tag === 'design-amount') {
+        const decimals = f && f.decimals !== undefined && f.decimals !== null ? Number(f.decimals) : 2
+        return amountWithUpper(n, isFinite(decimals) ? decimals : 2)
       }
-      return String(n)
+      if (tag === 'el-input-number') {
+        return formatAmount(n, { decimals: 2 })
+      }
+      return formatAmount(n, { decimals: 2 }) || String(n)
     },
 
     builtin(name) {

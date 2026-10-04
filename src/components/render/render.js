@@ -4,6 +4,7 @@ import DesignDeptSelect from "@/components/form/design/DesignDeptSelect"
 import DesignSerialNo from "@/components/SerialNo"
 import DesignSection from "@/components/form/design/DesignSection"
 import DesignText from "@/components/form/design/DesignText"
+import DesignAmount from "@/components/form/design/DesignAmount"
 
 const componentChild = {}
 /**
@@ -139,7 +140,7 @@ export default {
     //   1. 这里（运行时渲染 + 设计器画布共用同一个 render 组件）
     //   2. utils/generator/config.js 的组件清单（左侧可拖拽列表）
     //   3. 后端 ComponentTypeEnum（值转换时的类型判定，否则落 UNKNOWN 并打告警）
-    DesignDeptSelect, DesignUserSelect, DesignSerialNo, DesignSection, DesignText
+    DesignDeptSelect, DesignUserSelect, DesignSerialNo, DesignSection, DesignText, DesignAmount
   },
   render(h) {
     const dataObject = makeDataObject()

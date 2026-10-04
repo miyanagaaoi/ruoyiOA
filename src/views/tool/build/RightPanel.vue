@@ -39,6 +39,23 @@
             <el-input v-model="activeData.__config__.label" placeholder="请输入字段名称" @input="changeRenderKey" />
           </el-form-item>
           <!-- 纯排版控件（分组标题 / 说明文字）：标题与正文由自己画，不编辑"字段名称" -->
+          <!-- 金额控件（PRD 9.3 / AC-36）：小数位 / 币种 / 大写开关（范围用通用的最小值/最大值） -->
+          <el-form-item v-if="activeData.__config__.tag==='design-amount'" label="小数位">
+            <el-input-number v-model="activeData.decimals" :min="0" :max="6" placeholder="默认 2" />
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-amount'" label="币种">
+            <el-select v-model="activeData.currency" placeholder="请选择币种" :style="{width: '100%'}">
+              <el-option label="人民币 CNY" value="CNY" />
+              <el-option label="美元 USD" value="USD" />
+              <el-option label="欧元 EUR" value="EUR" />
+              <el-option label="港币 HKD" value="HKD" />
+              <el-option label="日元 JPY" value="JPY" />
+              <el-option label="英镑 GBP" value="GBP" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="activeData.__config__.tag==='design-amount'" label="显示大写">
+            <el-switch v-model="activeData.showUpper" />
+          </el-form-item>
           <el-form-item v-if="activeData.__config__.tag==='design-section'" label="分节标题">
             <el-input v-model="activeData.title" placeholder="如：我方信息" @input="changeRenderKey" />
           </el-form-item>
@@ -704,10 +721,10 @@ export default {
       return this.activeData.__config__.tag;
     },
     isShowMin() {
-      return ["el-input-number", "el-slider"].indexOf(this.activeTag) > -1;
+      return ["el-input-number", "el-slider", "design-amount"].indexOf(this.activeTag) > -1;
     },
     isShowMax() {
-      return ["el-input-number", "el-slider", "el-rate"].indexOf(this.activeTag) > -1;
+      return ["el-input-number", "el-slider", "el-rate", "design-amount"].indexOf(this.activeTag) > -1;
     },
     isShowStep() {
       return ["el-input-number", "el-slider"].indexOf(this.activeTag) > -1;

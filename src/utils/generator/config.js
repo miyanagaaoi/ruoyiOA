@@ -731,6 +731,27 @@ export const serialNoComponents = [
 export const formOaComponents = [
   {
     __config__: {
+      label: '金额',
+      tag: 'design-amount',
+      tagIcon: 'money',
+      defaultValue: null,
+      layout: 'colFormItem',
+      span: 24,
+      showLabel: true,
+      required: false,
+      regList: []
+    },
+    decimals: 2,
+    currency: 'CNY',
+    showUpper: true,
+    min: null,
+    max: null,
+    placeholder: '请输入金额',
+    tooltip: '',
+    style: { width: '100%' }
+  },
+  {
+    __config__: {
       label: '分组标题',
       tag: 'design-section',
       tagIcon: 'component',
