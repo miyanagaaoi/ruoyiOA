@@ -231,6 +231,22 @@ git config user.name "你的名字" ; git config user.email "you@example.com"
     表单服务直接报 `BaseException: 模板ID为空`）。它随业务记录落在
     `t_workflow_todo` / `t_workflow_done` / `t_workflow_recycle` 的 `template_id` 列上，
     按该顺序取第一个命中的。
+17. **用浏览器工具断言页面内容时，必须等"终态"，否则会把过渡动画的中间态当成功能坏了**（已踩过）。
+    `layout/components/AppMain.vue` 用的是 `<transition mode="out-in">` ——
+    **旧视图先离场、新视图才进场**，而面包屑等在 `router-view` **之外**的元素会先更新。
+    于是会出现"URL 变了、面包屑变了，但主内容还是上一页"的假象，看起来非常像路由 bug。
+    异步 chunk + 接口请求期间都属于这个窗口。
+    正确做法：**读取该页独有的根元素**（例如打印页的 `.print-page`）来判定是否已挂载，
+    而不是读通用容器，也不要拿面包屑与主内容的一致性当证据。
+    同一条主题：**验证手段失效时，结论不可信**（参见第 14 条）。
+18. **表单 schema 里，选项标签在 `__slot__.options`，不在 `__config__`**：
+    `__config__` 只有 label / showLabel / tag / span / required 这些；
+    el-select / el-radio-group / el-checkbox-group 的 `{label,value}` 列表在字段的
+    `__slot__.options`；el-switch 的中文在 `active-text` / `inactive-text`。
+    打印件上要把 `leave` 显示成"请假"就得从这里取，不必查字典接口。
+19. **`IBizFormService.getBizForm()` 返回的 `formData` 是一段 JSON 字符串**（不是对象）：
+    解析后形如 `{ formData: { fields:[{__config__,__vModel__}] }, valData: { 字段 → 值 } }`，
+    **值在 `valData`、中文标签与顺序在 `fields`**。只按对象递归会一个字段都取不到。
 
 ## 7. 结论
 
