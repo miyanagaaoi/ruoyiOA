@@ -205,9 +205,19 @@ public class SimpleFlowCompiler {
                     e.miCollection = field;
                     e.miElementVar = "dept";
                     e.miSequential = false;
+                    // 完成条件：
+                    //   ANY（任一完成即合流）→ 显式条件
+                    //   ALL（全部完成才合流）→ **不生成条件**，交给引擎默认语义 ——
+                    //     并行多实例在「全部实例完成」后本就会自动完成，
+                    //     显式写 == nrOfInstances 不但多余，在本环境还会坏事。
+                    //
+                    // 实测踩过：nrOfCompletedInstances 被存成
+                    // bpmnParallelMultiInstanceCompleted 类型、数值为 NULL，
+                    // 于是 ${nrOfCompletedInstances == nrOfInstances} 恒为 false ——
+                    // 全部会审人审批完毕后活动任务归零，流程却永不结束（END_TIME_ 一直为空）。
                     e.miCompletion = SimpleFlowDef.JOIN_ANY.equals(node.getJoinMode())
                             ? "${nrOfCompletedInstances >= 1}"
-                            : "${nrOfCompletedInstances == nrOfInstances}";
+                            : null;
                     for (String t : tails) {
                         addEdge(t, e.id, null);
                     }
@@ -486,16 +496,13 @@ public class SimpleFlowCompiler {
             String multiMode = StringUtils.defaultIfBlank(node.getMultiMode(), SimpleFlowDef.M_SINGLE);
             if (SimpleFlowDef.M_AND.equals(multiMode) || SimpleFlowDef.M_OR.equals(multiMode)
                     || SimpleFlowDef.M_SEQ.equals(multiMode)) {
-                String completion;
-                boolean sequential = false;
-                if (SimpleFlowDef.M_OR.equals(multiMode)) {
-                    completion = "${nrOfCompletedInstances >= 1}";
-                } else if (SimpleFlowDef.M_SEQ.equals(multiMode)) {
-                    completion = "${nrOfCompletedInstances == nrOfInstances}";
-                    sequential = true;
-                } else {
-                    completion = "${nrOfCompletedInstances == nrOfInstances}";
-                }
+                // 完成条件同并行分支：只有「任一完成」（或签）需要显式条件；
+                // 「全部完成」（会签 AND / 依次 SEQ）交给引擎默认语义，
+                // 避免踩 nrOfCompletedInstances 在本环境不可比较的坑（见并行分支处的注释）。
+                String completion = SimpleFlowDef.M_OR.equals(multiMode)
+                        ? "${nrOfCompletedInstances >= 1}"
+                        : null;
+                boolean sequential = SimpleFlowDef.M_SEQ.equals(multiMode);
                 appendMultiInstance(sb, sequential, e.id + "_approval", "assignee", completion);
             }
         }
@@ -508,8 +515,13 @@ public class SimpleFlowCompiler {
         sb.append("      <multiInstanceLoopCharacteristics isSequential=\"").append(sequential)
                 .append("\" flowable:collection=\"").append(collection)
                 .append("\" flowable:elementVariable=\"").append(elementVariable).append("\">\n");
-        sb.append("        <completionCondition xsi:type=\"").append(XSI_FORMAL)
-                .append("\"><![CDATA[").append(completion).append("]]></completionCondition>\n");
+        // completion 为空白表示「不设完成条件」—— 交给引擎默认语义（全部实例完成即完成）。
+        // ⚠ 必须判空：原实现无条件输出，若传 null 会写出 <![CDATA[null]]>，
+        //   引擎会把它当表达式求值，比「不写条件」更糟。
+        if (StringUtils.isNotBlank(completion)) {
+            sb.append("        <completionCondition xsi:type=\"").append(XSI_FORMAL)
+                    .append("\"><![CDATA[").append(completion).append("]]></completionCondition>\n");
+        }
         sb.append("      </multiInstanceLoopCharacteristics>\n");
     }
 
