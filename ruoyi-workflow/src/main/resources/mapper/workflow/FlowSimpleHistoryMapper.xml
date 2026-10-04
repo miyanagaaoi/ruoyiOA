@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workflow.mapper.FlowSimpleHistoryMapper">
+
+    <resultMap type="FlowSimpleHistory" id="FlowSimpleHistoryResult">
+        <result property="id"            column="id"             />
+        <result property="defKey"        column="def_key"        />
+        <result property="version"       column="version"        />
+        <result property="name"          column="name"           />
+        <result property="category"      column="category"       />
+        <result property="content"       column="content"        />
+        <result property="schemaVersion" column="schema_version" />
+        <result property="deployId"      column="deploy_id"      />
+        <result property="procDefId"     column="proc_def_id"    />
+        <result property="publisherId"   column="publisher_id"   />
+        <result property="publisherName" column="publisher_name" />
+        <result property="publishTime"   column="publish_time"   />
+        <result property="remark"        column="remark"         />
+    </resultMap>
+
+    <sql id="selectFlowSimpleHistoryVo">
+        select id, def_key, version, name, category, content, schema_version,
+               deploy_id, proc_def_id, publisher_id, publisher_name, publish_time, remark
+        from t_flow_simple_history
+    </sql>
+
+    <select id="selectByDefKey" parameterType="String" resultMap="FlowSimpleHistoryResult">
+        <include refid="selectFlowSimpleHistoryVo"/>
+        where def_key = #{defKey}
+        order by version desc
+    </select>
+
+    <select id="selectByDefKeyAndVersion" parameterType="FlowSimpleHistory" resultMap="FlowSimpleHistoryResult">
+        <include refid="selectFlowSimpleHistoryVo"/>
+        where def_key = #{defKey} and version = #{version}
+    </select>
+
+    <select id="selectMaxVersion" parameterType="String" resultType="java.lang.Integer">
+        select max(version) from t_flow_simple_history where def_key = #{defKey}
+    </select>
+
+    <insert id="insert" parameterType="FlowSimpleHistory">
+        insert into t_flow_simple_history (
+            id, def_key, version, name, category, content, schema_version,
+            deploy_id, proc_def_id, publisher_id, publisher_name, publish_time, remark
+        ) values (
+            #{id}, #{defKey}, #{version}, #{name}, #{category}, #{content}, #{schemaVersion},
+            #{deployId}, #{procDefId}, #{publisherId}, #{publisherName}, sysdate(), #{remark}
+        )
+    </insert>
+
+</mapper>
