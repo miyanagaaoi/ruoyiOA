@@ -75,9 +75,9 @@
               @keyup.enter="d.select(p(i, j))"
             >
               <span class="ft-lane-name">{{ br.name || ('分支' + (j + 1)) }}</span>
-              <span v-if="br.defaultBranch" class="ft-fallback">系统兜底</span>
-              <span v-else class="ft-cond" :title="d.condText(br)">{{ d.condText(br) }}</span>
               <span v-if="!br.defaultBranch" class="ft-prio">优先级 {{ j + 1 }}</span>
+              <span v-if="br.defaultBranch" class="ft-fallback">系统兜底</span>
+              <span v-else class="ft-cond">{{ d.condText(br) }}</span>
               <el-button
                 v-if="!br.defaultBranch"
                 type="text"
@@ -443,11 +443,15 @@ export default {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  max-width: 100%;
+  /* 与泳道内卡片同宽：100% 让泳道头铺满本泳道（泳道宽度由下方卡片决定），
+     max-width 与 .ft-node 的上限保持一致，避免被超长条件文本撑宽。 */
+  width: 100%;
+  max-width: 340px;
+  box-sizing: border-box;
   border: 1px solid #dfe4ea;
   border-radius: 4px;
   background: #fff;
-  padding: 4px 8px;
+  padding: 6px 8px;
   margin-bottom: 6px;
   cursor: pointer;
   font-size: 12px;
@@ -467,15 +471,18 @@ export default {
     color: #5b7fbf;
   }
   .ft-fallback { color: #aaa; }
+  /* 条件文本：不截断，过长自动换行 */
   .ft-cond {
+    flex: 1 1 100%;
+    min-width: 0;
     border: 1px solid #ddd;
-    border-radius: 10px;
-    padding: 0 6px;
+    border-radius: 4px;
+    padding: 2px 8px;
     color: #666;
-    max-width: 180px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.5;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
   .ft-prio {
     color: #4a9e6f;
