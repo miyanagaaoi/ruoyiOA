@@ -281,6 +281,18 @@ public class BizFormServiceImpl implements IBizFormService {
                             handleTimeRangeLabel(valData, vModel, value);
                         }
                         break;
+                    // 二开控件（PRD 9.3）：值的"翻译"不在这里做
+                    //   · 金额：值是数字本身，千分位与中文大写由前端内置计算生成
+                    //     —— 大写只留**一处**实现，否则前后端各算一遍迟早不一致（AC-36）；
+                    //   · 只读计算：如"日期区间 → 天数"，同样是前端算好再存；
+                    //   · 签名位：值是 fileId，取图是展示层的事。
+                    // 之所以把它们显式列出来而不是落 default：default 会打
+                    // "未支持的组件类型"告警，列全之后这条日志才重新可信。
+                    case AMOUNT:
+                    case CALC:
+                    case SIGNATURE:
+                        valData.put(vModel, value);
+                        break;
                     default:
                         log.warn("未支持的组件类型: {}", componentType.getTag());
                         valData.put(vModel, value);
