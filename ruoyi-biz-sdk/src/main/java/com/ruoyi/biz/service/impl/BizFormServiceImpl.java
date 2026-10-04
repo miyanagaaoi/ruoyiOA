@@ -11,6 +11,7 @@ import com.ruoyi.biz.enums.FormErrorMsgEnum;
 import com.ruoyi.biz.factory.BizFormDataFactory;
 import com.ruoyi.biz.service.IBizFormDataService;
 import com.ruoyi.biz.service.IBizFormService;
+import com.ruoyi.biz.service.INodeFieldWriteGuard;
 import com.ruoyi.biz.utils.FormClassUtil;
 import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.exception.base.BaseException;
@@ -21,6 +22,7 @@ import com.ruoyi.mq.enums.QueueEnum;
 import com.ruoyi.template.domain.Template;
 import com.ruoyi.template.domain.TemplateDynamicForm;
 import com.ruoyi.template.enums.FormTypeEnum;
+import com.ruoyi.tools.utils.bean.ApplicationContextHelper;
 import com.ruoyi.template.service.ITemplateDynamicFormService;
 import com.ruoyi.template.service.ITemplateService;
 import com.ruoyi.todo.domain.vo.TodoVO;
@@ -82,6 +84,11 @@ public class BizFormServiceImpl implements IBizFormService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(CommonForm commonForm) {
+        // AC-12：节点级「只读字段」的服务端强制（PRD 要求「直接调接口也改不动」）。
+        // ⚠ 必须放在下面 try **之前** —— 那个 catch 会把一切异常包成
+        //   「业务表单数据更新失败:…」，会把「字段 X 在本节点为只读」这种明确提示淹没掉。
+        validateNodeFieldWrite(commonForm);
+
         IBizFormDataService bizFormDataImpl = getBizFormDataImpl(commonForm);
         try {
             Object transform = getTransform(bizFormDataImpl, commonForm);
@@ -95,6 +102,25 @@ public class BizFormServiceImpl implements IBizFormService {
             log.error("业务表单数据更新失败:", e);
             throw new BaseException("业务表单数据更新失败:" + e.getMessage());
         }
+    }
+
+    /**
+     * 节点级只读字段校验（AC-12）。
+     *
+     * <p> 实现类在 {@code ruoyi-workflow}（字段权限表与流程模型都在那边），
+     * 本模块不能反向依赖它，故按类型从容器取；取不到就静默跳过 ——
+     * 这是防篡改校验，不该成为流程主链路的硬依赖。 </p>
+     */
+    private void validateNodeFieldWrite(CommonForm commonForm) {
+        INodeFieldWriteGuard guard;
+        try {
+            guard = ApplicationContextHelper.getApplicationContext().getBean(INodeFieldWriteGuard.class);
+        } catch (Exception e) {
+            // 没有实现（裁剪部署）或容器未就绪：跳过，不影响正常办理
+            return;
+        }
+        // 业务校验异常必须原样抛出，不能被下面的兜底吞掉
+        guard.check(commonForm);
     }
 
     @Override
