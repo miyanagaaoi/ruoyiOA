@@ -45,22 +45,34 @@
         </table>
 
         <!-- C. 签批栏区（默认不打印；模板 showSignature='1' 才输出） -->
+        <!--
+          AC-17：签批栏数量与顺序 == 流程节点顺序
+          AC-18：会签节点多人时，**同栏内按人分行**展示，不串行
+
+          所以这里按 `nodeIndex`（后端给的"节点序号"，同节点的多人共用一个序号）分组：
+          一个节点一栏，栏内每人一行。
+        -->
         <template v-if="showSignature">
           <div class="p-section-title">公文接收及处理</div>
-          <div v-if="!nodes.length" class="p-empty-tip">（暂无办理记录）</div>
-          <div v-for="(n, i) in nodes" :key="'n' + i" class="sign-block">
-            <div class="sb-head">{{ cn(i + 1) }} {{ n.nodeName || '（未命名节点）' }}</div>
-            <div class="sb-meta">
-              <span>接收单位：{{ n.deptName || '—' }}</span>
-              <span>接收人：{{ n.assigneeName || '—' }}</span>
-              <span>签收时间：{{ fmt(n.receiveTime) }}</span>
-              <span v-if="n.finishTime">办结时间：{{ fmt(n.finishTime) }}</span>
-            </div>
-            <div v-if="showComment" class="sb-comment">{{ n.comment || '' }}</div>
-            <div class="sb-sign">
-              <img v-if="signUrls[n.taskId]" :src="signUrls[n.taskId]" alt="签名" />
-              <span v-else class="sb-sign-empty">（签名）</span>
-            </div>
+          <div v-if="!signBlocks.length" class="p-empty-tip">（暂无办理记录）</div>
+          <div v-for="(blk, i) in signBlocks" :key="'n' + i" class="sign-block">
+            <div class="sb-head">{{ cn(i + 1) }} {{ blk.nodeName || '（未命名节点）' }}</div>
+            <table class="sb-table">
+              <tbody>
+                <tr v-for="(p, pi) in blk.people" :key="'p' + pi">
+                  <td class="sb-c-dept"><span class="sb-label">接收单位：</span>{{ p.deptName || '—' }}</td>
+                  <td class="sb-c-user"><span class="sb-label">接收人：</span>{{ p.assigneeName || '—' }}</td>
+                  <td class="sb-c-time"><span class="sb-label">签收时间：</span>{{ fmt(p.receiveTime) }}</td>
+                  <td v-if="showComment" class="sb-c-cmt">
+                    <span class="sb-label">处理意见：</span>{{ p.comment || '' }}
+                  </td>
+                  <td class="sb-c-sign">
+                    <img v-if="signUrls[p.taskId]" :src="signUrls[p.taskId]" alt="签名" />
+                    <span v-else class="sb-sign-empty">（签名）</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </template>
 
@@ -207,6 +219,28 @@ export default {
     },
     nodes() {
       return (this.data && this.data.nodes) || []
+    },
+    /**
+     * 签批栏：一个**流程节点**一栏，栏内每人一行（AC-17 / AC-18）。
+     *
+     * 后端给每个任务记录都带 `nodeIndex`（同节点的多人共用一个序号），这里按它分组。
+     * 兼容没有 nodeIndex 的旧数据：退化为"相邻同名节点合并"。
+     */
+    signBlocks() {
+      const list = this.nodes
+      const blocks = []
+      let cur = null
+      list.forEach(n => {
+        const key = n.nodeIndex !== undefined && n.nodeIndex !== null
+          ? 'i' + n.nodeIndex
+          : 'k' + (n.taskDefKey || '') + (n.nodeName || '')
+        if (!cur || cur.key !== key) {
+          cur = { key: key, nodeName: n.nodeName, people: [] }
+          blocks.push(cur)
+        }
+        cur.people.push(n)
+      })
+      return blocks
     },
     attachRows() {
       return (this.data && this.data.attachments) || []

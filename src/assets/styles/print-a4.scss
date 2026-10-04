@@ -144,30 +144,52 @@ table.p-base thead {
   font-size: 10.5pt;
   border-bottom: 0.5pt dashed #666;
 }
-.sign-block .sb-meta {
-  padding: 1.5mm 2mm;
+/*
+ * 签批栏一行 = 一个人（AC-18：会签节点多人时同栏内按人分行，不串行）。
+ * 用表格而不是若干 div：一行里"接收单位/接收人/签收时间/处理意见/签名"要横向对齐，
+ * 且换行时签名列不能跑到下一行的单位列里去。
+ */
+.sign-block .sb-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
   font-size: 9pt;
   color: #333;
 }
-.sign-block .sb-meta span {
-  margin-right: 8mm;
+.sign-block .sb-table tr {
+  border-bottom: 0.5pt dashed #999;
 }
-.sign-block .sb-comment {
-  padding: 1.5mm 2mm 2mm;
-  min-height: 12mm;
+.sign-block .sb-table tr:last-child {
+  border-bottom: none;
+}
+.sign-block .sb-table td {
+  padding: 1.5mm 2mm;
+  vertical-align: top;
+}
+.sign-block .sb-label {
+  color: #555;
+}
+.sign-block .sb-c-dept,
+.sign-block .sb-c-user,
+.sign-block .sb-c-time {
+  white-space: nowrap;
+}
+.sign-block .sb-c-cmt {
   white-space: pre-wrap;
-  font-size: 10.5pt;
+  word-break: break-word;
+  /* 意见可能很长：给下限保证栏高够手写，但不为它撑破整页 */
+  min-width: 30mm;
 }
-.sign-block .sb-sign {
-  padding: 0 2mm 2mm;
+.sign-block .sb-c-sign {
   text-align: right;
-  min-height: 10mm;
+  min-width: 26mm;
 }
-.sign-block .sb-sign img {
+.sign-block .sb-c-sign img {
+  /* 比例不变形（AC-33）：只限高/限宽，不写死宽高 */
   max-height: 18mm;
   max-width: 50mm;
 }
-.sign-block .sb-sign .sb-sign-empty {
+.sign-block .sb-c-sign .sb-sign-empty {
   color: #999;
   font-size: 9pt;
 }
