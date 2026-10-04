@@ -74,30 +74,37 @@
               @click.stop="d.select(p(i, j))"
               @keyup.enter="d.select(p(i, j))"
             >
-              <span class="ft-lane-name">{{ br.name || ('分支' + (j + 1)) }}</span>
-              <span v-if="!br.defaultBranch" class="ft-prio">优先级 {{ j + 1 }}</span>
-              <span v-if="br.defaultBranch" class="ft-fallback">系统兜底</span>
-              <span v-else class="ft-cond">{{ d.condText(br) }}</span>
-              <el-button
-                v-if="!br.defaultBranch"
-                type="text"
-                size="mini"
-                class="ft-lane-op"
-                @click.stop="d.editCondition(p(i, j))"
-              >编辑条件</el-button>
-              <el-button
-                v-if="!br.defaultBranch"
-                type="text"
-                size="mini"
-                class="ft-lane-op"
-                @click.stop="d.removeBranch(p(i, j))"
-              >删除</el-button>
-              <el-button
-                type="text"
-                size="mini"
-                class="ft-lane-op"
-                @click.stop="d.toggleLane(p(i, j))"
-              >{{ d.isCollapsed(p(i, j)) ? '展开' : '折叠' }}</el-button>
+              <div class="ft-lh-top">
+                <span class="ft-lane-name">{{ br.name || ('分支' + (j + 1)) }}</span>
+                <span v-if="!br.defaultBranch" class="ft-prio">优先级 {{ j + 1 }}</span>
+                <span v-else class="ft-fallback">系统兜底</span>
+              </div>
+              <div class="ft-lh-main">
+                <span v-if="!br.defaultBranch" class="ft-cond">{{ d.condText(br) }}</span>
+                <span v-else class="ft-cond fallback-desc">如存在未满足其他分支条件的情况，则进入此分支</span>
+                <span class="ft-lh-ops">
+                  <el-button
+                    v-if="!br.defaultBranch"
+                    type="text"
+                    size="mini"
+                    class="ft-lane-op"
+                    @click.stop="d.editCondition(p(i, j))"
+                  >编辑条件</el-button>
+                  <el-button
+                    v-if="!br.defaultBranch"
+                    type="text"
+                    size="mini"
+                    class="ft-lane-op"
+                    @click.stop="d.removeBranch(p(i, j))"
+                  >删除</el-button>
+                  <el-button
+                    type="text"
+                    size="mini"
+                    class="ft-lane-op"
+                    @click.stop="d.toggleLane(p(i, j))"
+                  >{{ d.isCollapsed(p(i, j)) ? '展开' : '折叠' }}</el-button>
+                </span>
+              </div>
             </div>
 
             <!-- 泳道内容：递归 —— 折叠时收起 -->
@@ -457,14 +464,21 @@ export default {
 /* 泳道头 */
 .ft-lane-head {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
   /* 与同级卡片**完全同宽**（同一个 --node-w），保证左右边缘持久对齐 */
   width: var(--node-w);
   min-width: var(--node-w);
   max-width: var(--node-w);
   box-sizing: border-box;
+  /*
+   * ★ 固定高度 —— 这是「同级卡片持久对齐」的关键。
+   * 泳道头内容多少不一（有条件的 2 行、兜底的 1 行），若按内容自适应，
+   * 下方卡片就会从不同的 y 开始，看起来左右两列错位。
+   * 条件文本用 -webkit-line-clamp 截断到 2 行，保证内容不会把高度撑破。
+   */
+  height: 80px;
+  overflow: hidden;
   border: 1px solid #dfe4ea;
   border-radius: 4px;
   background: #fff;
@@ -483,27 +497,61 @@ export default {
     color: #999;
   }
 
+  .ft-lh-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    min-height: 18px;
+  }
+  .ft-lh-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
   .ft-lane-name {
     font-weight: 500;
     color: #5b7fbf;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .ft-fallback { color: #aaa; }
-  /* 条件文本：不截断，过长自动换行 */
+
+  /* 条件文本：最多两行，超出截断 —— 恒定高度是等高的前提 */
   .ft-cond {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
     min-width: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
     border: 1px solid #ddd;
     border-radius: 4px;
     padding: 2px 8px;
     color: #666;
     line-height: 1.5;
-    white-space: normal;
     word-break: break-word;
     overflow-wrap: anywhere;
+
+    &.fallback-desc {
+      border-color: #eee;
+      color: #aaa;
+    }
   }
   .ft-prio {
+    flex: none;
     color: #4a9e6f;
     font-size: 11px;
+  }
+  .ft-lh-ops {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
   }
   .ft-lane-op {
     padding: 0 2px;
