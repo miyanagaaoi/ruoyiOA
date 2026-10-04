@@ -53,6 +53,30 @@ public class SimpleFlowCompiler {
     private static final String TARGET_NS = "http://www.flowable.org/processdef";
     private static final String XSI_FORMAL = "tFormalExpression";
 
+    /**
+     * 多实例参与人列表的「启动注入」监听器（实现见 simple/listener/ApprovalUsersInitListener）。
+     *
+     * <p> 「会签 / 或签 / 依次」的 {@code flowable:collection} 指向 {@code {nodeId}_approval}，
+     * 而本项目运行时**并不产生**该变量，故由编译器在流程启动时注入。
+     * 必须在启动时注入：首节点为会签时没有任何"上一节点"可以触发。 </p>
+     */
+    private static final String APPROVAL_INIT_LISTENER =
+            "com.ruoyi.workflow.simple.listener.ApprovalUsersInitListener";
+
+    /**
+     * 会签 / 或签 / 依次：多实例的**元素变量名**。
+     * 任务审批人必须绑定到它（{@code flowable:assignee="${assignee}"}），
+     * 否则任务能被创建，但 ASSIGNEE_ 为 NULL，谁都认领不到。
+     */
+    private static final String MI_ELEMENT_VAR = "assignee";
+
+    /** 是否「多人会签 / 或签 / 依次」——即由参与人列表驱动的多实例节点 */
+    private static boolean isMultiInstanceNode(Node node) {
+        String mm = StringUtils.defaultIfBlank(node.getMultiMode(), SimpleFlowDef.M_SINGLE);
+        return SimpleFlowDef.M_AND.equals(mm) || SimpleFlowDef.M_OR.equals(mm)
+                || SimpleFlowDef.M_SEQ.equals(mm);
+    }
+
     private static final String ID_START = "start_event";
     private static final String ID_END = "end_event";
 
@@ -355,6 +379,46 @@ public class SimpleFlowCompiler {
 
     /* ------------------------- 渲染 ------------------------- */
 
+    /**
+     * 收集「会签 / 或签 / 依次」节点的参与人列表，供启动监听器注入。
+     *
+     * <p> 这些节点的 {@code flowable:collection} 指向 {@code {nodeId}_approval}，
+     * 而本项目运行时不产生该变量（实测报 {@code Variable 'xxx_approval' was not found}），
+     * 因此改由编译器在流程启动时注入 —— 挂 <b>start</b> 而非节点上，
+     * 是因为首节点为会签时没有任何"上一节点"可以触发。 </p>
+     *
+     * <p> 只支持「指定人员」来源：角色 / 部门负责人等需要运行时解析，编译器无从得知；
+     * 与其生成一份到运行期才炸的 BPMN，不如在**发布时**就明确报错。 </p>
+     *
+     * @return {@code "n1=u1,u2;n2=u3"}；无多实例节点时返回空串
+     */
+    private String collectApprovalVars() {
+        StringBuilder sb = new StringBuilder();
+        for (Elem e : elems.values()) {
+            if (!"userTask".equals(e.kind) || e.node == null) {
+                continue;
+            }
+            String mm = StringUtils.defaultIfBlank(e.node.getMultiMode(), SimpleFlowDef.M_SINGLE);
+            boolean multi = SimpleFlowDef.M_AND.equals(mm) || SimpleFlowDef.M_OR.equals(mm)
+                    || SimpleFlowDef.M_SEQ.equals(mm);
+            if (!multi) {
+                continue;
+            }
+            Assignee a = e.node.getAssignee();
+            List<String> ids = a == null ? null : a.getUserIds();
+            if (ids == null || ids.isEmpty()) {
+                throw new UnsupportedOperationException("多人会签 / 或签 / 依次节点暂只支持「指定人员」参与人"
+                        + "（nodeId=" + e.node.getId() + "，multiMode=" + mm
+                        + "）；角色 / 部门负责人等需运行时解析的来源请改用单人节点");
+            }
+            if (sb.length() > 0) {
+                sb.append(';');
+            }
+            sb.append(e.id).append('=').append(String.join(",", ids));
+        }
+        return sb.toString();
+    }
+
     private String render() {
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -367,8 +431,23 @@ public class SimpleFlowCompiler {
                 .append(" xmlns:di=\"").append(NS_OMGDI).append("\"")
                 .append(" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"")
                 .append(" targetNamespace=\"").append(TARGET_NS).append("\">\n");
+        // isExecutable 是 BPMN 规约要求的可执行标记（缺省按 false 解释，部分工具会因此拒绝部署）
         sb.append("  <process id=\"").append(def.getKey()).append("\" name=\"")
-                .append(esc(StringUtils.defaultIfBlank(def.getName(), def.getKey()))).append("\">\n");
+                .append(esc(StringUtils.defaultIfBlank(def.getName(), def.getKey())))
+                .append("\" isExecutable=\"true\">\n");
+
+        // 多实例参与人列表：必须作为 <process> 的**第一个子元素**（BPMN 的 tBaseElement 要求
+        // extensionElements 在流元素之前），否则引擎解析不到。
+        String approvalVars = collectApprovalVars();
+        if (StringUtils.isNotBlank(approvalVars)) {
+            sb.append("    <extensionElements>\n");
+            sb.append("      <flowable:executionListener event=\"start\" class=\"")
+                    .append(APPROVAL_INIT_LISTENER).append("\">\n");
+            sb.append("        <flowable:field name=\"vars\" stringValue=\"")
+                    .append(esc(approvalVars)).append("\"/>\n");
+            sb.append("      </flowable:executionListener>\n");
+            sb.append("    </extensionElements>\n");
+        }
 
         // 流元素
         for (Elem e : elems.values()) {
@@ -470,7 +549,18 @@ public class SimpleFlowCompiler {
             }
         }
 
-        if (StringUtils.isNotBlank(assigneeExpr)) {
+        // 会签 / 或签 / 依次：任务由多实例按参与人列表逐条创建，任务的审批人必须绑定到
+        // **多实例的元素变量**（${assignee}），不能写成 candidateUsers ——
+        // candidateUsers 生成的是"候选人"任务（ASSIGNEE_ 恒为 NULL），与元素变量毫无关联，
+        // 结果是任务建出来了却无人认领（实测：两个会签任务 ASSIGNEE_ 全为 NULL，
+        // 在各人的"我的待办"里都看不到）。
+        // 注意排除并行会审：它走 e.assigneeAttrs（集合来自表单字段，元素变量是 dept）。
+        boolean miByApprovalList = StringUtils.isBlank(e.miCollection) && isMultiInstanceNode(node);
+        if (miByApprovalList) {
+            sb.append(" flowable:assignee=\"${").append(MI_ELEMENT_VAR).append("}\"");
+            sb.append(" flowable:userType=\"").append(ProcessConstants.ASSIGNEE).append("\"");
+            dataType = ProcessConstants.DYNAMIC;
+        } else if (StringUtils.isNotBlank(assigneeExpr)) {
             sb.append(" flowable:assignee=\"").append(esc(assigneeExpr)).append("\"");
             sb.append(" flowable:userType=\"").append(ProcessConstants.ASSIGNEE).append("\"");
         } else if (StringUtils.isNotBlank(candidateExpr)) {
@@ -503,7 +593,7 @@ public class SimpleFlowCompiler {
                         ? "${nrOfCompletedInstances >= 1}"
                         : null;
                 boolean sequential = SimpleFlowDef.M_SEQ.equals(multiMode);
-                appendMultiInstance(sb, sequential, e.id + "_approval", "assignee", completion);
+                appendMultiInstance(sb, sequential, e.id + "_approval", MI_ELEMENT_VAR, completion);
             }
         }
         sb.append("    </userTask>\n");
