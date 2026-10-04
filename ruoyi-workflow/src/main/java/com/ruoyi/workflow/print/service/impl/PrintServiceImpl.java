@@ -6,6 +6,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.ruoyi.biz.domain.CommonForm;
 import com.ruoyi.biz.service.IBizFormService;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.enums.WhetherStatus;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.flowable.domain.dto.FlowTaskDto;
 import com.ruoyi.flowable.factory.FlowServiceFactory;
@@ -312,6 +313,13 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
             printTemplate.setUpdateBy(SecurityUtils.getUsername());
             printTemplate.setUpdateTime(now);
             printTemplateMapper.update(printTemplate);
+        }
+        // 「同一单据模板下只有一套启用」是服务端不变量：
+        // 否则 selectByTemplateId 取的是 update_time 最新的那条 —— 改一下旧模板
+        // 就会悄悄改变打印结果（实测：新键一套模板后，另一张单据的签批栏没了）。
+        // 放在最后一律执行：只传 enableFlag='0' 的部分更新不会触发它。
+        if (WhetherStatus.YES.getCode().equals(printTemplate.getEnableFlag())) {
+            printTemplateMapper.disableOthers(printTemplate.getTemplateId(), printTemplate.getId());
         }
         return printTemplate;
     }

@@ -134,4 +134,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where id = #{id}
     </update>
 
+    <!--
+        同一单据模板下只保留一套启用 —— "哪套生效"不能取决于 update_time。
+        只动"当前启用"的行，已停用的不白写一次 update_time。
+    -->
+    <update id="disableOthers">
+        update t_template_print_template
+        set enable_flag = '0', update_time = sysdate()
+        where template_id = #{templateId}
+          and id != #{keepId}
+          and del_flag = '0'
+          and enable_flag = '1'
+    </update>
+
 </mapper>

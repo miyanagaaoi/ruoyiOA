@@ -1,7 +1,9 @@
 package com.ruoyi.workflow.print.controller;
 
+import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.ServletUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.workflow.domain.PrintLog;
@@ -10,6 +12,8 @@ import com.ruoyi.workflow.guard.DocViewGuard;
 import com.ruoyi.workflow.print.model.PrintData;
 import com.ruoyi.workflow.print.service.IPrintService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -67,6 +71,41 @@ public class WorkflowPrintController extends BaseController {
                                @RequestParam(value = "printTplId", required = false) String printTplId) {
         PrintTemplate tpl = printService.getEffectiveTemplate(templateId, printTplId);
         return success(tpl);
+    }
+
+    /* ==================== 打印模板配置（PRD 7.7） ==================== */
+
+    /**
+     * 某单据模板下的打印模板列表。
+     *
+     * <p> ⚠ 与上面的 {@code /template/{templateId}} 不冲突：Spring 的路径匹配里
+     * **字面量段优先于变量段**，{@code /template/list} 会命中本方法。 </p>
+     */
+    @GetMapping("/template/list")
+    @PreAuthorize("@ss.hasPermi('workflow:print:template')")
+    public AjaxResult templateList(@RequestParam(value = "templateId", required = false) String templateId) {
+        return success(printService.listTemplates(templateId));
+    }
+
+    /**
+     * 新增 / 更新打印模板。
+     *
+     * <p> 写接口此前**刻意没有放出来**（那时没有配置页，放一个没权限点保护的写接口只会留隐患）。
+     * 现在配置页来了，权限点 {@code workflow:print:template:edit} 一并落地。 </p>
+     */
+    @PostMapping("/template")
+    @PreAuthorize("@ss.hasPermi('workflow:print:template:edit')")
+    @Log(title = "打印模板", businessType = BusinessType.UPDATE)
+    public AjaxResult saveTemplate(@RequestBody PrintTemplate printTemplate) {
+        return success(printService.saveTemplate(printTemplate));
+    }
+
+    /** 删除打印模板（逻辑删，历史打印件不受影响） */
+    @DeleteMapping("/template/{id}")
+    @PreAuthorize("@ss.hasPermi('workflow:print:template:remove')")
+    @Log(title = "打印模板", businessType = BusinessType.DELETE)
+    public AjaxResult removeTemplate(@PathVariable("id") String id) {
+        return toAjax(printService.deleteTemplate(id));
     }
 
     /**

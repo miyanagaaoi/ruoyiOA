@@ -1,6 +1,7 @@
 package com.ruoyi.workflow.mapper;
 
 import com.ruoyi.workflow.domain.PrintTemplate;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -41,4 +42,17 @@ public interface PrintTemplateMapper {
 
     /** 逻辑删除 */
     int deleteById(PrintTemplate printTemplate);
+
+    /**
+     * 停用同一单据模板下的其它启用模板（保留 keepId 这一套）。
+     *
+     * <p> 为什么要它：{@code selectByTemplateId} 取的是 {@code order by update_time desc}
+     * 的第一条 —— 也就是说"打印时用哪套模板"取决于**谁最近被改过**。
+     * 实测后果：新建一套模板后，另一张单据原本能打的签批栏（AC-17/AC-33）悄悄没了。
+     * 所以"同一单据模板下只有一套启用"必须是**服务端不变量**，不能靠界面自觉。 </p>
+     *
+     * @param templateId 单据模板ID
+     * @param keepId     要保留的那一套（新启用/新保存的那套）
+     */
+    int disableOthers(@Param("templateId") String templateId, @Param("keepId") String keepId);
 }
