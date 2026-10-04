@@ -54,11 +54,8 @@
       <el-col :span="14">
         <el-card shadow="never" class="pane">
           <div slot="header" class="pane-head">
-            <span>节点配置 — {{ currentNode ? currentNode.name : '未选中节点' }}</span>
-            <span class="tip">
-              <template v-if="currentBranchPath">{{ currentBranchPath }} · </template>
-              {{ currentNode ? typeLabel(currentNode.type) : '' }}
-            </span>
+            <span>{{ panelTitle }}</span>
+            <span class="tip">{{ panelSubtitle }}</span>
           </div>
 
           <div v-if="currentNode" class="cfg">
@@ -217,7 +214,69 @@
             </el-form>
           </div>
 
-          <div v-else class="tip" style="padding:24px 0;text-align:center">从左侧选择一个节点开始配置</div>
+          <!-- 选中分支（泳道）：分支配置 -->
+          <div v-else-if="selectedBranch" class="cfg">
+            <el-form label-width="92px" size="small">
+              <el-form-item label="分支名称">
+                <el-input
+                  v-model="selectedBranch.name"
+                  :disabled="!!selectedBranch.defaultBranch"
+                  placeholder="分支名称"
+                />
+              </el-form-item>
+
+              <el-form-item label="分支类型">
+                <el-tag v-if="selectedBranch.defaultBranch" type="info" size="small">系统兜底</el-tag>
+                <el-tag v-else size="small">条件分支</el-tag>
+              </el-form-item>
+
+              <el-form-item v-if="!selectedBranch.defaultBranch" label="优先级">
+                <div class="row-inline">
+                  <span class="prio-badge">优先级 {{ branchPriority }}</span>
+                  <el-button
+                    type="text"
+                    size="mini"
+                    icon="el-icon-back"
+                    :disabled="branchPriority <= 1"
+                    @click="moveBranchAt(selection.path, -1)"
+                  >前移</el-button>
+                  <el-button
+                    type="text"
+                    size="mini"
+                    icon="el-icon-right"
+                    :disabled="isLastConditionalBranch"
+                    @click="moveBranchAt(selection.path, 1)"
+                  >后移</el-button>
+                </div>
+                <div class="tip">条件分支自上而下依次判定，命中即进入；兜底分支永远排在最后。</div>
+              </el-form-item>
+
+              <el-form-item v-if="!selectedBranch.defaultBranch" label="进入条件">
+                <div class="row-inline">
+                  <span class="cond-text">{{ condText(selectedBranch) }}</span>
+                  <el-button type="text" size="mini" @click="openConditionAt(selection.path)">编辑条件</el-button>
+                </div>
+              </el-form-item>
+              <el-form-item v-else label="进入条件">
+                <div class="tip">其余条件都不满足时进入本分支（系统自动生成，不可编辑）</div>
+              </el-form-item>
+
+              <el-form-item label="分支内节点">
+                <span>{{ (selectedBranch.nodes || []).length }} 个</span>
+                <span v-if="!(selectedBranch.nodes || []).length" class="tip warn">　空分支会被发布校验拦截</span>
+              </el-form-item>
+
+              <el-form-item v-if="!selectedBranch.defaultBranch" label="操作">
+                <el-button
+                  type="text"
+                  size="mini"
+                  icon="el-icon-delete"
+                  @click="removeBranchAt(selection.path)"
+                >删除本分支</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+          <div v-else class="tip" style="padding:24px 0;text-align:center">从画布上选择节点或分支开始配置</div>
         </el-card>
 
         <!-- 流程级：表单字段（自动提取，只读） -->
@@ -435,6 +494,45 @@ export default {
       }
       return names.join(' / ')
     },
+    /** 右侧面板标题 */
+    panelTitle() {
+      if (this.selectedNode) {
+        return '节点配置 — ' + (this.selectedNode.name || this.typeLabel(this.selectedNode.type))
+      }
+      if (this.selectedBranch) {
+        return '分支配置 — ' + (this.selectedBranch.name || '分支')
+      }
+      return '配置'
+    },
+    /** 右侧面板副标题 */
+    panelSubtitle() {
+      if (this.selectedNode) {
+        const path = this.currentBranchPath
+        return (path ? path + ' · ' : '') + this.typeLabel(this.selectedNode.type)
+      }
+      if (this.selectedBranch) {
+        if (this.selectedBranch.defaultBranch) return '系统兜底分支'
+        return '优先级 ' + this.branchPriority + ' · ' + (this.selectedBranch.nodes || []).length + ' 个节点'
+      }
+      return '从画布上选择节点或分支'
+    },
+    /** 选中泳道的优先级（= 在该容器内的下标 + 1） */
+    branchPriority() {
+      const p = this.selection.path || []
+      return p.length ? p[p.length - 1] + 1 : 0
+    },
+    /** 选中泳道所属的容器节点 */
+    branchParentNode() {
+      const p = this.selection.path || []
+      return p.length > 1 ? this.resolvePath(p.slice(0, -1)) : null
+    },
+    /** 后面还有没有可移动的条件分支（没有则"后移"禁用） */
+    isLastConditionalBranch() {
+      const parent = this.branchParentNode
+      if (!parent || !parent.branches) return true
+      const idx = this.branchPriority - 1
+      return !parent.branches.slice(idx + 1).some(b => !b.defaultBranch)
+    },
     /** 可作为条件的字段（只允许已设为必填的） */
     conditionFieldOptions() {
       return conditionableFields(this.formDef.list)
@@ -493,7 +591,8 @@ export default {
         editCondition: p => vm.openConditionAt(p),
         toggleLane: p => vm.toggleLane(p),
         isSys: n => vm.isSys(n),
-        removeNode: p => vm.removeNodeAt(p)
+        removeNode: p => vm.removeNodeAt(p),
+        moveNode: (p, d) => vm.moveNodeAt(p, d)
       }
     }
   },
@@ -623,6 +722,38 @@ export default {
       if (!this.isContainer(node)) return
       node.branches.splice(laneIdx, 1)
       this.selectPath(path.slice(0, -1))
+    },
+    /**
+     * 调整分支优先级（前移/后移）。
+     * 兜底分支永远排最后 —— 条件分支只能在条件分支之间移动。
+     */
+    moveBranchAt(path, delta) {
+      const parent = this.resolvePath(path.slice(0, -1))
+      if (!this.isContainer(parent)) return
+      const branches = parent.branches || []
+      const idx = path[path.length - 1]
+      const target = idx + delta
+      if (target < 0 || target >= branches.length) return
+      if (branches[idx].defaultBranch || branches[target].defaultBranch) return
+      const a = branches[idx]
+      const b = branches[target]
+      this.$set(branches, idx, b)
+      this.$set(branches, target, a)
+      this.selectPath(path.slice(0, -1).concat([target]))
+    },
+    /** 节点排序；起止节点不参与 */
+    moveNodeAt(path, delta) {
+      const nodes = this.siblingsOf(path)
+      if (!nodes) return
+      const idx = path[path.length - 1]
+      const target = idx + delta
+      if (target < 0 || target >= nodes.length) return
+      if (this.isSys(nodes[idx]) || this.isSys(nodes[target])) return
+      const a = nodes[idx]
+      const b = nodes[target]
+      this.$set(nodes, idx, b)
+      this.$set(nodes, target, a)
+      this.selectPath(path.slice(0, -1).concat([target]))
     },
     /** 删除节点；起止节点不可删。删掉最后一个节点时把选中落回所属泳道 */
     removeNodeAt(path) {
@@ -1107,6 +1238,37 @@ export default {
     max-height: 620px;
     overflow-y: auto;
     padding-right: 6px;
+  }
+  /* 分支配置面板 */
+  .row-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .prio-badge {
+    display: inline-block;
+    font-size: 12px;
+    line-height: 20px;
+    color: #2e7d4f;
+    background: #eaf6ef;
+    border: 1px solid #cbe7d7;
+    border-radius: 10px;
+    padding: 0 10px;
+  }
+  .cond-text {
+    display: inline-block;
+    max-width: 320px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #666;
+    background: #f5f7fa;
+    border: 1px solid #e4e8ee;
+    border-radius: 4px;
+    padding: 0 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .xml-pre {
     padding: 12px;

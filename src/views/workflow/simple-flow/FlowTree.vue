@@ -18,13 +18,32 @@
             v-if="node.type !== 'start' && node.type !== 'end'"
             class="ft-type"
           >{{ d.typeLabel(node.type) }}</span>
-          <button
-            v-if="!d.isSys(node)"
-            class="ft-del"
-            type="button"
-            :title="'删除节点：' + (node.name || d.typeLabel(node.type))"
-            @click.stop="d.removeNode(p(i))"
-          >×</button>
+          <span class="ft-head-right">
+            <!-- 排序：仅选中时出现，避免画布变吵 -->
+            <span v-if="d.isActive(p(i)) && !d.isSys(node)" class="ft-move">
+              <button
+                class="ft-mv"
+                type="button"
+                title="上移"
+                :disabled="i === 0 || d.isSys(nodes[i - 1])"
+                @click.stop="d.moveNode(p(i), -1)"
+              >↑</button>
+              <button
+                class="ft-mv"
+                type="button"
+                title="下移"
+                :disabled="i >= nodes.length - 1 || d.isSys(nodes[i + 1])"
+                @click.stop="d.moveNode(p(i), 1)"
+              >↓</button>
+            </span>
+            <button
+              v-if="!d.isSys(node)"
+              class="ft-del"
+              type="button"
+              :title="'删除节点：' + (node.name || d.typeLabel(node.type))"
+              @click.stop="d.removeNode(p(i))"
+            >×</button>
+          </span>
         </div>
         <div class="ft-node-body">
           <span class="ft-name">{{ node.name || d.typeLabel(node.type) }}</span>
@@ -232,9 +251,36 @@ export default {
     color: #fff;
     opacity: 0.95;
   }
-  /* 右上角删除按钮：低透明度常驻，悬停/选中时全亮 */
-  .ft-del {
+  /* 标题条右侧操作区 */
+  .ft-head-right {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+  }
+  .ft-move {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .ft-mv {
+    width: 16px;
+    height: 16px;
+    line-height: 14px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover:not(:disabled) { background: rgba(255, 255, 255, 0.38); }
+    &:disabled { opacity: 0.3; cursor: not-allowed; }
+  }
+  /* 删除按钮：低透明度常驻，悬停/选中时全亮 */
+  .ft-del {
     flex: none;
     width: 16px;
     height: 16px;
