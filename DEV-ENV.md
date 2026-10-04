@@ -192,6 +192,45 @@ git config user.name "你的名字" ; git config user.email "you@example.com"
 12. **手工删 Flowable 部署（裸 SQL）之后必须重启后端**：引擎有部署/流程定义缓存，
     只删库不改缓存会留下"缓存里有、库里没有"的悬空定义，之后按 key 启动流程会报错。
     正常途径是用引擎 API 的 `repositoryService.deleteDeployment(id, true)` 级联删除。
+13. **打 `ruoyi-admin` 的 fat jar 之前必须先停后端，否则可能打出"旧包"而 Maven 不报错**（已踩过，代价很大）。
+    后端进程会一直占着 `ruoyi-admin/target/ruoyi-admin.jar`；Windows 下
+    `spring-boot:repackage` 无法替换被占用的文件，但它**仍然打印
+    `Replacing main artifact with repackaged archive` 和 `BUILD SUCCESS`** ——
+    结果是你以为更新了，实际跑的还是几小时前的旧包，新接口一律 404。
+    **可靠做法**：
+    ```powershell
+    Stop-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProcess -Force
+    mvn -B -DskipTests -pl ruoyi-workflow install          # 变更的子模块先 install
+    mvn -B -DskipTests -pl ruoyi-admin clean package       # 再单模块打 fat jar
+    # 校验产物真的换了（不要只看 BUILD SUCCESS）
+    (Get-Item ruoyi-admin\target\ruoyi-admin.jar).LastWriteTime
+    ```
+    `clean` 很关键：它保证重新产出；并且**打包后一定要核对 jar 的时间戳**。
+14. **`/workflow/**` 下的接口用"未认证请求返回 401"是验证不了路由的**（已踩过）：
+    RuoYi 的安全过滤器在**路由之前**就拦掉未认证请求，所以
+    `/workflow/print/data/x` 与 `/workflow/print/__不存在的路径__` **返回完全一样**，
+    这个测试没有区分力（带 token 再调才会看到 401 与 404 的区别）。
+    要真正验证接口，得拿一个登录后的 token：
+    ```powershell
+    # 验证码默认开启，临时关掉即可（改完记得还原！）
+    update sys_config set config_value='false' where config_key='sys.account.captchaEnabled';
+    # RuoYi 把配置缓存在 Redis，改库不够，还要删缓存键（没有 redis-cli 时可用 TCP 发 RESP）
+    #   DEL sys_config:sys.account.captchaEnabled
+    $enc = node tools\rsa-encrypt.js "admin123"      # 取 RSA 加密后的口令
+    # POST /login {username, password:$enc, code:"", uuid:""} -> token
+    # 之后所有接口带 Authorization: Bearer <token>
+    ```
+    **验证完必须把 `captchaEnabled` 还原为 `true` 并再删一次缓存键。**
+15. **`businessId` 与 Flowable 的 `businessKey` 是同一个值**（证据：
+    `TodoAsyncService` 里 `runtimeService.updateBusinessKey(todo.getProcInsId(), todo.getBusinessId())`）。
+    所以 `businessId → procInsId` 直接用历史查询反查即可，
+    **不需要另建映射表**：`historyService.createHistoricProcessInstanceQuery()
+    .processInstanceBusinessKey(businessId)`，一套查询同时覆盖运行中与已结束的实例。
+16. **单据模板ID（`t_template.id`）在哪里**：它**不是**流程定义的 key，
+    **也不一定**是流程变量（踩过：用 `FlowTaskDto.getProcDefKey()` 当单据模板ID，
+    表单服务直接报 `BaseException: 模板ID为空`）。它随业务记录落在
+    `t_workflow_todo` / `t_workflow_done` / `t_workflow_recycle` 的 `template_id` 列上，
+    按该顺序取第一个命中的。
 
 ## 7. 结论
 
