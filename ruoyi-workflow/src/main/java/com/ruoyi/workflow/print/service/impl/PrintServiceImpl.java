@@ -58,6 +58,9 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
     /** 签批栏最多取多少条流转记录（打印场景一次性取全，不做分页） */
     private static final int RECORD_PAGE_SIZE = 500;
 
+    /** 草稿（尚未发起流程）的实例状态 —— 草稿没有 HistoricProcessInstance，用这个值兜底 */
+    private static final String INSTANCE_STATUS_DRAFT = "草稿";
+
     @Autowired
     private PrintTemplateMapper printTemplateMapper;
 
@@ -89,19 +92,26 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         data.setPrintUser(SecurityUtils.getUsername());
 
         // 1) businessId -> procInsId（历史查询同时覆盖运行中与已结束）
+        //
+        // ⚠ 草稿（尚未发起流程）**没有**流程实例，这是正常状态而不是错误：
+        //   打印件只输出表单信息，签批栏与附件本就默认不打印，因此草稿同样可打印
+        //   （表单数据由 t_workflow_form 提供，见 selectTemplateIdByBusinessId 的第四路 union）。
+        //   原实现直接抛 ServiceException，用户点打印只看到一个技术性报错。
         HistoricProcessInstance hpi = findHistoricInstance(businessId);
-        if (hpi == null) {
-            throw new ServiceException("找不到该单据对应的流程实例：" + businessId);
+        if (hpi != null) {
+            data.setProcInsId(hpi.getId());
+            data.setSubmitTime(hpi.getStartTime());
+            data.setFinishTime(hpi.getEndTime());
+            data.setInstanceStatus(instanceStatusOf(hpi));
+        } else {
+            data.setInstanceStatus(INSTANCE_STATUS_DRAFT);
         }
-        data.setProcInsId(hpi.getId());
-        data.setSubmitTime(hpi.getStartTime());
-        data.setFinishTime(hpi.getEndTime());
-        data.setInstanceStatus(instanceStatusOf(hpi));
 
-        // 2) 单据模板：它落在业务记录（待办/已办/回收站）上，**不是流程定义的 key**，
+        // 2) 单据模板：它落在业务记录（待办/已办/回收站/**草稿**）上，**不是流程定义的 key**，
         //    也不是流程变量。踩过：用 procDefKey 当单据模板ID，导致表单服务报"模板ID为空"。
         String templateId = printTemplateMapper.selectTemplateIdByBusinessId(businessId);
-        List<FlowTaskDto> records = loadRecords(hpi.getId());
+        // 无实例时不去查流转记录：loadRecords 按 procInsId 查历史，传 null 没有意义
+        List<FlowTaskDto> records = hpi != null ? loadRecords(hpi.getId()) : new ArrayList<>();
         data.setTemplateId(templateId);
         PrintTemplate tpl = getEffectiveTemplate(templateId, printTplId);
         data.setPrintTemplate(tpl);
