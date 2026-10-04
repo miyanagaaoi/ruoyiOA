@@ -47,6 +47,7 @@
 
 <script>
 import { getAuthRole, updateAuthRole } from "@/api/system/user"
+import { describeError } from "@/utils/errorMessage"
 
 export default {
   name: "AuthRole",
@@ -82,6 +83,13 @@ export default {
           })
         })
         this.loading = false
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false
+        this.roles = []
+        this.total = 0
+        const d = describeError(err)
+        this.$modal.msgError("加载失败：" + d.text)
       })
     }
   },

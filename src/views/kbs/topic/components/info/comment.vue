@@ -116,6 +116,7 @@ import CommentInput from "./comment-input.vue";
 import { listComment, addComment } from "@/api/kbs/document/comment";
 import { addLike, delLike } from "@/api/kbs/document/like";
 import { parseTime } from "@/utils/ruoyi";
+import { describeError } from "@/utils/errorMessage";
 import { StrUtil } from "@/utils/StrUtil";
 
 export default {
@@ -195,16 +196,23 @@ export default {
       if (this.loading || (loadMore && !this.hasMore)) return;
       if (loadMore) this.loadingMore = true;
       this.loading = true;
-      this.commentList = [];
       this.queryParam.docId = this.docId;
-      const res = await listComment(this.queryParam);
-      if (res.code == 200) {
-        const newData = res.rows || [];
-        this.commentList = loadMore ? [...this.commentList, ...newData] : newData;
-        this.hasMore = newData.length >= this.queryParam.pageSize;
+      // 原来没有 try/catch：await 抛错后 loading/loadingMore 复位执行不到，
+      // 评论区永久"加载中"，且"加载更多"再也触发不了。
+      try {
+        const res = await listComment(this.queryParam);
+        if (res.code == 200) {
+          const newData = res.rows || [];
+          this.commentList = loadMore ? [...this.commentList, ...newData] : newData;
+          this.hasMore = newData.length >= this.queryParam.pageSize;
+        }
+      } catch (err) {
+        if (!loadMore) this.commentList = [];
+        this.$modal.msgError("评论加载失败：" + describeError(err).text);
+      } finally {
+        this.loading = false;
+        this.loadingMore = false;
       }
-      this.loading = false;
-      this.loadingMore = false;
     },
     /** 根节点的评论 */
     async submitRootCmt(content) {

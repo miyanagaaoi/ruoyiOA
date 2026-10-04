@@ -101,7 +101,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="jobLogList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="jobLogList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="日志编号" width="80" align="center" prop="jobLogId" />
       <el-table-column label="任务名称" align="center" prop="jobName" :show-overflow-tooltip="true" />
@@ -182,14 +183,20 @@
 <script>
 import { getJob} from "@/api/monitor/job"
 import { listJobLog, delJobLog, cleanJobLog } from "@/api/monitor/jobLog"
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "JobLog",
+  components: { DataLoadError },
   dicts: ['sys_common_status', 'sys_job_group'],
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非多个禁用
@@ -232,12 +239,22 @@ export default {
     /** 查询调度日志列表 */
     getList() {
       this.loading = true
+      this.loadError = ""
+      this.loadErrorCause = ""
       listJobLog(this.addDateRange(this.queryParams, this.dateRange)).then(response => {
           this.jobLogList = response.rows
           this.total = response.total
           this.loading = false
         }
-      )
+      ).catch(err => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false
+        this.jobLogList = []
+        this.total = 0
+        const d = describeError(err)
+        this.loadError = d.text
+        this.loadErrorCause = d.cause
+      })
     },
     // 返回按钮
     handleClose() {

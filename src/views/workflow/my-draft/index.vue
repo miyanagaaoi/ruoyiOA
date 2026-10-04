@@ -20,7 +20,9 @@
     </el-form>
     <el-divider />
 
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
     <el-table
+      v-else
       v-loading="loading"
       ref="todoTable"
       :data="tableList"
@@ -58,14 +60,20 @@
 
 <script>
 import { listDraft } from "@/api/workflow/draft";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "MyDraftWorkflow",
+  components: { DataLoadError },
   dicts: ["workflow_biz_status"],
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // loading文本内容
       loadingText: "正在加载中...",
       // 显示搜索条件
@@ -106,11 +114,21 @@ export default {
     /** 查询待办列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listDraft(this.queryParams).then((response) => {
         this.tableList = response.rows;
         this.total = response.total;
         this.allTotal = this.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.tableList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     /** 搜索按钮操作 */

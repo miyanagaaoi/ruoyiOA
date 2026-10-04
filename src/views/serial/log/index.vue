@@ -14,7 +14,8 @@
     </el-form>
     <el-divider />
 
-    <el-table v-loading="loading" :data="logList">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="logList">
       <el-table-column label="编号规则" align="center" prop="title" />
       <el-table-column label="生成的编号" align="center" prop="code" />
       <el-table-column label="编号对应的序号" align="center" prop="codeSeq" />
@@ -36,13 +37,19 @@
 
 <script>
 import { listLog, delLog } from "@/api/serial/log";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Log",
+  components: { DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 显示搜索条件
       showSearch: true,
       // 总条数
@@ -65,10 +72,20 @@ export default {
     /** 查询编号生成日志列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listLog(this.queryParams).then((response) => {
         this.logList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.logList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     /** 重置按钮操作 */

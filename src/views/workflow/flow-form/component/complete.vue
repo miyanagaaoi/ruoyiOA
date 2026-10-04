@@ -82,6 +82,7 @@ import { getNextFlowNode } from "@/api/workflow/task";
 import { commonSubmit, checkCompleteCondition } from "@/api/workflow/process";
 import UserSelect from "@/components/org/UserSelect/index.vue";
 import UserAllSelect from "@/components/org/UserAllSelect/index.vue";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Complete",
@@ -207,6 +208,12 @@ export default {
 
           this.loading = false;
         }
+      }).catch((err) => {
+        // 弹窗里的节点数据，不是页面主表格：只补失败处理，不插横幅
+        this.loading = false;
+        this.nextApprovers = [];
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 选人 */

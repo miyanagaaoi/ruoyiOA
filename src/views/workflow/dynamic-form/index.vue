@@ -18,7 +18,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="formList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="formList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="表单名称" align="left" prop="name" show-overflow-tooltip />
       <el-table-column label="备注" align="left" prop="remark" width="300" show-overflow-tooltip />
@@ -69,16 +70,22 @@
 import { listDynamicForm, delDynamicForm, addDynamicForm, updateDynamicForm, exportDynamicForm } from "@/api/workflow/dynamicForm";
 import Editor from "@/components/Editor";
 import Parser from "@/components/parser/Parser";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 export default {
   name: "DynamicForm",
   components: {
     Editor,
     Parser,
+    DataLoadError,
   },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非单个禁用
@@ -118,10 +125,20 @@ export default {
     /** 查询流程表单列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listDynamicForm(this.queryParams).then((response) => {
         this.formList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.formList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     // 取消按钮

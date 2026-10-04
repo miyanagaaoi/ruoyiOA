@@ -22,6 +22,7 @@ import { getMainInfo } from "@/api/workflow/mainText";
 import { getToken } from "@/utils/auth";
 import { StrUtil } from "@/utils/StrUtil";
 import Base from "@/utils/base64";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "FlowMainText",
@@ -96,6 +97,13 @@ export default {
           this.fileInfo = { fileId: this.fileId, fileName: fileName, mainTextUrl: mainTextUrl };
         }
         this.loading = false;
+      }).catch((err) => {
+        // 正文预览不是页面主表格：只补失败处理，不插横幅
+        this.loading = false;
+        this.fileInfo = {};
+        this.isPreview = false;
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 显示盖章 */

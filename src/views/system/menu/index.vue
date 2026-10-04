@@ -48,8 +48,9 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
     <el-table
-      v-if="refreshTable"
+      v-else-if="refreshTable"
       v-loading="loading"
       :data="menuList"
       row-key="menuId"
@@ -303,15 +304,20 @@ import { listMenu, getMenu, delMenu, addMenu, updateMenu } from "@/api/system/me
 import Treeselect from "@riophae/vue-treeselect"
 import "@riophae/vue-treeselect/dist/vue-treeselect.css"
 import IconSelect from "@/components/IconSelect"
+import DataLoadError from "@/components/DataLoadError"
+import { describeError } from "@/utils/errorMessage"
 
 export default {
   name: "Menu",
   dicts: ['sys_show_hide', 'sys_normal_disable'],
-  components: { Treeselect, IconSelect },
+  components: { Treeselect, IconSelect, DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 显示搜索条件
       showSearch: true,
       // 菜单表格树数据
@@ -358,9 +364,18 @@ export default {
     /** 查询菜单列表 */
     getList() {
       this.loading = true
+      this.loadError = ""
+      this.loadErrorCause = ""
       listMenu(this.queryParams).then(response => {
         this.menuList = this.handleTree(response.data, "menuId")
         this.loading = false
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false
+        this.menuList = []
+        const d = describeError(err)
+        this.loadError = d.text
+        this.loadErrorCause = d.cause
       })
     },
     /** 转换菜单数据结构 */

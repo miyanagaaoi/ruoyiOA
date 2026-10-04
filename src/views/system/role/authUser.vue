@@ -59,7 +59,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="userList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="userList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="用户名称" prop="userName" :show-overflow-tooltip="true" />
       <el-table-column label="用户昵称" prop="nickName" :show-overflow-tooltip="true" />
@@ -102,15 +103,20 @@
 <script>
 import { allocatedUserList, authUserCancel, authUserCancelAll } from "@/api/system/role"
 import selectUser from "./selectUser"
+import DataLoadError from "@/components/DataLoadError"
+import { describeError } from "@/utils/errorMessage"
 
 export default {
   name: "AuthUser",
   dicts: ['sys_normal_disable'],
-  components: { selectUser },
+  components: { selectUser, DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中用户组
       userIds: [],
       // 非多个禁用
@@ -142,12 +148,22 @@ export default {
     /** 查询授权用户列表 */
     getList() {
       this.loading = true
+      this.loadError = ""
+      this.loadErrorCause = ""
       allocatedUserList(this.queryParams).then(response => {
           this.userList = response.rows
           this.total = response.total
           this.loading = false
         }
-      )
+      ).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false
+        this.userList = []
+        this.total = 0
+        const d = describeError(err)
+        this.loadError = d.text
+        this.loadErrorCause = d.cause
+      })
     },
     // 返回按钮
     handleClose() {

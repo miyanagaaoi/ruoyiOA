@@ -50,6 +50,7 @@
 <script>
 import CustomRadio from "../custom-radio.vue";
 import { listAll, getType, delType, addType, updateType } from "@/api/schedule/type";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   components: { CustomRadio },
@@ -102,6 +103,12 @@ export default {
       listAll(this.queryParams).then((response) => {
         this.typeList = response.data || [];
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，且残留上一次的分类列表
+        this.loading = false;
+        this.typeList = [];
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     // 取消按钮

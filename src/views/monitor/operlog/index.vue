@@ -111,7 +111,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table ref="tables" v-loading="loading" :data="list" @selection-change="handleSelectionChange" :default-sort="defaultSort" @sort-change="handleSortChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else ref="tables" v-loading="loading" :data="list" @selection-change="handleSelectionChange" :default-sort="defaultSort" @sort-change="handleSortChange">
       <el-table-column type="selection" width="50" align="center" />
       <el-table-column label="日志编号" align="center" prop="operId" />
       <el-table-column label="系统模块" align="center" prop="title" :show-overflow-tooltip="true" />
@@ -208,14 +209,20 @@
 
 <script>
 import { list, delOperlog, cleanOperlog } from "@/api/monitor/operlog"
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Operlog",
+  components: { DataLoadError },
   dicts: ['sys_oper_type', 'sys_common_status'],
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非多个禁用
@@ -253,12 +260,22 @@ export default {
     /** 查询登录日志 */
     getList() {
       this.loading = true
+      this.loadError = ""
+      this.loadErrorCause = ""
       list(this.addDateRange(this.queryParams, this.dateRange)).then( response => {
           this.list = response.rows
           this.total = response.total
           this.loading = false
         }
-      )
+      ).catch(err => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false
+        this.list = []
+        this.total = 0
+        const d = describeError(err)
+        this.loadError = d.text
+        this.loadErrorCause = d.cause
+      })
     },
     // 操作日志类型字典翻译
     typeFormat(row, column) {

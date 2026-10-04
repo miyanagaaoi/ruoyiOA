@@ -59,7 +59,9 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
     <el-table
+      v-else
       ref="tables"
       v-loading="loading"
       :data="tableList"
@@ -118,6 +120,8 @@
 import { listTable, previewTable, delTable, genCode, synchDb } from "@/api/tool/gen";
 import importTable from "./importTable";
 import createTable from "./createTable";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 import hljs from "highlight.js/lib/highlight";
 import "highlight.js/styles/github-gist.css";
 hljs.registerLanguage("java", require("highlight.js/lib/languages/java"));
@@ -129,11 +133,14 @@ hljs.registerLanguage("sql", require("highlight.js/lib/languages/sql"));
 
 export default {
   name: "Gen",
-  components: { importTable, createTable },
+  components: { importTable, createTable, DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 唯一标识符
       uniqueId: "",
       // 选中数组
@@ -187,10 +194,20 @@ export default {
     /** 查询表集合 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listTable(this.addDateRange(this.queryParams, this.dateRange)).then((response) => {
         this.tableList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.tableList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     /** 搜索按钮操作 */

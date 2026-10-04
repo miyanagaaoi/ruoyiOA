@@ -23,7 +23,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="typeList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="typeList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="模板名称" align="left" prop="name" />
       <el-table-column label="排序" align="center" prop="sort" width="120" />
@@ -82,14 +83,20 @@
 
 <script>
 import { listType, getType, delType, addType, updateType, updateEnable } from "@/api/workflow/template";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "TemplateType",
+  components: { DataLoadError },
   dicts: ["sys_yes_or_no"],
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非单个禁用
@@ -128,10 +135,20 @@ export default {
     /** 查询模板分类列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listType(this.queryParams).then((response) => {
         this.typeList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.typeList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     // 取消按钮

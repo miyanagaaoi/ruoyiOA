@@ -52,6 +52,7 @@
 
 <script>
 import { listTodoCollapse, readTodo, noRead, readCopyTodo } from "@/api/workflow/todo";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Todo",
@@ -173,15 +174,31 @@ export default {
         this.collapseAll();
         this.handleTotal(1);
         this.loading = false;
+      }).catch((err) => {
+        // 未读列表是页面次要数据：只补失败处理，不插横幅
+        this.loading = false;
+        this.collapseList = [];
+        this.totalNoRead = 0;
+        this.updateNoReadNum(0);
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 查询待办列表 */
     async getList() {
       this.loading = true;
-      const response = await listTodoCollapse(this.queryParams);
-      this.collapseList = response.data;
-      this.handleTotal(0);
-      this.loading = false;
+      // 原来没有 try/catch：await 抛错后 loading 永远为 true，折叠列表一直转圈
+      try {
+        const response = await listTodoCollapse(this.queryParams);
+        this.collapseList = response.data;
+        this.handleTotal(0);
+      } catch (err) {
+        this.collapseList = [];
+        this.handleTotal(0);
+        this.$modal.msgError("待办列表加载失败：" + describeError(err).text);
+      } finally {
+        this.loading = false;
+      }
     },
     /** 处理全部、未读总数 */
     handleTotal(type) {

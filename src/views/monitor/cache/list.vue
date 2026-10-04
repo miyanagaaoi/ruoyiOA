@@ -153,6 +153,7 @@
 
 <script>
 import { listCacheName, listCacheKey, getCacheValue, clearCacheName, clearCacheKey, clearCacheAll } from "@/api/monitor/cache"
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "CacheList",
@@ -177,6 +178,12 @@ export default {
       listCacheName().then(response => {
         this.cacheNames = response.data
         this.loading = false
+      }).catch(err => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，缓存名称列表永久转圈且残留旧数据
+        this.loading = false
+        this.cacheNames = []
+        const d = describeError(err)
+        this.$modal.msgError("加载失败：" + d.text)
       })
     },
     /** 刷新缓存名称列表 */

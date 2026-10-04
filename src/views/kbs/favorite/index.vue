@@ -76,6 +76,7 @@
 import { listFavorite, delFavorite } from "@/api/kbs/favorite/favorite";
 import { getGroup, delGroup, updateGroup } from "@/api/kbs/favorite/group";
 import { parseTime } from "@/utils/ruoyi";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Favorite",
@@ -125,6 +126,12 @@ export default {
       listFavorite({ objectName: this.title }).then((response) => {
         this.favoriteGroup = response.data;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，且残留上一次的收藏分组
+        this.loading = false;
+        this.favoriteGroup = [];
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 处理更新时间 */

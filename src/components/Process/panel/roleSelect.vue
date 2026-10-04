@@ -96,6 +96,7 @@
   
 <script>
 import { listRole } from "@/api/system/role";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   props: {
@@ -173,6 +174,12 @@ export default {
           this.$set(this.allDeptMap, role.roleId, role);
         });
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，列表永久转圈且残留旧数据
+        this.loading = false;
+        this.roleList = [];
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 确认 */

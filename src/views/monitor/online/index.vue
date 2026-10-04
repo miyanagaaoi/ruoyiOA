@@ -23,7 +23,9 @@
       </el-form-item>
 
     </el-form>
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
     <el-table
+      v-else
       v-loading="loading"
       :data="list.slice((pageNum-1)*pageSize,pageNum*pageSize)"
       style="width: 100%;"
@@ -64,13 +66,19 @@
 
 <script>
 import { list, forceLogout } from "@/api/monitor/online"
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Online",
+  components: { DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 总条数
       total: 0,
       // 表格数据
@@ -91,10 +99,20 @@ export default {
     /** 查询登录日志列表 */
     getList() {
       this.loading = true
+      this.loadError = ""
+      this.loadErrorCause = ""
       list(this.queryParams).then(response => {
         this.list = response.rows
         this.total = response.total
         this.loading = false
+      }).catch(err => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false
+        this.list = []
+        this.total = 0
+        const d = describeError(err)
+        this.loadError = d.text
+        this.loadErrorCause = d.cause
       })
     },
     /** 搜索按钮操作 */

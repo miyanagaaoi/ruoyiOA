@@ -47,6 +47,7 @@
 
 <script>
 import { flowCmts } from "@/api/workflow/task";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "FlowComment",
@@ -105,15 +106,22 @@ export default {
     async getList() {
       this.loading = true;
       const params = { ...this.queryParams, procInsId: this.procInsId };
-      const res = await flowCmts(params);
-      this.loading = false;
-
-      if (res.code === 200 && res.data.flowList) {
-        this.cmtList = res.data.flowList || [];
-        this.actFilterList = res.data.actFilters;
-        this.total = res.data.total || 0;
-        this.calcSpan();
-        this.$emit("change-flag");
+      // 原来没有 try/catch：await 抛错时 loading 复位执行不到，流转记录永久转圈
+      try {
+        const res = await flowCmts(params);
+        if (res.code === 200 && res.data.flowList) {
+          this.cmtList = res.data.flowList || [];
+          this.actFilterList = res.data.actFilters;
+          this.total = res.data.total || 0;
+          this.calcSpan();
+          this.$emit("change-flag");
+        }
+      } catch (err) {
+        this.cmtList = [];
+        this.total = 0;
+        this.$modal.msgError("审批意见加载失败：" + describeError(err).text);
+      } finally {
+        this.loading = false;
       }
     },
     // 计算合并规则（在获取数据后调用）

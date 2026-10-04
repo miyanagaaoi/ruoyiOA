@@ -34,7 +34,8 @@
       <right-toolbar :showSearch.sync="showSearch" :search="false" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="configList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="configList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="编号名称" align="center" prop="title" />
       <el-table-column label="最新流水号" align="center" prop="currentSeq" width="160" />
@@ -143,14 +144,20 @@
 
 <script>
 import { listConfig, getConfig, delConfig, addConfig, updateConfig, changeEnableFlag } from "@/api/serial/config";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "SerialConfig",
+  components: { DataLoadError },
   dicts: ["sys_yes_or_no"],
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非单个禁用
@@ -313,6 +320,8 @@ export default {
     /** 查询编号配置列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       this.queryParams.params = {};
       if (null != this.daterangeCreateTime && "" != this.daterangeCreateTime) {
         this.queryParams.params["beginCreateTime"] = this.daterangeCreateTime[0];
@@ -322,6 +331,14 @@ export default {
         this.configList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.configList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     // 状态切换
@@ -408,6 +425,11 @@ export default {
         this.open = true;
         this.title = "修改编号配置";
         this.loading = false;
+      }).catch((err) => {
+        // 表单取数（非列表）：失败也要复位 loading，否则遮罩一直转
+        this.loading = false;
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 提交按钮 */

@@ -119,6 +119,7 @@
 
 <script>
 import { flowRecord, urge } from "@/api/workflow/task";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "FlowApprove",
@@ -178,14 +179,22 @@ export default {
     async getList() {
       this.loading = true;
       const params = { ...this.queryParams, procInsId: this.procInsId };
-      const res = await flowRecord(params);
-      if (res.code === 200) {
-        this.flowRecordList = res.data.flowList;
-        this.actFilterList = res.data.actFilters;
-        this.total = res.data.total;
-        this.calcSpan();
+      // 原来没有 try/catch：await 抛错时 loading 复位执行不到，流转记录永久转圈
+      try {
+        const res = await flowRecord(params);
+        if (res.code === 200) {
+          this.flowRecordList = res.data.flowList;
+          this.actFilterList = res.data.actFilters;
+          this.total = res.data.total;
+          this.calcSpan();
+          this.$emit("change-flag");
+        }
+      } catch (err) {
+        this.flowRecordList = [];
+        this.total = 0;
+        this.$modal.msgError("流程流转记录加载失败：" + describeError(err).text);
+      } finally {
         this.loading = false;
-        this.$emit("change-flag");
       }
     },
     /** 催办 */
@@ -197,6 +206,11 @@ export default {
             this.$modal.msgSuccess("催办成功！");
             this.loading = false;
           }
+        }).catch((err) => {
+          // 催办是写操作：只复位本次操作自己打开的 loading 并提示失败，不清空列表数据
+          this.loading = false;
+          const d = describeError(err);
+          this.$modal.msgError("催办失败：" + d.text);
         });
       });
     },

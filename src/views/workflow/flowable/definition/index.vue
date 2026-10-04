@@ -28,7 +28,8 @@
         <div>4、id参数设置为{processDefinitionKey}:{processDefinitionVersion}:{generated-id}，其中generated-id是一个唯一数字，用以保证在集群环境下，流程定义缓存中，流程id的唯一性。</div>
       </template>
     </el-alert>
-    <el-table v-loading="loading" fit :data="definitionList" border @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" fit :data="definitionList" border @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="流程名称" align="left" show-overflow-tooltip>
         <template slot-scope="scope">
@@ -131,6 +132,8 @@ import { getToken } from "@/utils/auth";
 import BpmnViewer from "@/components/Process/viewer";
 import flow from "@/views/workflow/flowable/definition/flow";
 import Model from "./model";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Definition",
@@ -139,11 +142,15 @@ export default {
     BpmnViewer,
     flow,
     Model,
+    DataLoadError,
   },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非单个禁用
@@ -227,10 +234,20 @@ export default {
     /** 查询流程定义列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listDefinition(this.queryParams).then((response) => {
         this.definitionList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.definitionList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     // 取消按钮

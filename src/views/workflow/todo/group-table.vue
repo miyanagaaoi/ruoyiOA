@@ -59,6 +59,7 @@
 <script>
 import { listTodoTable, readTodo, noRead, readCopyTodo } from "@/api/workflow/todo";
 import { finishProcess } from "@/api/workflow/task";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "TodoTable",
@@ -199,6 +200,15 @@ export default {
         this.totalNoRead = this.total;
         this.updateNoReadNum(this.totalNoRead);
         this.loading = false;
+      }).catch((err) => {
+        // 未读列表是页面次要数据：只补失败处理，不插横幅
+        this.loading = false;
+        this.todoList = [];
+        this.total = 0;
+        this.totalNoRead = 0;
+        this.updateNoReadNum(0);
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 查询待办列表 */
@@ -211,6 +221,16 @@ export default {
         this.allTotal = this.total;
         this.loading = false;
         this.$emit("resetAllToal", this.total);
+      }).catch((err) => {
+        // 这张表由 getList/getNoReadData 共用（父组件切换“全部/未读”不重建组件），
+        // 插 v-else 横幅会在切到未读并加载成功后仍然挂着，故这里只补失败处理
+        this.loading = false;
+        this.todoList = [];
+        this.total = 0;
+        this.allTotal = 0;
+        this.$emit("resetAllToal", 0);
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 重置文案内容 */

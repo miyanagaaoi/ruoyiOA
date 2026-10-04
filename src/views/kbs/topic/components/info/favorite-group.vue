@@ -69,6 +69,7 @@
 
 <script>
 import { listGroup, getGroup, delGroup, addGroup, updateGroup } from "@/api/kbs/favorite/group";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Group",
@@ -124,6 +125,13 @@ export default {
         this.groupList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，弹框里的表格永久转圈且残留旧数据
+        this.loading = false;
+        this.groupList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     // 取消按钮

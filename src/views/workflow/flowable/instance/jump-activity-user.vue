@@ -75,6 +75,7 @@ import UserSelect from "@/components/org/UserSelect/index.vue";
 import UserAllSelect from "@/components/org/UserAllSelect/index.vue";
 import { getJumpActivityNode } from "@/api/workflow/flowable/monitor";
 import { jumpActivity } from "@/api/workflow/process";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "jumpActivityUser",
@@ -169,6 +170,12 @@ export default {
           this.formData.approvers = Object.assign({}, initialValues);
           this.loading = false;
         }
+      }).catch((err) => {
+        // 弹窗里的节点数据，不是页面主表格：只补失败处理，不插横幅
+        this.loading = false;
+        this.nextApprovers = [];
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 选人 */

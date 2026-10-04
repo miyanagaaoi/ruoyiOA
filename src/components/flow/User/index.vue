@@ -74,6 +74,7 @@ import { listUser, deptTreeSelect } from "@/api/system/user";
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 import { StrUtil } from "@/utils/StrUtil";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "FlowUser",
@@ -192,6 +193,13 @@ export default {
         this.userList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.userList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.$modal.msgError("加载失败：" + d.text);
       });
     },
     /** 查询部门下拉树结构 */

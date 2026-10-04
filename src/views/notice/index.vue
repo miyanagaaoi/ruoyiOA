@@ -23,7 +23,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="noticeList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="noticeList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="公告标题" align="left" prop="noticeTitle" :show-overflow-tooltip="true" />
       <el-table-column label="公告类型" align="center" prop="noticeType" width="100">
@@ -143,15 +144,20 @@
 <script>
 import { listNotice, getNotice, delNotice, addNotice, updateNotice, changeStatus } from "@/api/system/notice";
 import TreeSelect from "@/components/org/TreeSelect/index.vue";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Notice",
   dicts: ["sys_notice_status", "sys_notice_type", "sys_yes_or_no"],
-  components: { TreeSelect },
+  components: { TreeSelect, DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选人弹框
       openSelect: false,
       selectType: "single",
@@ -218,10 +224,20 @@ export default {
     /** 查询公告列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listNotice(this.queryParams).then((response) => {
         this.noticeList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.noticeList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     // 取消按钮
@@ -286,9 +302,13 @@ export default {
             row.status = "1";
             this.loading = false;
             this.$modal.msgSuccess("发布成功");
+          }).catch((err) => {
+            // 内层是独立链，外层 catch 接不到 —— 不在这里复位 loading，表格会永久转圈
+            this.loading = false;
+            this.$modal.msgError("发布失败：" + describeError(err).text);
           });
         })
-        .catch(() => {});
+        .catch(() => {}); // 仅：用户取消确认框
     },
     /** 下架 */
     handleCanclePublic(row) {
@@ -302,9 +322,13 @@ export default {
             row.status = "2";
             this.loading = false;
             this.$modal.msgSuccess("下架成功");
+          }).catch((err) => {
+            // 内层是独立链，外层 catch 接不到 —— 不在这里复位 loading，表格会永久转圈
+            this.loading = false;
+            this.$modal.msgError("下架失败：" + describeError(err).text);
           });
         })
-        .catch(() => {});
+        .catch(() => {}); // 仅：用户取消确认框
     },
     /** 预览 */
     goDetail(row) {

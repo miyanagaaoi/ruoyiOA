@@ -17,7 +17,8 @@
     </el-form>
     <el-divider />
 
-    <el-table v-loading="loading" :data="noticeList">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="noticeList">
       <el-table-column label="序号" type="index" align="center" width="55">
         <template slot-scope="scope">
           <span>{{(queryParams.pageNum - 1) * queryParams.pageSize + scope.$index + 1}}</span>
@@ -47,14 +48,20 @@
 
 <script>
 import { listUserNotice } from "@/api/system/notice";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "PubNotice",
+  components: { DataLoadError },
   dicts: ["sys_notice_type"],
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 显示搜索条件
       showSearch: true,
       // 总条数
@@ -79,10 +86,20 @@ export default {
     /** 查询公告列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listUserNotice(this.queryParams).then((response) => {
         this.noticeList = response.rows;
         this.total = response.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.noticeList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     /** 搜索按钮操作 */

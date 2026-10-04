@@ -25,8 +25,9 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
     <el-table
-      v-if="refreshTable"
+      v-else-if="refreshTable"
       v-loading="loading"
       :data="deptList"
       row-key="deptId"
@@ -142,15 +143,20 @@ import { listDept, getDept, delDept, addDept, updateDept, listDeptExcludeChild }
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 import FormUserSelect from "@/components/form/FormUserSelect.vue";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "Dept",
   dicts: ["sys_normal_disable", "sys_org_type"],
-  components: { Treeselect, FormUserSelect },
+  components: { Treeselect, FormUserSelect, DataLoadError },
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 显示搜索条件
       showSearch: true,
       // 表格树数据
@@ -204,9 +210,18 @@ export default {
     /** 查询机构列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listDept(this.queryParams).then((response) => {
         this.deptList = this.handleTree(response.data, "deptId");
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.deptList = [];
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     /** 转换机构数据结构 */

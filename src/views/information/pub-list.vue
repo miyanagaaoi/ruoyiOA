@@ -61,6 +61,7 @@
 
 <script>
 import { listPubInformation, addReadNum } from "@/api/information/information";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "PubInformation",
@@ -102,14 +103,22 @@ export default {
       if (this.loading || !this.hasMore) return;
       this.loading = true;
       if (loadMore) this.loadingMore = true;
-      const res = await listPubInformation(this.queryParams);
-      if (res.code === 200) {
-        const newData = res.rows || [];
-        this.informationList = loadMore ? [...this.informationList, ...newData] : newData;
-        this.hasMore = newData.length >= this.queryParams.pageSize;
+      // 原来这里没有 try/catch：await 一抛错，下面的 loading/loadingMore 复位就永远执行不到，
+      // 列表会永久停在"加载中"、滚动加载再也触发不了。
+      try {
+        const res = await listPubInformation(this.queryParams);
+        if (res.code === 200) {
+          const newData = res.rows || [];
+          this.informationList = loadMore ? [...this.informationList, ...newData] : newData;
+          this.hasMore = newData.length >= this.queryParams.pageSize;
+        }
+      } catch (err) {
+        if (!loadMore) this.informationList = [];
+        this.$modal.msgError("资讯列表加载失败：" + describeError(err).text);
+      } finally {
+        this.loading = false;
+        this.loadingMore = false;
       }
-      this.loading = false;
-      this.loadingMore = false;
     },
     /** 滚动事件 */
     handleScroll(e) {

@@ -42,7 +42,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="recycleList" @selection-change="handleSelectionChange">
+    <DataLoadError v-if="loadError" :text="loadError" :cause="loadErrorCause" @retry="getList" />
+    <el-table v-else v-loading="loading" :data="recycleList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="名称" align="left" prop="objectName" show-overflow-tooltip />
       <el-table-column label="类型" align="center" prop="objectType" width="120">
@@ -66,14 +67,20 @@
 
 <script>
 import { listRecycle, recoverRecycle, delRecycle } from "@/api/kbs/recycle/recycle";
+import DataLoadError from "@/components/DataLoadError";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "KbsRecycle",
+  components: { DataLoadError },
   dicts: ["t_kbs_favorite_type"],
   data() {
     return {
       // 遮罩层
       loading: true,
+      /** 列表主数据加载失败：文案与原因（空串 = 没失败） */
+      loadError: "",
+      loadErrorCause: "",
       // 选中数组
       ids: [],
       // 非单个禁用
@@ -102,10 +109,20 @@ export default {
     /** 查询知识库文档回收站列表 */
     getList() {
       this.loading = true;
+      this.loadError = "";
+      this.loadErrorCause = "";
       listRecycle(this.queryParams).then((res) => {
         this.recycleList = res.rows;
         this.total = res.total;
         this.loading = false;
+      }).catch((err) => {
+        // 原来这里没有 catch：失败后 loading 永远为 true，表格永久转圈且残留旧数据
+        this.loading = false;
+        this.recycleList = [];
+        this.total = 0;
+        const d = describeError(err);
+        this.loadError = d.text;
+        this.loadErrorCause = d.cause;
       });
     },
     /** 搜索按钮操作 */
