@@ -151,6 +151,20 @@ export const constantRoutes = [
       }
     ]
   },
+  {
+    // 简化版流程设计器（二开）：节点清单式配置，不暴露 BPMN
+    path: '/workflow',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'simple-flow/designer',
+        component: () => import('@/views/workflow/simple-flow/designer'),
+        name: 'SimpleFlowDesigner',
+        meta: { title: '流程设计', icon: '' }
+      }
+    ]
+  },
 ]
 
 // 动态路由，基于用户权限动态去加载
