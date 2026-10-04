@@ -188,6 +188,12 @@ export default {
 
 <style lang="scss" scoped>
 .flow-tree {
+  /*
+   * 同级卡片统一宽度（含泳道头）。
+   * 不能靠 max-content 各自算：泳道头里的条件文本一长就会把泳道撑开，
+   * 而卡片仍按自己的内容宽，于是被居中成不齐 —— 宽度必须来自同一个确定值。
+   */
+  --node-w: 280px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -198,8 +204,7 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  min-width: 220px;
-  max-width: 340px;
+  width: var(--node-w);
   min-height: 62px;
   border: 1px solid #d8d8d8;
   border-radius: 6px;
@@ -298,15 +303,18 @@ export default {
     }
   }
 
-  /* 第二行：节点名 + 摘要 */
+  /* 第二行：节点名 + 摘要（宽度不够时摘要换行，不截断内容） */
   .ft-node-body {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 2px 8px;
     min-width: 0;
     padding: 8px 12px 10px;
   }
   .ft-name {
+    min-width: 0;
     font-weight: 500;
     color: #333;
     white-space: nowrap;
@@ -314,12 +322,9 @@ export default {
     text-overflow: ellipsis;
   }
   .ft-sum {
-    margin-left: auto;
     color: #aaa;
     font-size: 11px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   /* 起止节点：灰蓝 */
@@ -443,10 +448,8 @@ export default {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  /* 与泳道内卡片同宽：100% 让泳道头铺满本泳道（泳道宽度由下方卡片决定），
-     max-width 与 .ft-node 的上限保持一致，避免被超长条件文本撑宽。 */
-  width: 100%;
-  max-width: 340px;
+  /* 与同级卡片**完全同宽**（同一个 --node-w），保证左右边缘持久对齐 */
+  width: var(--node-w);
   box-sizing: border-box;
   border: 1px solid #dfe4ea;
   border-radius: 4px;
@@ -509,6 +512,8 @@ export default {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  width: var(--node-w);
+  box-sizing: border-box;
   border: 1px dashed #dcdcdc;
   border-radius: 6px;
   padding: 10px 18px;
