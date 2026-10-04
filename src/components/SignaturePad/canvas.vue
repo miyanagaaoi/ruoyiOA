@@ -36,8 +36,27 @@ import vueEsign from 'vue-esign'
 /** 空画布时 `capture()` reject 的哨兵错误：调用方据此区分"用户还没写"与"真失败" */
 export const EMPTY_SIGN_ERROR = 'EMPTY_SIGN'
 
+/**
+ * 识别"画布是空的"。
+ *
+ * ⚠ 这里必须认识两件事，少一样就会出现"用户还没写、界面却报红字"：
+ *   1. `vue-esign` 空画板时 reject 的是**字符串** `'Warning: Not Signned!'`
+ *      （库源码 `reject(\`Warning: Not Signned!\`)`，原文还拼错了一个 n），
+ *      而**不是** Error —— 早先按 `err.message === 'EMPTY'` 判断，那条分支从未生效，
+ *      用户点确认看到的是"签名失败：Warning: Not Signned!"这种技术性报错；
+ *   2. 本组件 `capture()` 自己抛的哨兵。
+ */
+const EMPTY_SIGN_HINTS = ['Not Signn', 'Not Signed']
+
 export function isEmptySignError(err) {
-  return !!(err && (err.message === EMPTY_SIGN_ERROR || err === EMPTY_SIGN_ERROR))
+  if (!err) {
+    return false
+  }
+  const text = typeof err === 'string' ? err : err.message || ''
+  if (text === EMPTY_SIGN_ERROR) {
+    return true
+  }
+  return EMPTY_SIGN_HINTS.some(hint => text.indexOf(hint) >= 0)
 }
 
 export default {
@@ -60,8 +79,8 @@ export default {
     /**
      * 取图：返回透明底 PNG 的 base64。
      *
-     * `generate()` 在画布为空时会 **reject**，这里据此做"非空白校验"，
-     * 不必自己去数像素 —— 库已经做了判断，重复实现只会多一处可能出错的地方。
+     * 两个"没写"的情况都要收敛成 {@link EMPTY_SIGN_ERROR}，调用方才能给一句人话；
+     * 否则空画板会以库的原始文案（`Warning: Not Signned!`）冒到界面上。
      *
      * @returns {Promise<string>} 成功给 dataURL；空白画布 reject `EMPTY_SIGN_ERROR`
      */
@@ -69,12 +88,22 @@ export default {
       if (!this.$refs.esign) {
         return Promise.reject(new Error('签名画板未就绪'))
       }
-      return this.$refs.esign.generate().then(dataURL => {
-        if (!dataURL) {
-          throw new Error(EMPTY_SIGN_ERROR)
-        }
-        return dataURL
-      })
+      return this.$refs.esign
+        .generate()
+        .then(dataURL => {
+          // 库只在 hasDrew 为真时 resolve；这里再确认一次"拿到的确实是一张图"，
+          // 免得半成品字符串被当成图片一路传到上传接口
+          if (typeof dataURL !== 'string' || dataURL.indexOf('data:image') !== 0) {
+            throw new Error(EMPTY_SIGN_ERROR)
+          }
+          return dataURL
+        })
+        .catch(err => {
+          if (isEmptySignError(err)) {
+            throw new Error(EMPTY_SIGN_ERROR)
+          }
+          throw err
+        })
     }
   }
 }
