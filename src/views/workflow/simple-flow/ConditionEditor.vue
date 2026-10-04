@@ -1,12 +1,5 @@
 <template>
-  <el-dialog
-    :title="'编辑分支条件 — ' + (branch.name || '')"
-    :visible.sync="open"
-    width="720px"
-    append-to-body
-    :close-on-click-modal="false"
-    @open="onOpen"
-  >
+  <div class="cond-editor">
     <!-- 自然语言回显：防"且/或"理解错 -->
     <el-alert type="success" :closable="false" class="mb10">
       <div slot="title">
@@ -18,7 +11,13 @@
       <div class="cond-group-head">
         <span>条件组 {{ gi + 1 }}</span>
         <span class="tip">组内为「且」</span>
-        <el-button type="text" icon="el-icon-delete" class="fr" @click="removeGroup(gi)">删除条件组</el-button>
+        <el-button
+          v-if="groups.length > 1"
+          type="text"
+          icon="el-icon-delete"
+          class="fr"
+          @click="removeGroup(gi)"
+        >删除</el-button>
       </div>
 
       <div v-for="(row, ri) in group.rows" :key="ri" class="cond-row">
@@ -26,7 +25,7 @@
           v-model="row.field"
           placeholder="选择表单字段"
           size="small"
-          class="w220"
+          class="fld"
           filterable
           allow-create
           default-first-option
@@ -42,14 +41,14 @@
             <span class="opt-tail">{{ f.required ? '必填' : '未设必填' }}</span>
           </el-option>
         </el-select>
-        <el-select v-model="row.op" placeholder="比较符" size="small" class="w130">
+        <el-select v-model="row.op" placeholder="比较符" size="small" class="op">
           <el-option v-for="op in opOptions" :key="op.value" :label="op.label" :value="op.value" />
         </el-select>
         <el-input
           v-model="row.value"
           placeholder="值"
           size="small"
-          class="w180"
+          class="val"
           :disabled="row.op === 'EMPTY' || row.op === 'NOT_EMPTY'"
         />
         <el-button type="text" icon="el-icon-close" @click="removeRow(gi, ri)" />
@@ -73,12 +72,7 @@
         整句会被包进一对 <code>${ }</code>（写成 <code>${A} == 'B'</code> 运行期会报 non-Boolean）。
       </div>
     </el-alert>
-
-    <div slot="footer" class="dialog-footer">
-      <el-button @click="open = false">取 消</el-button>
-      <el-button type="primary" @click="confirm">确 定</el-button>
-    </div>
-  </el-dialog>
+  </div>
 </template>
 
 <script>
@@ -87,19 +81,21 @@
  *
  * 逻辑：条件组内为「且」，条件组之间为「或」，形如 (A 且 B) 或 (C 且 D)。
  * 只提供"选字段 / 选比较符 / 填值"三件套——不提供表达式框与脚本入口。
+ *
+ * **内嵌形态**：不再自带 el-dialog。它直接挂在配置抽屉的「进入条件」里，
+ * 与抽屉内其它字段一样即时编辑（branch.groups 直接改，引用即生效）。
+ * 空行在提交前由 designer 的 pruneConditions() 清理，不在这里拦截。
  */
 export default {
   name: 'ConditionEditor',
   props: {
-    visible: { type: Boolean, default: false },
-    branch: { type: Object, default: () => ({}) },
+    /** 分支（泳道）对象；组件直接读写它的 groups */
+    branch: { type: Object, default: null },
     /** 从表单提取出来的字段清单（{vModel,label,required,disabled}） */
     fieldOptions: { type: Array, default: () => [] }
   },
   data() {
     return {
-      open: false,
-      groups: [],
       opOptions: [
         { value: 'EQ', label: '等于' },
         { value: 'NE', label: '不等于' },
@@ -115,6 +111,9 @@ export default {
     }
   },
   computed: {
+    groups() {
+      return (this.branch && this.branch.groups) || []
+    },
     sentence() {
       const parts = []
       ;(this.groups || []).forEach(g => {
@@ -138,20 +137,20 @@ export default {
     }
   },
   watch: {
-    visible(val) {
-      this.open = val
-    },
-    open(val) {
-      this.$emit('update:visible', val)
+    branch: {
+      immediate: true,
+      handler() {
+        this.ensureGroups()
+      }
     }
   },
   methods: {
-    onOpen() {
-      // 深拷贝，取消时不污染原对象
-      const src = this.branch && this.branch.groups ? this.branch.groups : []
-      this.groups = JSON.parse(JSON.stringify(src))
-      if (!this.groups.length) {
-        this.groups = [{ logic: 'AND', rows: [{ field: '', op: 'EQ', value: '' }] }]
+    /** 保证至少有一个条件组（编辑态始终可见一行可填） */
+    ensureGroups() {
+      const b = this.branch
+      if (!b) return
+      if (!b.groups || !b.groups.length) {
+        this.$set(b, 'groups', [{ logic: 'AND', rows: [{ field: '', op: 'EQ', value: '' }] }])
       }
     },
     addGroup() {
@@ -159,6 +158,7 @@ export default {
     },
     removeGroup(gi) {
       this.groups.splice(gi, 1)
+      this.ensureGroups()
     },
     addRow(gi) {
       this.groups[gi].rows.push({ field: '', op: 'EQ', value: '' })
@@ -168,39 +168,27 @@ export default {
       if (!this.groups[gi].rows.length) {
         this.addRow(gi)
       }
-    },
-    confirm() {
-      // 过滤空行
-      const cleaned = this.groups
-        .map(g => ({
-          logic: 'AND',
-          rows: (g.rows || []).filter(r => r.field && r.op)
-        }))
-        .filter(g => g.rows.length)
-      if (!cleaned.length) {
-        this.$modal.msgError('至少要有一条有效条件')
-        return
-      }
-      this.$emit('save', cleaned)
-      this.open = false
     }
   }
 }
 </script>
 
 <style scoped>
+.cond-editor {
+  min-width: 0;
+}
 .cond-group {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
   background: #fcfcfc;
 }
 .cond-group-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-size: 13px;
   color: #555;
 }
@@ -211,23 +199,24 @@ export default {
 .cond-group-head .fr {
   margin-left: auto;
 }
+/* 抽屉内宽度有限：字段/值自适应，比较符定宽，整体可换行 */
 .cond-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
-.w130 {
-  width: 130px;
+.cond-row .fld {
+  flex: 1 1 150px;
+  min-width: 0;
 }
-.w180 {
-  width: 180px;
+.cond-row .op {
+  flex: 0 0 92px;
 }
-.w200 {
-  width: 200px;
-}
-.w220 {
-  width: 230px;
+.cond-row .val {
+  flex: 1 1 90px;
+  min-width: 0;
 }
 .opt-tail {
   float: right;

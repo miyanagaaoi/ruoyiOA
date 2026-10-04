@@ -78,32 +78,17 @@
                 <span class="ft-lane-name">{{ br.name || ('分支' + (j + 1)) }}</span>
                 <span v-if="!br.defaultBranch" class="ft-prio">优先级 {{ j + 1 }}</span>
                 <span v-else class="ft-fallback">系统兜底</span>
+                <button
+                  v-if="!br.defaultBranch"
+                  class="ft-lane-del"
+                  type="button"
+                  title="删除该分支"
+                  @click.stop="d.removeBranch(p(i, j))"
+                >×</button>
               </div>
               <div class="ft-lh-main">
                 <span v-if="!br.defaultBranch" class="ft-cond">{{ d.condText(br) }}</span>
                 <span v-else class="ft-cond fallback-desc">如存在未满足其他分支条件的情况，则进入此分支</span>
-                <span class="ft-lh-ops">
-                  <el-button
-                    v-if="!br.defaultBranch"
-                    type="text"
-                    size="mini"
-                    class="ft-lane-op"
-                    @click.stop="d.editCondition(p(i, j))"
-                  >编辑条件</el-button>
-                  <el-button
-                    v-if="!br.defaultBranch"
-                    type="text"
-                    size="mini"
-                    class="ft-lane-op"
-                    @click.stop="d.removeBranch(p(i, j))"
-                  >删除</el-button>
-                  <el-button
-                    type="text"
-                    size="mini"
-                    class="ft-lane-op"
-                    @click.stop="d.toggleLane(p(i, j))"
-                  >{{ d.isCollapsed(p(i, j)) ? '展开' : '折叠' }}</el-button>
-                </span>
               </div>
             </div>
 
@@ -504,6 +489,28 @@ export default {
     flex: none;
     min-height: 18px;
   }
+  /* 右上角删除（与节点卡片的 × 保持同一套视觉） */
+  .ft-lane-del {
+    margin-left: auto;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    line-height: 14px;
+    text-align: center;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #c0c4cc;
+    font-size: 14px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+
+    &:hover {
+      color: #f56c6c;
+      background: #fef0f0;
+    }
+  }
   .ft-lh-main {
     display: flex;
     align-items: flex-start;
@@ -545,16 +552,6 @@ export default {
   .ft-prio {
     flex: none;
     color: #4a9e6f;
-    font-size: 11px;
-  }
-  .ft-lh-ops {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-  }
-  .ft-lane-op {
-    padding: 0 2px;
     font-size: 11px;
   }
 }

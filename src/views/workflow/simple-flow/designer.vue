@@ -257,11 +257,9 @@
                 <div class="tip">条件分支自上而下依次判定，命中即进入；兜底分支永远排在最后。</div>
               </el-form-item>
 
+              <!-- 进入条件：图形化编辑器直接内嵌（原"编辑条件"弹窗已合并到这里） -->
               <el-form-item v-if="!selectedBranch.defaultBranch" label="进入条件">
-                <div class="row-inline">
-                  <span class="cond-text">{{ condText(selectedBranch) }}</span>
-                  <el-button type="text" size="mini" @click="openConditionAt(selection.path)">编辑条件</el-button>
-                </div>
+                <ConditionEditor :branch="selectedBranch" :field-options="conditionFieldOptions" />
               </el-form-item>
               <el-form-item v-else label="进入条件">
                 <div class="tip">其余条件都不满足时进入本分支（系统自动生成，不可编辑）</div>
@@ -270,6 +268,13 @@
               <el-form-item label="分支内节点">
                 <span>{{ (selectedBranch.nodes || []).length }} 个</span>
                 <span v-if="!(selectedBranch.nodes || []).length" class="tip warn">　空分支会被发布校验拦截</span>
+              </el-form-item>
+
+              <el-form-item label="显示">
+                <el-button type="text" size="mini" @click="toggleLane(selection.path)">
+                  {{ isCollapsed(selection.path) ? '展开本分支' : '折叠本分支' }}
+                </el-button>
+                <span class="tip">　泳道头不再放按钮，折叠入口收在这里</span>
               </el-form-item>
 
               <el-form-item v-if="!selectedBranch.defaultBranch" label="操作">
@@ -321,13 +326,7 @@
       </div>
     </el-drawer>
 
-    <!-- 图形化条件组编辑器（字段清单由表单自动提取） -->
-    <ConditionEditor
-      :visible.sync="condVisible"
-      :branch="condBranch"
-      :field-options="conditionFieldOptions"
-      @save="onConditionSave"
-    />
+    <!-- 配置抽屉内已内嵌 ConditionEditor，独立的编辑条件弹窗已移除 -->
 
     <!-- 编译预览 -->
     <el-drawer title="编译预览（BPMN XML）" :visible.sync="previewVisible" size="58%" append-to-body>
@@ -412,9 +411,6 @@ export default {
       drawerVisible: false,
       saving: false,
       publishing: false,
-      condVisible: false,
-      condNode: null,
-      condBranch: null,
       previewVisible: false,
       previewXml: '',
       historyVisible: false,
@@ -596,7 +592,6 @@ export default {
         insertEmpty: p => vm.insertEmpty(p),
         addBranch: p => vm.addBranchAt(p),
         removeBranch: p => vm.removeBranchAt(p),
-        editCondition: p => vm.openConditionAt(p),
         toggleLane: p => vm.toggleLane(p),
         isSys: n => vm.isSys(n),
         removeNode: p => vm.removeNodeAt(p),
@@ -782,13 +777,6 @@ export default {
         this.selection = { path: [0] }
       }
     },
-    /** 打开图形化条件编辑器；path 为泳道路径 */
-    openConditionAt(path) {
-      this.condNode = this.resolvePath(path.slice(0, -1))
-      this.condBranch = this.resolvePath(path)
-      this.condVisible = true
-    },
-
     /* ---------------- 表单字段（自动提取） ---------------- */
     loadFormOptions() {
       listDynamicForm({ pageNum: 1, pageSize: 200 }).then(res => {
@@ -905,12 +893,6 @@ export default {
     },
     /* ---------------- 条件分支 ---------------- */
 
-    onConditionSave(groups) {
-      if (this.condBranch) {
-        this.$set(this.condBranch, 'groups', groups)
-        this.$modal.msgSuccess('条件已更新')
-      }
-    },
     condText(branch) {
       const groups = branch.groups || []
       const parts = []
@@ -924,7 +906,31 @@ export default {
       return parts.length ? ('当 ' + parts.join(' 或 ')) : '未设置条件'
     },
     /* ---------------- 保存 / 发布 ---------------- */
+    /**
+     * 清理条件里的空行与空组。
+     * 条件编辑器改为内嵌即时编辑后不再有"确定"按钮兜底，
+     * 用户新加但没填完的行会留在内存树里，提交前必须清掉。
+     */
+    pruneConditions() {
+      const walk = nodes => {
+        (nodes || []).forEach(n => {
+          if (n.type === 'condition' && n.branches) {
+            n.branches.forEach(b => {
+              if (!b.groups) return
+              b.groups = b.groups
+                .map(g => ({ logic: 'AND', rows: (g.rows || []).filter(r => r.field && r.op) }))
+                .filter(g => g.rows.length)
+            })
+          }
+          if (n.branches) {
+            n.branches.forEach(b => walk(b.nodes))
+          }
+        })
+      }
+      walk(this.flow.nodes)
+    },
     buildContent() {
+      this.pruneConditions()
       const content = {
         schemaVersion: 1,
         key: this.flow.defKey,
