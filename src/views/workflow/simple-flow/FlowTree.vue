@@ -189,11 +189,14 @@ export default {
 <style lang="scss" scoped>
 .flow-tree {
   /*
-   * 同级卡片统一宽度（含泳道头）。
-   * 不能靠 max-content 各自算：泳道头里的条件文本一长就会把泳道撑开，
-   * 而卡片仍按自己的内容宽，于是被居中成不齐 —— 宽度必须来自同一个确定值。
+   * 画布横向/纵向尺寸的唯一定义处。
+   * 卡片、泳道头、空态共用 --node-w，保证同级卡片持久对齐；
+   * --lane-gap 同时决定泳道左右留白与分段横线的负外边距 ——
+   * 两者必须相等，否则相邻泳道的横线接不上（原先硬编码 14px 写了两处）。
    */
   --node-w: 280px;
+  --lane-gap: 14px;
+  --stub-h: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -400,16 +403,16 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 14px;
+  padding: var(--stub-h) var(--lane-gap);
 }
 
-/* 分段横线：靠 -14px 负外边距跨过泳道间距，与相邻泳道拼接 */
+/* 分段横线：靠 -var(--lane-gap) 负外边距跨过泳道间距，与相邻泳道拼接 */
 .laneline {
   position: absolute;
   height: 1px;
   background: #d5d5d5;
-  left: -14px;
-  right: -14px;
+  left: calc(-1 * var(--lane-gap));
+  right: calc(-1 * var(--lane-gap));
 }
 .laneline-top { top: 0; }
 .laneline-bottom { bottom: 0; }
@@ -427,7 +430,7 @@ export default {
   position: absolute;
   left: 50%;
   width: 1px;
-  height: 16px;
+  height: var(--stub-h);
   background: #d5d5d5;
   transform: translateX(-50%);
 }
@@ -437,7 +440,7 @@ export default {
 /* 容器上下与父/子节点相连的竖线 */
 .ft-stub {
   width: 1px;
-  height: 16px;
+  height: var(--stub-h);
   background: #d5d5d5;
   flex: none;
 }
