@@ -95,8 +95,12 @@
               <template v-if="isApprovable(currentNode)">
                 <el-form-item label="参与人来源">
                   <el-select v-model="currentNode.assignee.source" style="width:100%">
-                    <el-option v-for="s in assigneeSources" :key="s.value" :label="s.label" :value="s.value" />
+                    <el-option v-for="s in assigneeSources" :key="s.value" :label="s.label" :value="s.value"
+                               :disabled="isSourceDisabled(s.value)" />
                   </el-select>
+                  <div v-if="isFirstApproveNode" class="first-node-hint">
+                    首个审批节点不支持「角色 / 发起人自选」：引擎在发起时解析不到该变量，流程会一发起就报错（校验规则 V-3）
+                  </div>
                 </el-form-item>
                 <el-form-item v-if="currentNode.assignee.source === 'USER'" label="指定人员">
                   <el-input v-model="userIdsText" placeholder="用户ID，多个用英文逗号分隔" />
@@ -484,6 +488,19 @@ export default {
     }
   },
   computed: {
+    /**
+     * 当前选中的节点是不是「发起节点之后的第 1 个审批节点」。
+     *
+     * 为什么要单独判它：该节点上「角色 / 发起人自选」是**引擎层就跑不通**的 ——
+     * 它们会编译成 flowable:candidateUsers="${节点id_user}"，而 startFlow 不传这个变量，
+     * 结果是流程一发起就报 Unknown property used in expression（PRD 5.5 P-1）。
+     * 所以这里置灰给原因，发布校验 V-3 再拦一道。
+     */
+    isFirstApproveNode() {
+      const nodes = (this.flow && this.flow.nodes) || []
+      const first = nodes.find(n => this.isApprovable(n))
+      return !!first && !!this.currentNode && this.currentNode.id === first.id
+    },
     /** 画布三态：加载中 / 加载失败 / 正常（空态交给 FlowTree 自己的 .ft-empty） */
     canvasState() {
       if (this.loadingFlow) return 'loading'
@@ -1214,6 +1231,14 @@ export default {
     isApprovable(node) {
       return node.type === 'approve' || node.type === 'handle'
     },
+    /**
+     * 参与人来源在「首个审批节点」上是否禁用（PRD AC-06）。
+     * 与发布校验 V-3 前后呼应：这里置灰并给出原因，V-3 在发布时二次拦截。
+     */
+    isSourceDisabled(value) {
+      if (!this.isFirstApproveNode) return false
+      return value === 'ROLE' || value === 'INITIATOR_SELECT'
+    },
     needLevel(node) {
       return node.type === 'approve' && (node.assignee.source === 'DEPT_LEADER' || node.assignee.source === 'LEADER')
     },
@@ -1243,6 +1268,13 @@ export default {
 
 <style lang="scss" scoped>
 .simple-flow-designer {
+  /* 首个审批节点的限制提示：说明为什么这两项是灰的（不是 bug，是引擎限制） */
+  .first-node-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-color-warning, #e6a23c);
+  }
   .topbar {
     display: flex;
     align-items: center;
