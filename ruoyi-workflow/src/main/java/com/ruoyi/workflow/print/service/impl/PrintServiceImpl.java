@@ -93,9 +93,10 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         data.setFinishTime(hpi.getEndTime());
         data.setInstanceStatus(instanceStatusOf(hpi));
 
-        // 2) 单据模板：优先取流程记录里的 templateId，再由它定位打印模板
+        // 2) 单据模板：它落在业务记录（待办/已办/回收站）上，**不是流程定义的 key**，
+        //    也不是流程变量。踩过：用 procDefKey 当单据模板ID，导致表单服务报"模板ID为空"。
+        String templateId = printTemplateMapper.selectTemplateIdByBusinessId(businessId);
         List<FlowTaskDto> records = loadRecords(hpi.getId());
-        String templateId = firstNonBlank(records, FlowTaskDto::getProcDefKey);
         data.setTemplateId(templateId);
         PrintTemplate tpl = getEffectiveTemplate(templateId, printTplId);
         data.setPrintTemplate(tpl);
@@ -112,15 +113,21 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         // 5) 附件清单
         data.setAttachments(loadAttachments(businessId));
 
-        // 6) 表单数据：形状由 IBizFormService 决定，这里不二次加工
-        try {
-            CommonForm cf = new CommonForm();
-            cf.setBizId(businessId);
-            cf.setTemplateId(templateId);
-            data.setFormData(bizFormService.getBizForm(cf));
-        } catch (Exception e) {
-            // 表单取不到不该让整张打印件失败：签批栏与附件清单仍有价值
-            log.warn("打印聚合：取表单数据失败 businessId={}，将只打印流程部分", businessId, e);
+        // 6) 表单数据：形状由 IBizFormService 决定，这里不二次加工。
+        //    表单服务**要求模板ID**，取不到时直接跳过，不打无意义的告警。
+        if (StringUtils.isNotBlank(templateId)) {
+            try {
+                CommonForm cf = new CommonForm();
+                cf.setBizId(businessId);
+                cf.setTemplateId(templateId);
+                data.setFormData(bizFormService.getBizForm(cf));
+            } catch (Exception e) {
+                // 表单取不到不该让整张打印件失败：签批栏与附件清单仍有价值
+                log.warn("打印聚合：取表单数据失败 businessId={} templateId={}，将只打印流程部分",
+                        businessId, templateId, e);
+            }
+        } else {
+            log.info("打印聚合：businessId={} 查不到单据模板ID，跳过表单数据（只打印流程部分）", businessId);
         }
 
         // 7) 水印

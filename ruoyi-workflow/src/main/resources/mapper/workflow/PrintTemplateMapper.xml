@@ -48,6 +48,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by update_time desc
     </select>
 
+    <!--
+      由业务ID反查单据模板ID。单据模板ID 不是流程定义 key，
+      它随业务记录落在 待办/已办/回收站 三张表上，按该顺序取第一个命中的。
+    -->
+    <select id="selectTemplateIdByBusinessId" parameterType="String" resultType="String">
+        select template_id from (
+            select template_id, 1 as ord from t_workflow_todo    where business_id = #{businessId} and template_id is not null
+            union all
+            select template_id, 2 as ord from t_workflow_done    where business_id = #{businessId} and template_id is not null
+            union all
+            select template_id, 3 as ord from t_workflow_recycle where business_id = #{businessId} and template_id is not null
+        ) t
+        order by ord
+        limit 1
+    </select>
+
     <select id="selectList" parameterType="PrintTemplate" resultMap="PrintTemplateResult">
         <include refid="selectPrintTemplateVo"/>
         <where>

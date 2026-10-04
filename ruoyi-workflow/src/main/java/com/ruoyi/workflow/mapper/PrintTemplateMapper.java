@@ -20,6 +20,16 @@ public interface PrintTemplateMapper {
     /** 按单据模板ID查询已启用的打印模板列表 */
     List<PrintTemplate> selectByTemplateId(String templateId);
 
+    /**
+     * 由业务ID反查**单据模板ID**。
+     *
+     * <p> 单据模板ID **不是**流程定义的 key，也**不一定**是流程变量 ——
+     * 它随业务记录落在 {@code t_workflow_todo / t_workflow_done / t_workflow_recycle}
+     * 上，所以这里按"待办 → 已办 → 回收站"的顺序取第一个命中的。
+     * （踩过：曾用 {@code FlowTaskDto.getProcDefKey()} 当单据模板ID，导致表单服务报"模板ID为空"。） </p>
+     */
+    String selectTemplateIdByBusinessId(String businessId);
+
     /** 查询列表 */
     List<PrintTemplate> selectList(PrintTemplate query);
 
