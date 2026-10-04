@@ -94,6 +94,14 @@ service.interceptors.response.use(res => {
       })
     }
       return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
+    } else if (code === 403) {
+      // 403：明确的"没权限"（打印/签名接口的越权拦截走这里）。
+      // ① 文案优先用服务端的 msg —— 它会说清是"没有查看权"还是"任务不属于你"，
+      //    比 errorCode 里那句通用的"没有权限，请联系管理员授权"有用得多；
+      // ② 不能落进最后的"未知错误"分支，那会让人以为是系统故障而不是权限问题。
+      const noAuthMsg = res.data.msg || msg
+      Message({ message: noAuthMsg, type: 'error' })
+      return Promise.reject(new Error(noAuthMsg))
     } else if (code === 500) {
       Message({ message: msg, type: 'error' })
       return Promise.reject(new Error(msg))
