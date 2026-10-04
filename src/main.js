@@ -13,6 +13,7 @@ import store from './store'
 import router from './router'
 import directive from './directive' // directive
 import plugins from './plugins' // plugins
+import './plugins/printPreview' // 打印预览浮层：注册 this.$openPrintPreview
 import { download } from '@/utils/request'
 
 import './assets/icons' // icon

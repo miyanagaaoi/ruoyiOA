@@ -19,6 +19,13 @@
   padding: 16px 0 40px;
 }
 
+/* 在打印浮层的 iframe 里打开：去掉外层留白与灰底（浮层自己负责外框） */
+.print-page.is-embedded {
+  background: #fff;
+  min-height: 0;
+  padding: 10px 0 24px;
+}
+
 /* ---------- 屏幕上的工具条（打印时隐藏） ---------- */
 .print-toolbar {
   position: sticky;

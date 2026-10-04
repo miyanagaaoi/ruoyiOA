@@ -103,7 +103,7 @@ export default {
   },
   methods: {
     /**
-     * 列表行打印（PRD 7.2 入口2）。新窗口打开打印预览页。
+     * 列表行打印（PRD 7.2 入口2）。**页内浮层**打开打印预览。
      * 注意草稿列表的业务ID字段是 bizId（与行点击口径一致）。
      */
     printRow(row) {
@@ -112,15 +112,8 @@ export default {
         this.$modal.msgWarning("该记录没有业务ID，无法打印");
         return;
       }
-      const { href } = this.$router.resolve({
-        path: "/workflow/print",
-        query: { businessId: businessId },
-      });
-      // 被拦截时退化为当前窗口跳转，保证点击永远有反应
-      const w = window.open(href, "_blank");
-      if (!w) {
-        this.$router.push({ path: "/workflow/print", query: { businessId: businessId } });
-      }
+      // 页内浮层打开（不跳转、不开新窗口）
+      this.$openPrintPreview(businessId);
     },
     /** 行点击 */
     handleRowClick(row, column, event) {

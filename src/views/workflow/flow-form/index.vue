@@ -303,17 +303,12 @@ export default {
     },
     /** 按钮方法 */
     /**
-     * 打开打印预览页（新窗口，PRD 7.2 入口1）。
+     * 打开打印预览**浮层**（PRD 7.2 入口1）。
      * 打印是只读动作；不传 printTplId，由服务端按单据模板挑启用的打印模板（无则用系统默认）。
      */
     printBtn() {
-      const route = { path: '/workflow/print', query: { businessId: this.businessId } }
-      const { href } = this.$router.resolve(route)
-      // 被浏览器拦截时退化为当前窗口跳转，保证点击永远有反应
-      const w = window.open(href, '_blank')
-      if (!w) {
-        this.$router.push(route)
-      }
+      // 页内浮层打开（不跳转、不开新窗口）
+      this.$openPrintPreview(this.businessId)
     },
     /** 打开签名弹窗（PRD 8.3：手写签名采集） */
     openSign() {

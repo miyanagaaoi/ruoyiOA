@@ -1,12 +1,13 @@
 <template>
-  <div class="print-page">
-    <!-- 屏幕上的工具条：打印时整条隐藏（.no-print） -->
+  <div class="print-page" :class="{ 'is-embedded': embedded }">
+    <!-- 屏幕上的工具条：打印时整条隐藏（.no-print）。
+         在浮层 iframe 里打开（embedded=1）时隐藏「关闭」——关闭由浮层的 × 负责。 -->
     <div class="print-toolbar no-print">
       <span class="tb-title">{{ title }}</span>
       <span class="tb-hint">A4 纵向 · 仅表单信息 · 共 {{ pageCount }} 页</span>
       <el-button type="primary" size="mini" icon="el-icon-printer" :loading="printing" @click="doPrint">打印</el-button>
       <el-button size="mini" icon="el-icon-refresh" @click="load">刷新数据</el-button>
-      <el-button size="mini" @click="closeWin">关闭</el-button>
+      <el-button v-if="!embedded" size="mini" @click="closeWin">关闭</el-button>
     </div>
 
     <StateBlock
@@ -148,6 +149,10 @@ export default {
     },
     printTplId() {
       return this.$route.query.printTplId
+    },
+    /** 是否在打印浮层的 iframe 中打开（浮层自带关闭，故页内不再显示「关闭」） */
+    embedded() {
+      return this.$route.query.embedded === '1'
     },
     title() {
       if (this.data && this.data.title) return this.data.title

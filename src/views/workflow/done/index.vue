@@ -140,7 +140,7 @@ export default {
       this.handleQuery();
     },
     /**
-     * 列表行打印（PRD 7.2 入口2）。新窗口打开打印预览页；打印只读，不改业务数据。
+     * 列表行打印（PRD 7.2 入口2）。**页内浮层**打开打印预览；打印只读，不改业务数据。
      * 沿用行点击的 businessId 口径。
      */
     printRow(row) {
@@ -149,16 +149,10 @@ export default {
         this.$modal.msgWarning("该记录没有业务ID，无法打印");
         return;
       }
-      const { href } = this.$router.resolve({
-        path: "/workflow/print",
-        query: { businessId: businessId },
-      });
-      // 新窗口打开；被浏览器拦截时（window.open 返回 null）退化为当前窗口跳转，
-      // 否则用户点了"打印"却什么都不发生，比跳走更糟。
-      const w = window.open(href, "_blank");
-      if (!w) {
-        this.$router.push({ path: "/workflow/print", query: { businessId: businessId } });
-      }
+      // 页内浮层打开（不跳转、不开新窗口）。
+      // 原实现是 window.open 新窗口，被浏览器拦截时还会退化成当前窗口跳转 ——
+      // 等于把用户从列表上带走，回来时筛选与分页都丢了。
+      this.$openPrintPreview(businessId);
     },
     // 行点击
     handleRowClick(row, column, event) {
