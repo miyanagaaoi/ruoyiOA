@@ -57,7 +57,7 @@
           </div>
           <div v-if="showComment" class="sb-comment">{{ n.comment || '' }}</div>
           <div class="sb-sign">
-            <img v-if="n.signFileId" :src="signUrl(n.signFileId)" alt="签名" />
+            <img v-if="signUrls[n.taskId]" :src="signUrls[n.taskId]" alt="签名" />
             <span v-else class="sb-sign-empty">（签名）</span>
           </div>
         </div>
@@ -101,7 +101,7 @@
 
 <script>
 import StateBlock from '@/components/StateBlock'
-import { getPrintData, addPrintLog } from '@/api/workflow/print'
+import { getPrintData, addPrintLog, getFileBlob } from '@/api/workflow/print'
 import { describeError } from '@/utils/errorMessage'
 
 /** A4 版心高度（297mm - 上下各 12mm）换算成 96dpi 下的像素，用于估算页数 */
@@ -131,7 +131,14 @@ export default {
        */
       optionMap: {},
       /** 开关翻译表：字段 -> { 'true': '是', 'false': '否' }（el-switch 的 active/inactive） */
-      switchMap: {}
+      switchMap: {},
+      /**
+       * 签名图片的对象 URL：taskId -> blob URL。
+       * 不能直接用 `<img :src="'/file/operate/downloadfile?fileId=' + id">` ——
+       * 那个接口是 POST，GET 会返回 "Request method 'GET' not supported"。
+       * 所以先取 blob 再转对象 URL，并在组件销毁时释放，避免内存泄漏。
+       */
+      signUrls: {}
     }
   },
   computed: {
@@ -191,6 +198,7 @@ export default {
         return
       }
       this.state = 'loading'
+      this.releaseSignUrls()
       getPrintData(this.businessId, this.printTplId)
         .then(res => {
           const d = res && res.data
@@ -200,6 +208,7 @@ export default {
           }
           this.data = d
           this.applyFormData(d.formData)
+          this.loadSignImages(d.nodes)
           this.$nextTick(() => {
             this.measurePages()
             this.state = 'ready'
@@ -259,6 +268,37 @@ export default {
       window.close()
       // 浏览器可能不允许脚本关闭非脚本打开的窗口，退化为返回
       this.$router.push('/index')
+    },
+
+    /**
+     * 取签名图片。签名是**只读展示**，取不到时不该让整张打印件失败 ——
+     * 单张失败只记一条告警，那一栏留空（正好还是"供手写"的语义）。
+     */
+    loadSignImages(nodes) {
+      const list = (nodes || []).filter(n => n && n.signFileId && n.taskId)
+      list.forEach(n => {
+        getFileBlob(n.signFileId)
+          .then(res => {
+            const blob = res && res.data ? res.data : res
+            if (!blob) return
+            this.$set(this.signUrls, n.taskId, window.URL.createObjectURL(blob))
+          })
+          .catch(() => {
+            console.warn('打印：签名图片加载失败 taskId=' + n.taskId + ' fileId=' + n.signFileId)
+          })
+      })
+    },
+
+    /** 释放对象 URL */
+    releaseSignUrls() {
+      Object.keys(this.signUrls).forEach(k => {
+        try {
+          window.URL.revokeObjectURL(this.signUrls[k])
+        } catch (e) {
+          /* 忽略 */
+        }
+      })
+      this.signUrls = {}
     },
 
     /* ---------- field_map ---------- */
@@ -509,12 +549,10 @@ export default {
       if (n < 1024) return n + ' B'
       if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
       return (n / 1024 / 1024).toFixed(2) + ' MB'
-    },
-
-    /** 签名图片地址（签名功能落地前不会用到） */
-    signUrl(fileId) {
-      return process.env.VUE_APP_BASE_API + '/file/operate/downloadfile?fileId=' + fileId
     }
+  },
+  beforeDestroy() {
+    this.releaseSignUrls()
   }
 }
 </script>
