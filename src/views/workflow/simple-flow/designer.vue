@@ -42,80 +42,11 @@
       <el-col :span="10">
         <el-card shadow="never" class="pane">
           <div slot="header" class="pane-head">
-            <span>节点清单</span>
-            <span class="tip">上下顺序即流转顺序</span>
+            <span>流程画布</span>
+            <span class="tip">点节点配置 · 点 + 插入 · 分支并列</span>
           </div>
 
-          <div class="node-list">
-            <div v-for="(node, idx) in flow.nodes" :key="node.id" class="node-wrap">
-              <div
-                class="node-card"
-                :class="{ active: selectionIndex === idx, sys: isSys(node) }"
-                @click="selectNode(idx)"
-              >
-                <span v-if="!isSys(node)" class="idx">{{ idx }}</span>
-                <span v-else class="idx dot">●</span>
-                <span class="nm">{{ node.name || typeLabel(node.type) }}</span>
-                <span class="summary">{{ summary(node) }}</span>
-              </div>
-
-              <!-- 条件分支：内嵌子清单 -->
-              <div v-if="node.type === 'condition'" class="branch-box">
-                <div v-for="(b, bi) in node.branches" :key="b.id" class="branch-item">
-                  <div class="branch-head">
-                    <span class="branch-name">{{ b.name || ('分支' + (bi + 1)) }}</span>
-                    <span v-if="b.defaultBranch" class="tag-default">系统兜底</span>
-                    <span v-else class="cond-chip">{{ condText(b) }}</span>
-                    <el-button v-if="!b.defaultBranch" type="text" size="mini" @click.stop="openCondition(node, b)">编辑条件</el-button>
-                    <el-button v-if="!b.defaultBranch" type="text" size="mini" @click.stop="removeBranch(node, bi)">删除</el-button>
-                    <el-dropdown class="fr" trigger="click" @command="cmd => addBranchNode(node, b, cmd)">
-                      <el-button type="text" size="mini">＋节点</el-button>
-                      <el-dropdown-menu slot="dropdown">
-                        <el-dropdown-item command="approve">审批节点</el-dropdown-item>
-                        <el-dropdown-item command="handle">办理节点</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </el-dropdown>
-                  </div>
-                  <div class="branch-body">
-                    <span
-                      v-for="(sn, si) in b.nodes"
-                      :key="sn.id"
-                      class="sub-node"
-                      :class="{ active: isSubActive(node, b, si) }"
-                      role="button"
-                      tabindex="0"
-                      :title="'配置节点：' + sn.name"
-                      @click.stop="selectSubNode(node, b, si)"
-                      @keyup.enter="selectSubNode(node, b, si)"
-                    >
-                      {{ sn.name }}
-                      <em class="sub-sum">{{ summary(sn) }}</em>
-                      <i class="el-icon-setting" title="配置该节点" @click.stop="selectSubNode(node, b, si)" />
-                      <i class="el-icon-close" title="删除" @click.stop="removeBranchNode(node, b, si)" />
-                    </span>
-                    <span v-if="!b.nodes.length" class="tip warn">空分支｜发布会被拦截</span>
-                  </div>
-                </div>
-                <el-button type="text" size="mini" icon="el-icon-plus" @click.stop="addBranch(node)">添加分支</el-button>
-              </div>
-
-              <div class="insert-line">
-                <el-dropdown trigger="click" @command="cmd => insertNode(idx + 1, cmd)">
-                  <el-button type="text" size="mini" icon="el-icon-plus">插入节点</el-button>
-                  <el-dropdown-menu slot="dropdown">
-                    <el-dropdown-item command="approve">审批节点</el-dropdown-item>
-                    <el-dropdown-item command="handle">办理节点</el-dropdown-item>
-                    <el-dropdown-item command="condition">条件分支</el-dropdown-item>
-                    <el-dropdown-item command="parallel">并行分支（会审）</el-dropdown-item>
-                    <el-dropdown-item command="end">结束节点</el-dropdown-item>
-                  </el-dropdown-menu>
-                </el-dropdown>
-                <el-button type="text" size="mini" icon="el-icon-top" @click="moveNode(idx, -1)">上移</el-button>
-                <el-button type="text" size="mini" icon="el-icon-bottom" @click="moveNode(idx, 1)">下移</el-button>
-                <el-button v-if="!isSys(node)" type="text" size="mini" icon="el-icon-delete" @click="removeNode(idx)">删除</el-button>
-              </div>
-            </div>
-          </div>
+          <FlowTree :nodes="flow.nodes" :path-prefix="[]" />
         </el-card>
       </el-col>
 
@@ -359,6 +290,7 @@
 
 <script>
 import ConditionEditor from './ConditionEditor'
+import FlowTree from './FlowTree'
 import {
   getSimpleFlow,
   saveSimpleFlowDraft,
@@ -386,7 +318,7 @@ import {
  */
 export default {
   name: 'SimpleFlowDesigner',
-  components: { ConditionEditor },
+  components: { ConditionEditor, FlowTree },
   data() {
     return {
       flow: {
@@ -403,7 +335,14 @@ export default {
        * 条件分支内部的节点用 { kind:'branch', index, branchId, subIndex }——
        * 否则分支里的审批节点没法配置（发布时必然被 V-2「未配置参与人」拦下）。
        */
-      selection: { kind: 'top', index: 0 },
+      /**
+       * 选中路径：[节点下标, 泳道下标, 节点下标, 泳道下标, …] 交替。
+       * 偶数位 = 节点，奇数位 = 泳道；这样任意层嵌套都能寻址。
+       * （旧实现用 {kind,index,branchId,subIndex} 只能表达两层，嵌套一深就失效。）
+       */
+      selection: { path: [0] },
+      /** 已折叠的泳道，key = 路径字符串 */
+      collapsedLanes: {},
       saving: false,
       publishing: false,
       condVisible: false,
@@ -439,28 +378,62 @@ export default {
     }
   },
   computed: {
+    /** 路径解析器：偶数位=节点下标，奇数位=泳道下标 */
+    resolvePath() {
+      return path => {
+        if (!path || !path.length) return null
+        let nodes = this.flow.nodes
+        let cur = null
+        for (let d = 0; d < path.length; d++) {
+          const i = path[d]
+          if (d % 2 === 0) {
+            cur = nodes[i]
+            if (!cur) return null
+          } else {
+            const br = (cur.branches || [])[i]
+            if (!br) return null
+            cur = br
+            nodes = br.nodes || []
+          }
+        }
+        return cur
+      }
+    },
+    /** 当前选中的是节点（路径长度奇数） */
+    selectedNode() {
+      const p = this.selection.path || []
+      return p.length % 2 === 1 ? this.resolvePath(p) : null
+    },
+    /** 当前选中的是泳道（路径长度偶数且非空） */
+    selectedBranch() {
+      const p = this.selection.path || []
+      return p.length > 0 && p.length % 2 === 0 ? this.resolvePath(p) : null
+    },
     currentNode() {
-      const s = this.selection
-      if (!s) return null
-      const top = this.flow.nodes[s.index]
-      if (!top) return null
-      if (s.kind !== 'branch') return top
-      const branch = (top.branches || []).find(b => b.id === s.branchId)
-      if (!branch) return null
-      return branch.nodes[s.subIndex] || null
+      return this.selectedNode
     },
-    /** 当前选中项所在的顶层下标（分支内节点也会高亮其父卡片） */
-    selectionIndex() {
-      return this.selection ? this.selection.index : -1
-    },
-    /** 当前选中的是不是分支内的节点（用于面包屑提示） */
+    /** 面包屑：如「合同类型路由 / 分支1」 */
     currentBranchPath() {
-      const s = this.selection
-      if (!s || s.kind !== 'branch') return ''
-      const top = this.flow.nodes[s.index]
-      if (!top) return ''
-      const branch = (top.branches || []).find(b => b.id === s.branchId)
-      return (top.name || '条件分支') + ' / ' + (branch ? branch.name : '')
+      const p = this.selection.path || []
+      if (p.length < 3) return ''
+      const names = []
+      let nodes = this.flow.nodes
+      let cur = null
+      for (let d = 0; d < p.length; d++) {
+        const i = p[d]
+        if (d % 2 === 0) {
+          cur = nodes[i]
+          if (!cur) break
+          if (d < p.length - 1) names.push(cur.name || '节点')
+        } else {
+          const br = (cur.branches || [])[i]
+          if (!br) break
+          names.push(br.name || ('分支' + (i + 1)))
+          cur = br
+          nodes = br.nodes || []
+        }
+      }
+      return names.join(' / ')
     },
     /** 可作为条件的字段（只允许已设为必填的） */
     conditionFieldOptions() {
@@ -495,6 +468,33 @@ export default {
       }
     }
   },
+  /**
+   * 向递归画布组件（FlowTree）暴露回调。
+   * 用箭头函数绑定 this —— 直接传 vm.method 会丢上下文。
+   * 递归层不在模板里层层 $emit，避免深层事件穿透（见 doc/飞书流程设计页面.md §11）。
+   */
+  provide() {
+    const vm = this
+    return {
+      flowDesigner: {
+        isActive: p => vm.isActive(p),
+        isContainer: n => vm.isContainer(n),
+        isCollapsed: p => vm.isCollapsed(p),
+        typeLabel: t => vm.typeLabel(t),
+        summary: n => vm.summary(n),
+        nodeBadge: n => vm.nodeBadge(n),
+        kindClass: n => vm.kindClass(n),
+        condText: b => vm.condText(b),
+        select: p => vm.selectPath(p),
+        insertAfter: (p, t) => vm.insertAfter(p, t),
+        insertEmpty: p => vm.insertEmpty(p),
+        addBranch: p => vm.addBranchAt(p),
+        removeBranch: p => vm.removeBranchAt(p),
+        editCondition: p => vm.openConditionAt(p),
+        toggleLane: p => vm.toggleLane(p)
+      }
+    }
+  },
   created() {
     this.loadFormOptions()
     const id = this.$route.query.id
@@ -505,6 +505,130 @@ export default {
     }
   },
   methods: {
+    /* ================= 画布：路径寻址与结构编辑 ================= */
+    /** 该路径是否为当前选中项 */
+    isActive(path) {
+      const cur = this.selection.path || []
+      return cur.length === path.length && cur.every((v, i) => v === path[i])
+    },
+    /** 是否为分支容器（条件 / 并行） */
+    isContainer(node) {
+      return !!node && (node.type === 'condition' || node.type === 'parallel')
+    },
+    /** 节点卡片上的单字徽标 */
+    nodeBadge(node) {
+      if (!node) return '·'
+      return {
+        start: '起', end: '终', approve: '审', handle: '办',
+        cc: '抄', condition: '条', parallel: '并'
+      }[node.type] || '·'
+    },
+    /** 节点卡片的配色类（审批=橙、办理=绿、起止=灰蓝、容器=蓝、抄送=虚线） */
+    kindClass(node) {
+      if (!node) return ''
+      if (node.type === 'start' || node.type === 'end') return 'kind-sys'
+      if (node.type === 'condition' || node.type === 'parallel') return 'kind-container'
+      return 'kind-' + node.type
+    },
+    isCollapsed(path) {
+      return !!this.collapsedLanes[this.laneKey(path)]
+    },
+    toggleLane(path) {
+      const k = this.laneKey(path)
+      this.$set(this.collapsedLanes, k, !this.collapsedLanes[k])
+    },
+    laneKey(path) {
+      return (path || []).join('-')
+    },
+    selectPath(path) {
+      this.selection = { path: (path || []).slice() }
+    },
+    /**
+     * 取 path 末位元素所在的同级数组。
+     * 例：[2] → 顶层数组；[2,1,3] → 顶层[2].branches[1].nodes
+     */
+    siblingsOf(path) {
+      let nodes = this.flow.nodes
+      for (let d = 0; d + 1 < path.length; d += 2) {
+        const node = nodes[path[d]]
+        if (!node) return null
+        const br = (node.branches || [])[path[d + 1]]
+        if (!br) return null
+        if (!br.nodes) {
+          this.$set(br, 'nodes', [])
+        }
+        nodes = br.nodes
+      }
+      return nodes
+    },
+    createNode(type) {
+      if (type === 'condition') return this.newCondition()
+      if (type === 'parallel') return this.newParallel()
+      if (type === 'end') return this.newEnd()
+      if (type === 'handle') return Object.assign(this.newApprove('办理节点'), { type: 'handle' })
+      if (type === 'cc') {
+        return {
+          id: 'cc_' + Date.now(),
+          type: 'cc',
+          name: '抄送节点',
+          ccers: [],
+          signMode: 'NONE'
+        }
+      }
+      return this.newApprove()
+    },
+    /** 在 path 指向的节点之后插入 */
+    insertAfter(path, type) {
+      const nodes = this.siblingsOf(path)
+      if (!nodes) return
+      const idx = path[path.length - 1]
+      nodes.splice(idx + 1, 0, this.createNode(type))
+      this.selectPath(path.slice(0, -1).concat([idx + 1]))
+    },
+    /** 空链（空泳道）里添加第一个节点；path 为泳道路径 */
+    insertEmpty(path) {
+      const nodes = this.siblingsOf(path)
+      if (!nodes) return
+      nodes.push(this.createNode('approve'))
+      this.selectPath(path.concat([nodes.length - 1]))
+    },
+    /** 给容器加一条分支（兜底分支永远排最后） */
+    addBranchAt(path) {
+      const node = this.resolvePath(path)
+      if (!this.isContainer(node)) return
+      if (!node.branches) {
+        this.$set(node, 'branches', [])
+      }
+      const n = node.branches.filter(b => !b.defaultBranch).length + 1
+      const branch = {
+        id: 'b_' + Date.now(),
+        name: '分支' + n,
+        groups: [{ logic: 'AND', rows: [{ field: '', op: 'EQ', value: '' }] }],
+        nodes: [this.newApprove('分支内审批')]
+      }
+      const fallbackIndex = node.branches.findIndex(b => b.defaultBranch)
+      if (fallbackIndex >= 0) {
+        node.branches.splice(fallbackIndex, 0, branch)
+      } else {
+        node.branches.push(branch)
+      }
+      this.selectPath(path.concat([fallbackIndex >= 0 ? fallbackIndex : node.branches.length - 1]))
+    },
+    /** 删除一条分支；path 为泳道路径 */
+    removeBranchAt(path) {
+      const laneIdx = path[path.length - 1]
+      const node = this.resolvePath(path.slice(0, -1))
+      if (!this.isContainer(node)) return
+      node.branches.splice(laneIdx, 1)
+      this.selectPath(path.slice(0, -1))
+    },
+    /** 打开图形化条件编辑器；path 为泳道路径 */
+    openConditionAt(path) {
+      this.condNode = this.resolvePath(path.slice(0, -1))
+      this.condBranch = this.resolvePath(path)
+      this.condVisible = true
+    },
+
     /* ---------------- 表单字段（自动提取） ---------------- */
     loadFormOptions() {
       listDynamicForm({ pageNum: 1, pageSize: 200 }).then(res => {
@@ -534,7 +658,7 @@ export default {
         this.newApprove('集团分管领导'),
         this.newEnd()
       ]
-      this.selection = { kind: 'top', index: 1 }
+      this.selection = { path: [1] }
     },
     loadFlow(id) {
       getSimpleFlow(id).then(res => {
@@ -556,7 +680,7 @@ export default {
           this.$modal.msgError('流程内容不是合法 JSON')
           this.flow.nodes = []
         }
-        this.selection = { kind: 'top', index: 0 }
+        this.selection = { path: [0] }
       })
     },
     /* ---------------- 节点工厂 ---------------- */
@@ -619,89 +743,13 @@ export default {
         signTypes: ['HANDWRITE', 'PRESET']
       }
     },
-    /* ---------------- 节点操作 ---------------- */
-    insertNode(index, type) {
-      const node = type === 'condition'
-        ? this.newCondition()
-        : type === 'parallel'
-          ? this.newParallel()
-          : type === 'end'
-            ? this.newEnd()
-            : this.newApprove()
-      this.flow.nodes.splice(index, 0, node)
-      this.selection = { kind: 'top', index: index }
-    },
-    removeNode(index) {
-      this.flow.nodes.splice(index, 1)
-      const cur = this.selection
-      if (cur && cur.kind === 'top' && cur.index >= this.flow.nodes.length) {
-        this.selection = { kind: 'top', index: Math.max(0, this.flow.nodes.length - 1) }
-      }
-    },
-    moveNode(index, delta) {
-      const target = index + delta
-      if (target < 0 || target >= this.flow.nodes.length) return
-      const arr = this.flow.nodes
-      const tmp = arr[index]
-      this.$set(arr, index, arr[target])
-      this.$set(arr, target, tmp)
-      this.selection = { kind: 'top', index: target }
-    },
-    selectNode(index) {
-      this.selection = { kind: 'top', index: index }
-    },
-    /** 选中条件分支内部的节点（分支里的审批节点同样需要配置参与人） */
-    selectSubNode(node, branch, subIndex) {
-      const index = this.flow.nodes.indexOf(node)
-      this.selection = { kind: 'branch', index: index, branchId: branch.id, subIndex: subIndex }
-    },
-    isTopActive(index) {
-      const s = this.selection
-      return !!s && s.kind === 'top' && s.index === index
-    },
-    isSubActive(node, branch, subIndex) {
-      const s = this.selection
-      return !!s && s.kind === 'branch' && s.branchId === branch.id && s.subIndex === subIndex &&
-        this.flow.nodes[s.index] === node
-    },
     /* ---------------- 条件分支 ---------------- */
-    openCondition(node, branch) {
-      this.condNode = node
-      this.condBranch = branch
-      this.condVisible = true
-    },
+
     onConditionSave(groups) {
       if (this.condBranch) {
         this.$set(this.condBranch, 'groups', groups)
         this.$modal.msgSuccess('条件已更新')
       }
-    },
-    addBranch(node) {
-      const n = node.branches.filter(b => !b.defaultBranch).length + 1
-      // 兜底分支始终排最后
-      const fallbackIndex = node.branches.findIndex(b => b.defaultBranch)
-      const branch = {
-        id: 'b_' + Date.now(),
-        name: '分支' + n,
-        groups: [{ logic: 'AND', rows: [{ field: '', op: 'EQ', value: '' }] }],
-        nodes: [this.newApprove('分支内审批')]
-      }
-      if (fallbackIndex >= 0) {
-        node.branches.splice(fallbackIndex, 0, branch)
-      } else {
-        node.branches.push(branch)
-      }
-    },
-    removeBranch(node, index) {
-      node.branches.splice(index, 1)
-    },
-    addBranchNode(node, branch, type) {
-      const n = type === 'handle' ? Object.assign(this.newApprove('分支内办理'), { type: 'handle' }) : this.newApprove('分支内审批')
-      branch.nodes.push(n)
-      this.selectSubNode(node, branch, branch.nodes.length - 1)
-    },
-    removeBranchNode(node, branch, index) {
-      branch.nodes.splice(index, 1)
     },
     condText(branch) {
       const groups = branch.groups || []
