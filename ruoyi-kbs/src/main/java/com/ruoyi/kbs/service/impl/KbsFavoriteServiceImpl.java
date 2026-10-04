@@ -48,12 +48,22 @@ public class KbsFavoriteServiceImpl implements IKbsFavoriteService {
             return Collections.emptyList();
         }
         // 按组ID分组
+        // ⚠ 「未分组收藏」是合法状态（group_id 为空），而 Collectors.groupingBy 的分类键为
+        //    null 时 JDK 必然抛 "element cannot be mapped to a null key"，会把整个收藏页打挂；
+        //    同时 null 混进 groupIds 还会让下面的 IN 查询带上 null。
+        //    这里把未分组收藏单独归到「未分组」，既不丢数据也不再崩。
         Map<String, List<KbsFavorite>> kbsFavoriteListMap = kbsFavorites.stream()
+                .filter(favorite -> StringUtils.isNotEmpty(favorite.getGroupId()))
                 .collect(Collectors.groupingBy(KbsFavorite::getGroupId));
-        // 收藏组
+        // 收藏组（空组不下发到 IN 查询）
         List<String> groupIds = kbsFavorites.stream()
-                .map(KbsFavorite::getGroupId).collect(Collectors.toList());
-        List<KbsFavoriteGroup> kbsFavoriteGroups = kbsFavoriteGroupService.listKbsFavoriteGroupByIds(groupIds);
+                .map(KbsFavorite::getGroupId)
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        List<KbsFavoriteGroup> kbsFavoriteGroups = CollectionUtils.isEmpty(groupIds)
+                ? Collections.emptyList()
+                : kbsFavoriteGroupService.listKbsFavoriteGroupByIds(groupIds);
         List<KbsFavoriteGroupVo> kbsFavoriteGroupVos = new ArrayList<>();
         for (KbsFavoriteGroup group : kbsFavoriteGroups) {
             List<KbsFavorite> kbsFavoritesByGroupId = kbsFavoriteListMap.get(group.getId());
@@ -61,6 +71,16 @@ public class KbsFavoriteServiceImpl implements IKbsFavoriteService {
                 continue;
             }
             kbsFavoriteGroupVos.add(buildKbsFavoriteGroupVo(group, kbsFavoritesByGroupId));
+        }
+        // 未分组的收藏仍要展示出来，否则用户会以为收藏丢了
+        List<KbsFavorite> ungrouped = kbsFavorites.stream()
+                .filter(favorite -> StringUtils.isEmpty(favorite.getGroupId()))
+                .collect(Collectors.toList());
+        if (CollectionUtils.isNotEmpty(ungrouped)) {
+            KbsFavoriteGroup placeholder = new KbsFavoriteGroup();
+            placeholder.setId("");
+            placeholder.setName("未分组");
+            kbsFavoriteGroupVos.add(buildKbsFavoriteGroupVo(placeholder, ungrouped));
         }
         return kbsFavoriteGroupVos;
     }

@@ -306,7 +306,12 @@ public class ScheduleServiceImpl implements IScheduleService {
             }
         });
         // 按日期分组
-        return listDTO.stream().collect(Collectors.groupingBy(s -> DateUtils.dateTime(s.getStartTime())));
+        // ⚠ 两处 NPE：DateUtils.dateTime(null) 自身就会抛（SimpleDateFormat.format(null)），
+        //   而 Collectors.groupingBy 的分类键为 null 同样会抛
+        //   （"element cannot be mapped to a null key"）。
+        //   没有开始时间的日程本来就落不到日历上，统一兜成空串 —— 前端按具体日期取键，会自然忽略它。
+        return listDTO.stream().collect(Collectors.groupingBy(
+                s -> s.getStartTime() == null ? "" : StringUtils.defaultString(DateUtils.dateTime(s.getStartTime()))));
     }
 
     /**
@@ -320,8 +325,13 @@ public class ScheduleServiceImpl implements IScheduleService {
         List<String> result = new ArrayList<>();
         List<Schedule> list = listMonthScheduleList(schedule);
         list.stream().forEach(s -> {
+            // 同上：没有开始时间的日程不参与「有日程的日期」集合，
+            // 否则 DateUtils.dateTime(null) 直接抛 NPE，整个日历面板取不到日期
+            if (s.getStartTime() == null) {
+                return;
+            }
             String date = DateUtils.dateTime(s.getStartTime());
-            if (!result.contains(date)) {
+            if (StringUtils.isNotEmpty(date) && !result.contains(date)) {
                 result.add(date);
             }
         });

@@ -185,7 +185,12 @@ public class KbsDocumentCommentServiceImpl implements IKbsDocumentCommentService
      */
     private Map<String, List<KbsDocumentComment>> getChildrenComments(List<String> commentIds) {
         List<KbsDocumentComment> childrenComments = kbsDocumentCommentMapper.selectKbsDocumentCommentByParentIds(commentIds);
+        // ⚠ Collectors.groupingBy 的分类键为 null 时抛 "element cannot be mapped to a null key"。
+        //   子评论按 rootParentId 分组的目的是供上层用「父评论 id」去取（childrenCommentListMap.get(id)），
+        //   而不带 rootParentId 的评论本来就挂不到任何父评论下（取用时也永远取不到），
+        //   故直接过滤，而不是让整个评论列表崩掉。
         return childrenComments.stream()
+                .filter(comment -> StringUtils.isNotEmpty(comment.getRootParentId()))
                 .collect(Collectors.groupingBy(KbsDocumentComment::getRootParentId));
     }
 

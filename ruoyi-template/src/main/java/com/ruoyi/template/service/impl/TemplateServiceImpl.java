@@ -211,15 +211,25 @@ public class TemplateServiceImpl implements ITemplateService {
             return templateModels;
         }
         // 按类型分组
+        // ⚠ Collectors.groupingBy 的分类键为 null 时抛 "element cannot be mapped to a null key"：
+        //   只要有一条模板没选分类，整个「新启流程」列表就 500。
+        //   空分类的模板本来也匹配不到任何模板分类行（下方结果由 templateTypList 驱动），
+        //   这里空键归入同一组、并把它排除出分类查询，不再连累整页。
         Map<String, List<Template>> templateTypeMap = templates.stream()
                 .collect(Collectors.groupingBy(
-                        Template::getType,
+                        item -> StringUtils.defaultString(item.getType()),
                         () -> new LinkedHashMap<>(),
                         Collectors.toList()
                 ));
         // 按模板类型的顺序进行排序
-        List<String> templateTypes = templates.stream().map(Template::getType).distinct().collect(Collectors.toList());
-        List<TemplateType> templateTypList = templateTypeService.listTemplateType(templateTypes);
+        List<String> templateTypes = templates.stream()
+                .map(Template::getType)
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        List<TemplateType> templateTypList = CollectionUtils.isEmpty(templateTypes)
+                ? new ArrayList<>()
+                : templateTypeService.listTemplateType(templateTypes);
         for (TemplateType templateType : templateTypList) {
             String typeId = templateType.getId();
             if (!templateTypeMap.containsKey(typeId)) {
