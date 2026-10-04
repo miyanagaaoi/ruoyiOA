@@ -3,13 +3,27 @@
 > 本文件记录**本机实际可用**的配置（而非项目默认值）。
 > 体检时间：2026-10-03 18:35 ｜ 修复落地：2026-10-03 18:50
 
+## ⚡ 重启设备后，先跑这两条
+
+```powershell
+cd H:\dsh\ruoyiOA
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-env.ps1      # 一键起全部服务
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1 # 重新登录拿 token
+```
+
+详见 **§4 常用命令**。（本机没有 `pwsh`，只有 Windows PowerShell 5.1，用 `powershell`。）
+
+---
+
 工程位置：
 
 | 目录 | 说明 |
 | --- | --- |
+| `H:\dsh\ruoyiOA\start-env.ps1` | **一键启动全部服务（幂等，可反复跑）** |
+| `H:\dsh\ruoyiOA\stop-env.ps1` | **停止本项目后端/前端（`-IncludeInfra` 连基础设施一起停）** |
 | `H:\dsh\ruoyiOA\ruoyi-vue-oa-master` | 后端（Maven 多模块，28 个模块） |
 | `H:\dsh\ruoyiOA\ruoyi-vue-oa-ui-master` | 前端（Vue2 + Element UI + Vue CLI 4） |
-| `H:\dsh\ruoyiOA\tools` | 环境辅助脚本 |
+| `H:\dsh\ruoyiOA\tools` | 环境辅助脚本（启动 MQ / 登录 / 流程回归 / RSA 加密） |
 | `H:\dsh\ruoyiOA\doc\参考文档` | 审批单等需求参考素材 |
 | `H:\dsh\ruoyiOA\logs` | 后端 / 前端 / broker / RabbitMQ 运行日志 |
 
@@ -19,16 +33,19 @@
 
 | 端口 | 服务 | 启动方式 | 数据目录 |
 | --- | --- | --- | --- |
-| 80 | 前端 dev server | `npm run dev` | — |
-| 8080 | ruoyi-admin 后端 | `java -jar ruoyi-admin/target/ruoyi-admin.jar` | `H:\dsh\ruoyiOA\uploadPath` |
-| 3306 | MySQL 8.0.40 | `H:\dsh\OA\oa-deploy\runtime\start-local.ps1 -SkipApp` | `H:\dsh\OA\oa-deploy\runtime\mysql\data` |
+| 80 | 前端 dev server | `.\start-env.ps1`（或 `npm.cmd run dev`） | — |
+| 8080 | ruoyi-admin 后端 | `.\start-env.ps1`（或 `java -jar ruoyi-admin/target/ruoyi-admin.jar`） | `H:\dsh\ruoyiOA\uploadPath` |
+| 3306 | MySQL 8.0.40 | `.\start-env.ps1`（内部调 `start-local.ps1 -SkipApp`） | `H:\dsh\OA\oa-deploy\runtime\mysql\data` |
 | 6379 | Redis 5.0.14.1 | 同上 | `H:\dsh\OA\oa-deploy\runtime\redis` |
-| 5672 | RabbitMQ 3.12.14 | `H:\dsh\ruoyiOA\tools\start-rabbitmq.ps1` | `H:\dsh\ruoyiOA\.cache\rabbitmq` |
+| 5672 | RabbitMQ 3.12.14 | `.\start-env.ps1`（或 `tools\start-rabbitmq.ps1`） | `H:\dsh\ruoyiOA\.cache\rabbitmq` |
 | 8544 | ruoyi-im-broker（Netty WebSocket `/im`） | `java -jar ruoyi-im-broker/target/ruoyi-im-broker.jar` | — |
 | 15672 | RabbitMQ 控制台 ✅ 已启用 | 随 broker 自动启动 | — |
 | 8012 | kkFileView 附件在线预览（**未部署**） | 需另行部署 | — |
 
 > ⚠️ MySQL / Redis 与同机另一个项目 `H:\dsh\OA` **共用同一套实例**，不要随意改 root 口令或删库。
+> ⚠️ `H:\dsh\OA\oa-deploy\runtime\start-local.ps1` **必须加 `-SkipApp`** —— 不加它会去起
+> `H:\dsh\OA\oa-server`，而那个应用同样监听 **8080**，会把本项目的后端顶掉。
+
 
 ## 2. 账号与凭据
 
@@ -98,15 +115,50 @@ legacy-peer-deps=true
 
 ## 4. 常用命令
 
+### 4.1 一键启停（推荐，脚本在仓库根目录）
+
+```powershell
+cd H:\dsh\ruoyiOA
+
+# 启动全部：MySQL → Redis → RabbitMQ → 后端 8080 → 前端 80
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-env.ps1
+
+# 常用变体
+powershell ... -File .\start-env.ps1 -Only Infra        # 只起 MySQL/Redis/MQ
+powershell ... -File .\start-env.ps1 -SkipFrontend      # 不起前端（后端联调用）
+powershell ... -File .\start-env.ps1 -Rebuild           # 先重新打包后端再起
+
+# 停止（默认只停本项目的后端 + 前端，基础设施保留）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\stop-env.ps1
+powershell ... -File .\stop-env.ps1 -IncludeInfra       # 连 MySQL/Redis/MQ 一起停
+
+# 重新登录拿 token（token 会过期；重启用接口脚本前先跑这个）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1
+
+# 简化流程组合矩阵回归（跑在真实环境上，20 条断言）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\flow-regression.ps1
+```
+
+两个脚本都是**幂等**的（端口已监听就跳过），可反复执行；所有进程用 WMI 拉起，
+完全脱离调用方句柄，不会把终端/CI 挂住。
+
+> ⚠️ 本机**没有 `pwsh`**，只有 Windows PowerShell 5.1，必须用 `powershell`。
+> ⚠️ 这三个 `.ps1` 都存成 **UTF-8 with BOM** —— 5.1 读无 BOM 的 UTF-8 会把中文注释
+> 当 ANSI 解码，直接 `Unexpected token` 解析失败。新增脚本时务必保持带 BOM。
+
+### 4.2 手动命令（脚本出问题时的对照）
+
 ```powershell
 # ---- 基础设施（按顺序）----
 powershell -NoProfile -ExecutionPolicy Bypass -File "H:\dsh\OA\oa-deploy\runtime\start-local.ps1" -SkipApp   # MySQL + Redis
 powershell -NoProfile -ExecutionPolicy Bypass -File "H:\dsh\ruoyiOA\tools\start-rabbitmq.ps1"                  # RabbitMQ
+# ⚠️ start-local.ps1 **必须加 -SkipApp**：不加它会去起 H:\dsh\OA\oa-server，
+#    而那个应用同样监听 8080，会把本项目的后端顶掉。
 
 # ---- 后端：构建（无需设置 JAVA_HOME，toolchains 会自动用 JDK 11）----
 cd H:\dsh\ruoyiOA\ruoyi-vue-oa-master
 mvn -B -DskipTests install                       # 全量
-mvn -B -DskipTests -pl ruoyi-admin package       # 单模块（已修复，不带 -am 也可用）
+mvn -B -DskipTests -pl ruoyi-admin clean package # 单模块（**要 clean**，否则可能把旧子模块打进 jar）
 
 # ---- 后端：运行（必须用 JDK 11 的 java）----
 & "D:\Program Files\Java\jdk-11\bin\java.exe" -jar ruoyi-admin\target\ruoyi-admin.jar
@@ -114,9 +166,19 @@ mvn -B -DskipTests -pl ruoyi-admin package       # 单模块（已修复，不�
 
 # ---- 前端 ----
 cd H:\dsh\ruoyiOA\ruoyi-vue-oa-ui-master
-npm run dev            # http://localhost/
+npm.cmd run dev        # http://localhost/   （必须 npm.cmd：npm.ps1 被执行策略拦下，日志为空）
 npm run build:prod     # 产物 dist/
 ```
+
+### 4.3 重启设备后的恢复顺序
+
+1. `.\start-env.ps1`（一条命令起全部）
+2. `.\tools\oa-login.ps1` —— **重新登录**。token 有有效期，不重新登录的话接口脚本会报
+   「认证失败，无法访问系统资源」。
+   > 判断 token 是否有效要**校验响应里的 `code`**，不能只看某个字段空不空 ——
+   > 401 的响应体同样是没有 `total` 字段的错误对象，容易被误读成"调用成功"。
+3. `.\tools\flow-regression.ps1` 确认流程引擎无回归
+
 
 ## 5. 体检发现与处理状态
 
