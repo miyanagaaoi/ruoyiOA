@@ -271,6 +271,22 @@ git config user.name "你的名字" ; git config user.email "you@example.com"
       **SPA 的 HTML**（`text/html`），图是取不到的。
     落了库的路径字符串（如签名记录的 `file_id`）建议按"以 `/` 开头 = 可直接访问的相对路径"
     来判定，否则再走文件模块的 POST 取 blob。
+21. **后端不要用"会话的后台任务"方式启动，要用脱离进程**（已踩过两次）。
+    用后台任务（`pwsh ... & java -jar ...`）启动时，任务结束时**进程会被一起杀掉** ——
+    表现为任务以 `exit code: 1` 结束、日志停在一条正常的查询上、
+    **没有任何异常栈**（Windows 下强杀就是没有信号标记的 exit 1）。
+    很容易误判成"后端崩了"，其实是"被清理了"。
+    正确做法：
+    ```powershell
+    $java = "D:\Program Files\Java\jdk-11\bin\java.exe"
+    $jar  = "H:\dsh\ruoyiOA\ruoyi-vue-oa-master\ruoyi-admin\target\ruoyi-admin.jar"
+    Start-Process -FilePath $java -ArgumentList @('-jar', $jar) `
+      -RedirectStandardOutput "H:\dsh\ruoyiOA\logs\backend-out.log" `
+      -RedirectStandardError  "H:\dsh\ruoyiOA\logs\backend-err.log" `
+      -WindowStyle Hidden -PassThru
+    ```
+    判断"是崩溃还是被清理"的方法：看日志末尾有没有异常栈。**只有异常的才是崩溃。**
+    另外：**杀后端之前别忘了它也占着 `ruoyi-admin.jar`**（见第 13 条）。
 
 ## 7. 结论
 
