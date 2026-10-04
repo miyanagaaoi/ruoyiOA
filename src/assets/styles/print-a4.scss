@@ -1,0 +1,276 @@
+/**
+ * A4 打印样式（PRD 7.3 / 7.5）
+ *
+ * 三条刻意的约束，都是为了规避各浏览器打印差异：
+ *   1. **不使用 Element 主题变量**，也不使用 flex 做主要布局 —— 用 table 与块级流；
+ *   2. 字号用 pt（10.5pt ≈ 五号），字体优先 宋体/黑体，不依赖 webfont；
+ *   3. 打印与屏幕用两套尺寸：屏幕上按 A4 纸样居中预览，打印时交给 @page。
+ */
+
+/* 屏幕预览：A4 纸样 */
+@page {
+  size: A4 portrait;
+  margin: 12mm 10mm;
+}
+
+.print-page {
+  background: #f0f2f5;
+  min-height: 100vh;
+  padding: 16px 0 40px;
+}
+
+/* ---------- 屏幕上的工具条（打印时隐藏） ---------- */
+.print-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  width: 210mm;
+  margin: 0 auto 12px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.print-toolbar .tb-title {
+  font-weight: 600;
+  margin-right: auto;
+  color: #303133;
+}
+.print-toolbar .tb-hint {
+  color: #909399;
+  font-size: 12px;
+}
+
+/* ---------- A4 纸 ---------- */
+.print-paper {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 12mm 10mm;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+  color: #000;
+  font-family: SimSun, "宋体", "Songti SC", serif;
+  font-size: 10.5pt;
+  line-height: 1.6;
+  position: relative;
+}
+
+/* A. 抬头区 */
+.p-title {
+  text-align: center;
+  font-family: SimHei, "黑体", "Heiti SC", sans-serif;
+  font-size: 16pt;
+  font-weight: bold;
+  letter-spacing: 4px;
+  padding: 4mm 0 2mm;
+}
+.p-headline {
+  display: table;
+  width: 100%;
+  margin-bottom: 2mm;
+}
+.p-headline > .p-hl-left,
+.p-headline > .p-hl-right {
+  display: table-cell;
+  vertical-align: bottom;
+  font-size: 9pt;
+  color: #333;
+}
+.p-headline > .p-hl-right {
+  text-align: right;
+}
+
+/* B. 基本信息区：用 table，表头跨页可重复 */
+table.p-base {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+table.p-base th,
+table.p-base td {
+  border: 0.5pt solid #000;
+  padding: 1.5mm 2mm;
+  font-size: 10.5pt;
+  vertical-align: middle;
+  word-break: break-all;
+}
+table.p-base th {
+  background: #f7f7f7;
+  font-weight: normal;
+  font-family: SimHei, "黑体", sans-serif;
+  text-align: center;
+  width: 22mm;
+  white-space: nowrap;
+}
+/* 跨页时重复表头（PRD 7.5） */
+table.p-base thead {
+  display: table-header-group;
+}
+
+/* C. 签批栏 */
+.p-section-title {
+  font-family: SimHei, "黑体", sans-serif;
+  font-size: 11pt;
+  margin: 4mm 0 1.5mm;
+  padding-left: 2mm;
+  border-left: 3pt solid #000;
+}
+.sign-block {
+  border: 0.5pt solid #000;
+  border-top: none;
+  /* 签批栏不撕裂（PRD 7.5）——这条是打印件可读性的关键 */
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.sign-block:first-of-type {
+  border-top: 0.5pt solid #000;
+}
+.sign-block .sb-head {
+  background: #f7f7f7;
+  padding: 1.5mm 2mm;
+  font-family: SimHei, "黑体", sans-serif;
+  font-size: 10.5pt;
+  border-bottom: 0.5pt dashed #666;
+}
+.sign-block .sb-meta {
+  padding: 1.5mm 2mm;
+  font-size: 9pt;
+  color: #333;
+}
+.sign-block .sb-meta span {
+  margin-right: 8mm;
+}
+.sign-block .sb-comment {
+  padding: 1.5mm 2mm 2mm;
+  min-height: 12mm;
+  white-space: pre-wrap;
+  font-size: 10.5pt;
+}
+.sign-block .sb-sign {
+  padding: 0 2mm 2mm;
+  text-align: right;
+  min-height: 10mm;
+}
+.sign-block .sb-sign img {
+  max-height: 18mm;
+  max-width: 50mm;
+}
+.sign-block .sb-sign .sb-sign-empty {
+  color: #999;
+  font-size: 9pt;
+}
+.sign-block .sb-empty {
+  padding: 1.5mm 2mm;
+  color: #767676;
+  font-size: 9pt;
+}
+
+/* D. 附件清单 */
+table.p-attach {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4mm;
+  table-layout: fixed;
+}
+table.p-attach th,
+table.p-attach td {
+  border: 0.5pt solid #000;
+  padding: 1.2mm 2mm;
+  font-size: 9pt;
+}
+table.p-attach th {
+  background: #f7f7f7;
+  font-weight: normal;
+  font-family: SimHei, "黑体", sans-serif;
+}
+.p-empty-tip {
+  color: #767676;
+  font-size: 9pt;
+  padding: 2mm 0;
+}
+
+/* E. 水印 */
+.p-watermark {
+  position: fixed;
+  top: 40%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 30pt;
+  color: rgba(0, 0, 0, 0.07);
+  transform: rotate(-20deg);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* F. 页脚 */
+.p-footer {
+  margin-top: 6mm;
+  padding-top: 2mm;
+  border-top: 0.5pt solid #000;
+  font-size: 9pt;
+  color: #333;
+  display: table;
+  width: 100%;
+}
+.p-footer > .pf-left,
+.p-footer > .pf-right {
+  display: table-cell;
+}
+.p-footer > .pf-right {
+  text-align: right;
+}
+.p-footer .pf-note {
+  color: #555;
+}
+
+/* ================= 打印媒体 ================= */
+@media print {
+  /* 打印时把屏幕上的壳全部去掉：只留纸面 */
+  .print-page {
+    background: #fff;
+    padding: 0;
+    min-height: 0;
+  }
+  .print-paper {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+  /* 页脚每页固定（PRD 7.5） */
+  .p-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
+    background: #fff;
+  }
+  /* 链接不打印出 URL、不打印背景色差 */
+  a {
+    color: #000;
+    text-decoration: none;
+  }
+  tr,
+  td,
+  th {
+    page-break-inside: avoid;
+  }
+  .sign-block {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .p-section-title {
+    page-break-after: avoid;
+  }
+}

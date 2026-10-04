@@ -165,6 +165,22 @@ export const constantRoutes = [
       }
     ]
   },
+  {
+    // 表单打印预览页（二开，PRD 7.2 入口3）：由详情页/列表的 [打印] 新窗口打开，
+    // 也支持直链 /workflow/print?businessId=xxx&printTplId=yyy（需登录）。
+    // 放在 constantRoutes 里是因为它**不挂在任何菜单上**，靠菜单动态路由找不到它。
+    path: '/workflow',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'print',
+        component: () => import('@/views/workflow/print/index'),
+        name: 'WorkflowPrint',
+        meta: { title: '打印预览', icon: '' }
+      }
+    ]
+  },
 ]
 
 // 动态路由，基于用户权限动态去加载

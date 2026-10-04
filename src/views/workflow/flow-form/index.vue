@@ -53,6 +53,8 @@
               </div>
               <!-- 流程操作按钮 -->
               <div class="mb10 pull-right">
+                <!-- 表单打印（PRD 7.2 入口1：单据详情页）。对单据有查看权即可打印，不叠加权限点 -->
+                <el-button v-if="businessId" class="mt10 mb10" icon="el-icon-printer" size="mini" @click="printBtn">打印</el-button>
                 <el-button v-if="isReturn" type="primary" plain size="mini" @click="returnBtn">退回</el-button>
                 <el-button v-if="isReject" type="primary" plain size="mini" @click="rejectBtn">驳回</el-button>
                 <!-- 取回提交 -->
@@ -267,6 +269,17 @@ export default {
       });
     },
     /** 按钮方法 */
+    /**
+     * 打开打印预览页（新窗口，PRD 7.2 入口1）。
+     * 打印是只读动作；不传 printTplId，由服务端按单据模板挑启用的打印模板（无则用系统默认）。
+     */
+    printBtn() {
+      const { href } = this.$router.resolve({
+        path: '/workflow/print',
+        query: { businessId: this.businessId }
+      })
+      window.open(href, '_blank')
+    },
     handleButtonClick(btnCode) {
       switch (btnCode) {
         case "save":
