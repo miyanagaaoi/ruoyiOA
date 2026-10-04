@@ -104,15 +104,39 @@ public class TodoServiceImpl implements ITodoService {
             return Collections.emptyList();
         }
         // 按模板分类分组
-        List<String> templateTypes = list.stream().map(Todo::getTemplateType).distinct().collect(Collectors.toList());
-        List<TemplateType> templateTypList = templateTypeService.listTemplateType(templateTypes);
-        Map<String, String> templateMap = templateTypList.stream().collect(Collectors.toMap(TemplateType::getId, TemplateType::getName));
-        Map<String, List<Todo>> map = list.stream().collect(Collectors.groupingBy(Todo::getTemplateType));
+        // ⚠ 这里原有两处 NullPointerException 隐患（实测踩过：整张「首页待办折叠列表」500）：
+        //   1) Collectors.groupingBy 的**分类键为 null** 时抛
+        //      "element cannot be mapped to a null key" ——
+        //      待办的 template_type 为空即触发（例如由接口直接创建、未带 templateType 的待办）；
+        //   2) Collectors.toMap 的 **value 为 null** 时同样抛 NPE —— 模板分类没有名称时触发。
+        // 统一按「空模板分类归入"未分类"」处理：宁可多出一个未分类分组，
+        // 也不能让整个待办页因为一条脏数据而崩掉。
+        List<String> templateTypes = list.stream()
+                .map(Todo::getTemplateType)
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, String> templateMap = new HashMap<>();
+        if (CollectionUtils.isNotEmpty(templateTypes)) {
+            List<TemplateType> templateTypList = templateTypeService.listTemplateType(templateTypes);
+            if (CollectionUtils.isNotEmpty(templateTypList)) {
+                for (TemplateType templateType : templateTypList) {
+                    if (StringUtils.isNotEmpty(templateType.getId())) {
+                        templateMap.put(templateType.getId(), StringUtils.defaultString(templateType.getName()));
+                    }
+                }
+            }
+        }
+        Map<String, List<Todo>> map = list.stream()
+                .collect(Collectors.groupingBy(t -> StringUtils.defaultString(t.getTemplateType())));
         return map.entrySet().stream().map(entry -> {
             TodoCollapseResult result = new TodoCollapseResult();
             String templateTypeId = entry.getKey();
             result.setTemplateId(templateTypeId); // 此处仅用作前端展示时的折叠分类，不用作跳转
-            result.setTemplateName(templateMap.get(templateTypeId));
+            String templateName = templateMap.get(templateTypeId);
+            // 分类查不到名称时不要留 null（前端会渲染成空白分组），兜一个可读名字
+            result.setTemplateName(StringUtils.isNotEmpty(templateName) ? templateName
+                    : (StringUtils.isEmpty(templateTypeId) ? "未分类" : templateTypeId));
             result.setCount(entry.getValue().size());
             result.setTodoList(entry.getValue());
             return result;
