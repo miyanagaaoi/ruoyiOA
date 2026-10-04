@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workflow.mapper.UserSignPresetMapper">
+
+    <!-- 显式 resultMap：不依赖全局 map-underscore-to-camel-case，
+         否则开关一关字段会静默变 null（"默认签名取不到"这种问题很难查） -->
+    <resultMap type="com.ruoyi.workflow.domain.UserSignPreset" id="UserSignPresetResult">
+        <result property="id"         column="id"/>
+        <result property="userId"     column="user_id"/>
+        <result property="name"       column="name"/>
+        <result property="fileId"     column="file_id"/>
+        <result property="isDefault"  column="is_default"/>
+        <result property="status"     column="status"/>
+        <result property="delFlag"    column="del_flag"/>
+        <result property="createId"   column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateId"   column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectVo">
+        select id, user_id, name, file_id, is_default, status, del_flag,
+               create_id, create_time, update_id, update_time
+        from t_user_sign_preset
+    </sql>
+
+    <select id="selectByUserId" resultMap="UserSignPresetResult">
+        <include refid="selectVo"/>
+        where user_id = #{userId} and del_flag = '0'
+        order by is_default desc, create_time desc
+    </select>
+
+    <select id="selectById" resultMap="UserSignPresetResult">
+        <include refid="selectVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectDefault" resultMap="UserSignPresetResult">
+        <include refid="selectVo"/>
+        where user_id = #{userId} and del_flag = '0' and is_default = '1' and status = '1'
+        order by create_time desc
+        limit 1
+    </select>
+
+    <insert id="insert" parameterType="com.ruoyi.workflow.domain.UserSignPreset">
+        insert into t_user_sign_preset
+            (id, user_id, name, file_id, is_default, status, del_flag, create_id, create_time)
+        values
+            (#{id}, #{userId}, #{name}, #{fileId}, #{isDefault}, #{status}, #{delFlag}, #{createId}, sysdate())
+    </insert>
+
+    <update id="update" parameterType="com.ruoyi.workflow.domain.UserSignPreset">
+        update t_user_sign_preset
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="fileId != null">file_id = #{fileId},</if>
+            <if test="isDefault != null">is_default = #{isDefault},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            update_time = sysdate()
+        </set>
+        where id = #{id}
+    </update>
+
+    <!-- 只清"未删除且当前是默认"的行，避免把已删/非默认行也写一遍 update_time -->
+    <update id="clearDefault">
+        update t_user_sign_preset
+        set is_default = '0', update_time = sysdate()
+        where user_id = #{userId} and del_flag = '0' and is_default = '1'
+    </update>
+
+</mapper>

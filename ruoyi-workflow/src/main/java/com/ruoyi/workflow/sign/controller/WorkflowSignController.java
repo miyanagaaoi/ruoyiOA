@@ -5,10 +5,15 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.utils.ServletUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.workflow.domain.SignRecord;
+import com.ruoyi.workflow.domain.UserSignPreset;
 import com.ruoyi.workflow.sign.service.ISignService;
+import com.ruoyi.workflow.sign.service.IUserSignPresetService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,14 +23,16 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
- * <p> 签名与撤销（PRD 第 8 章 / 10.2-B） </p>
+ * <p> 签名 / 撤销 / 预存签名（PRD 第 8 章 / 10.2-B） </p>
  *
  * <p> 权限口径与打印一致：签名发生在"我自己的审批动作"上，
- * 能办这个任务就能签，因此只要求登录，不叠加单独权限点。 </p>
+ * 能办这个任务就能签，因此只要求登录，不叠加单独权限点。
+ * 预存签名同理 —— 服务端按当前登录用户过滤并校验归属，越权在服务端拒绝。 </p>
  *
- * <p> <b>未实现（下一段）</b>：{@code GET /workflow/sign/policy}（节点级签名策略）
- * 需要设计器把 {@code signMode/signTypes/signReuse} 写进 BPMN 扩展属性，
- * 属于"节点级配置"那一轮的工作。 </p>
+ * <p> <b>关于节点级签名策略</b>：编译器 {@code SimpleFlowCompiler} 已把
+ * {@code signMode / signTypes} 写进 BPMN 扩展属性，服务端读它做提交拦截
+ * （{@code TaskSignGuard}），前端也可通过任务的扩展变量拿到，故不再单独开
+ * {@code GET /workflow/sign/policy}。 </p>
  *
  * @author 二开
  */
@@ -35,6 +42,9 @@ public class WorkflowSignController extends BaseController {
 
     @Autowired
     private ISignService signService;
+
+    @Autowired
+    private IUserSignPresetService userSignPresetService;
 
     /**
      * 提交签名。
@@ -78,5 +88,49 @@ public class WorkflowSignController extends BaseController {
     @GetMapping("/record/effective")
     public AjaxResult effective(@RequestParam("businessId") String businessId) {
         return success(signService.effectiveSignByTask(businessId));
+    }
+
+    /* ==================== 预存签名（PRD 8.4 / AC-29、AC-30） ==================== */
+
+    /** 我的预存签名列表（默认签名排最前） */
+    @GetMapping("/preset/list")
+    public AjaxResult presetList() {
+        return success(userSignPresetService.listMine());
+    }
+
+    /**
+     * 我的默认预存签名。
+     *
+     * <p> 没有配过时 {@code data} 为 null —— 前端据此决定"一键使用默认签名"是否可用，
+     * 不要让它去猜。 </p>
+     */
+    @GetMapping("/preset/default")
+    public AjaxResult presetDefault() {
+        return success(userSignPresetService.getMyDefault());
+    }
+
+    /** 新增预存签名（手写采集或上传图片后，把 fileId 存下来）；第一枚自动成为默认 */
+    @PostMapping("/preset")
+    public AjaxResult presetAdd(@RequestBody UserSignPreset preset) {
+        return success(userSignPresetService.save(preset));
+    }
+
+    /** 改名 / 停用启用 */
+    @PutMapping("/preset")
+    public AjaxResult presetEdit(@RequestBody UserSignPreset preset) {
+        return success(userSignPresetService.update(preset));
+    }
+
+    /** 设为默认（服务端同一事务内先清后置，保证同一用户只有一个默认） */
+    @PutMapping("/preset/default/{id}")
+    public AjaxResult presetSetDefault(@PathVariable("id") String id) {
+        return success(userSignPresetService.setDefault(id));
+    }
+
+    /** 逻辑删除 */
+    @DeleteMapping("/preset/{id}")
+    public AjaxResult presetRemove(@PathVariable("id") String id) {
+        userSignPresetService.remove(id);
+        return success();
     }
 }
