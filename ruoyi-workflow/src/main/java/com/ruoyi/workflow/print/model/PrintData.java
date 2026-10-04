@@ -119,6 +119,15 @@ public class PrintData implements Serializable {
 
         /** 节点状态 */
         private String status;
+
+        /**
+         * 签批栏序号（1 起，按**流程节点**递增）。
+         *
+         * <p> AC-17 要求"签批栏数量与顺序 == 流程节点顺序"，AC-18 要求"会签节点多人时
+         * 同栏内按人分行"。所以这里给的是**节点**序号而不是任务序号：
+         * 同一会签节点的多人拥有相同的 {@code nodeIndex}，打印页据此合并成一栏、按人分行。 </p>
+         */
+        private Integer nodeIndex;
     }
 
     /** 附件清单行 */

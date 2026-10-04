@@ -9,6 +9,7 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.enums.WhetherStatus;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.flowable.domain.dto.FlowTaskDto;
+import com.ruoyi.flowable.domain.vo.FlowCommentVo;
 import com.ruoyi.flowable.factory.FlowServiceFactory;
 import com.ruoyi.flowable.service.IFlowTaskService;
 import com.ruoyi.workflow.domain.PrintLog;
@@ -30,7 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -172,8 +176,39 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * 取流程的流转记录（含处理意见）。
+     *
+     * <p> 必须<b>两个都调</b>，各自缺一半： </p>
+     * <ul>
+     *   <li> {@code flowHistoryRecord}：给**全部**活动（含进行中的当前节点 —— 签批栏要能看到
+     *        "已签但还没提交"的那一栏），但**不带处理意见**、也不按节点归并； </li>
+     *   <li> {@code flowCmts}：带处理意见（意见在 ACT_HI_COMMENT 里），但**只给已办结的活动** ——
+     *        只用它会让进行中的节点整栏消失（实测：AC-33 那张在跑的单据签批栏变空）。 </li>
+     * </ul>
+     * <p> 所以：以 {@code flowHistoryRecord} 的列表为准，按 taskId 把 {@code flowCmts} 的意见补上。
+     * 节点顺序与归并在 {@link #buildNodes} 里按签收时间自己排（那个 service 的"首次出现顺序"
+     * 实测不是时间序）。 </p>
+     */
     private List<FlowTaskDto> loadRecords(String procInsId) {
-        java.util.Map<String, Object> map = flowTaskService.flowHistoryRecord(procInsId, null, 1, RECORD_PAGE_SIZE);
+        List<FlowTaskDto> records = extractFlowList(flowTaskService.flowHistoryRecord(procInsId, null, 1, RECORD_PAGE_SIZE));
+        // 意见：只有已办结的任务有意见（进行中的任务提交时才写意见），查不到就留空
+        Map<String, String> commentMap = new HashMap<>();
+        for (FlowTaskDto t : extractFlowList(flowTaskService.flowCmts(procInsId, null, 1, RECORD_PAGE_SIZE))) {
+            if (t != null && StringUtils.isNotBlank(t.getTaskId()) && t.getComment() != null
+                    && StringUtils.isNotBlank(t.getComment().getComment())) {
+                commentMap.put(t.getTaskId(), t.getComment().getComment());
+            }
+        }
+        for (FlowTaskDto t : records) {
+            if (t != null && t.getComment() == null && commentMap.containsKey(t.getTaskId())) {
+                t.setComment(FlowCommentVo.builder().type("1").comment(commentMap.get(t.getTaskId())).build());
+            }
+        }
+        return records;
+    }
+
+    private List<FlowTaskDto> extractFlowList(java.util.Map<String, Object> map) {
         if (map == null) {
             return new ArrayList<>();
         }
@@ -192,14 +227,28 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         if (records == null) {
             return nodes;
         }
-        for (FlowTaskDto r : records) {
+        // ⚠ 顺序必须自己按"签收时间"排：flowCmts 的 "首次出现顺序" 实测**不是**时间序
+        // （踩过：n2 会签排在 n1 预审前面，签批栏顺序与流程节点顺序相反 → AC-17 不达标）。
+        // 稳定排序：会签多人签收时间相同，排完仍相邻。
+        List<FlowTaskDto> ordered = new ArrayList<>(records);
+        ordered.sort(Comparator.comparing(FlowTaskDto::getCreateTime,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+
+        // 节点序号：同一个流程节点（actId）的多人共用同一个序号 —— 打印页据此把会签合成一栏
+        Map<String, Integer> nodeIndexMap = new LinkedHashMap<>();
+        for (FlowTaskDto r : ordered) {
             if (r == null) {
                 continue;
             }
+            // ⚠ flowCmts 只填 actId，不填 taskDefKey（实测 taskDefKey 为空），这里退化为 actId
+            String nodeKey = StringUtils.isNotBlank(r.getTaskDefKey()) ? r.getTaskDefKey() : r.getActId();
+            Integer nodeIndex = nodeIndexMap.computeIfAbsent(nodeKey, k -> nodeIndexMap.size() + 1);
+
             PrintData.Node n = new PrintData.Node();
             n.setTaskId(r.getTaskId());
-            n.setTaskDefKey(r.getTaskDefKey());
+            n.setTaskDefKey(nodeKey);
             n.setNodeName(StringUtils.isNotBlank(r.getTaskName()) ? r.getTaskName() : r.getActId());
+            n.setNodeIndex(nodeIndex);
             // 接收单位优先取"办理人所属部门"，退化为流程记录的部门
             n.setDeptName(StringUtils.isNotBlank(r.getAssigneeDeptName())
                     ? r.getAssigneeDeptName() : r.getDeptName());
