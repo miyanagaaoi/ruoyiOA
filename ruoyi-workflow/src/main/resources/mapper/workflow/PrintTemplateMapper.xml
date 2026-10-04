@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workflow.mapper.PrintTemplateMapper">
+
+    <resultMap type="PrintTemplate" id="PrintTemplateResult">
+        <result property="id"             column="id"              />
+        <result property="templateId"     column="template_id"     />
+        <result property="name"           column="name"            />
+        <result property="paper"          column="paper"           />
+        <result property="orientation"    column="orientation"     />
+        <result property="title"          column="title"           />
+        <result property="logoFileId"     column="logo_file_id"    />
+        <result property="fieldMap"       column="field_map"       />
+        <result property="showSignature"  column="show_signature"  />
+        <result property="showComment"    column="show_comment"    />
+        <result property="showAttachment" column="show_attachment" />
+        <result property="showCcNode"     column="show_cc_node"    />
+        <result property="watermark"      column="watermark"       />
+        <result property="footerNote"     column="footer_note"     />
+        <result property="enableFlag"     column="enable_flag"     />
+        <result property="delFlag"        column="del_flag"        />
+        <result property="createId"       column="create_id"       />
+        <result property="createBy"       column="create_by"       />
+        <result property="createTime"     column="create_time"     />
+        <result property="updateId"       column="update_id"       />
+        <result property="updateBy"       column="update_by"       />
+        <result property="updateTime"     column="update_time"     />
+    </resultMap>
+
+    <sql id="selectPrintTemplateVo">
+        select id, template_id, name, paper, orientation, title, logo_file_id, field_map,
+               show_signature, show_comment, show_attachment, show_cc_node, watermark,
+               footer_note, enable_flag, del_flag,
+               create_id, create_by, create_time, update_id, update_by, update_time
+        from t_template_print_template
+    </sql>
+
+    <select id="selectById" parameterType="String" resultMap="PrintTemplateResult">
+        <include refid="selectPrintTemplateVo"/>
+        where id = #{id} and del_flag = '0'
+    </select>
+
+    <select id="selectByTemplateId" parameterType="String" resultMap="PrintTemplateResult">
+        <include refid="selectPrintTemplateVo"/>
+        where template_id = #{templateId} and del_flag = '0' and enable_flag = '1'
+        order by update_time desc
+    </select>
+
+    <select id="selectList" parameterType="PrintTemplate" resultMap="PrintTemplateResult">
+        <include refid="selectPrintTemplateVo"/>
+        <where>
+            del_flag = '0'
+            <if test="templateId != null and templateId != ''">
+                and template_id = #{templateId}
+            </if>
+            <if test="name != null and name != ''">
+                and name like concat('%', #{name}, '%')
+            </if>
+            <if test="enableFlag != null and enableFlag != ''">
+                and enable_flag = #{enableFlag}
+            </if>
+        </where>
+        order by update_time desc
+    </select>
+
+    <insert id="insert" parameterType="PrintTemplate">
+        insert into t_template_print_template (
+            id, template_id, name, paper, orientation, title, logo_file_id, field_map,
+            show_signature, show_comment, show_attachment, show_cc_node, watermark,
+            footer_note, enable_flag, del_flag,
+            create_id, create_by, create_time, update_id, update_by, update_time
+        ) values (
+            #{id}, #{templateId}, #{name}, #{paper}, #{orientation}, #{title}, #{logoFileId}, #{fieldMap},
+            #{showSignature}, #{showComment}, #{showAttachment}, #{showCcNode}, #{watermark},
+            #{footerNote}, #{enableFlag}, '0',
+            #{createId}, #{createBy}, sysdate(), #{updateId}, #{updateBy}, sysdate()
+        )
+    </insert>
+
+    <update id="update" parameterType="PrintTemplate">
+        update t_template_print_template
+        <set>
+            <if test="templateId != null">template_id = #{templateId},</if>
+            <if test="name != null">name = #{name},</if>
+            <if test="paper != null">paper = #{paper},</if>
+            <if test="orientation != null">orientation = #{orientation},</if>
+            <if test="title != null">title = #{title},</if>
+            <if test="logoFileId != null">logo_file_id = #{logoFileId},</if>
+            <if test="fieldMap != null">field_map = #{fieldMap},</if>
+            <if test="showSignature != null">show_signature = #{showSignature},</if>
+            <if test="showComment != null">show_comment = #{showComment},</if>
+            <if test="showAttachment != null">show_attachment = #{showAttachment},</if>
+            <if test="showCcNode != null">show_cc_node = #{showCcNode},</if>
+            <if test="watermark != null">watermark = #{watermark},</if>
+            <if test="footerNote != null">footer_note = #{footerNote},</if>
+            <if test="enableFlag != null">enable_flag = #{enableFlag},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </set>
+        where id = #{id}
+    </update>
+
+    <update id="deleteById" parameterType="PrintTemplate">
+        update t_template_print_template
+        set del_flag = '1',
+            update_id = #{updateId},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where id = #{id}
+    </update>
+
+</mapper>

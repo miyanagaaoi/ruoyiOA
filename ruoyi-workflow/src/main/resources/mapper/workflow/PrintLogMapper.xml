@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workflow.mapper.PrintLogMapper">
+
+    <resultMap type="PrintLog" id="PrintLogResult">
+        <result property="id"            column="id"              />
+        <result property="businessId"    column="business_id"     />
+        <result property="procInsId"     column="proc_ins_id"     />
+        <result property="templateId"    column="template_id"     />
+        <result property="printTplId"    column="print_tpl_id"    />
+        <result property="printUserId"   column="print_user_id"   />
+        <result property="printUserName" column="print_user_name" />
+        <result property="printTime"     column="print_time"      />
+        <result property="printIp"       column="print_ip"        />
+        <result property="userAgent"     column="user_agent"      />
+        <result property="pageCount"     column="page_count"      />
+        <result property="watermarkText" column="watermark_text"  />
+    </resultMap>
+
+    <sql id="selectPrintLogVo">
+        select id, business_id, proc_ins_id, template_id, print_tpl_id,
+               print_user_id, print_user_name, print_time, print_ip,
+               user_agent, page_count, watermark_text
+        from t_print_log
+    </sql>
+
+    <insert id="insert" parameterType="PrintLog">
+        insert into t_print_log (
+            id, business_id, proc_ins_id, template_id, print_tpl_id,
+            print_user_id, print_user_name, print_time, print_ip,
+            user_agent, page_count, watermark_text
+        ) values (
+            #{id}, #{businessId}, #{procInsId}, #{templateId}, #{printTplId},
+            #{printUserId}, #{printUserName}, #{printTime}, #{printIp},
+            #{userAgent}, #{pageCount}, #{watermarkText}
+        )
+    </insert>
+
+    <select id="selectByBusinessId" parameterType="String" resultMap="PrintLogResult">
+        <include refid="selectPrintLogVo"/>
+        where business_id = #{businessId}
+        order by print_time desc
+    </select>
+
+    <select id="selectList" parameterType="PrintLog" resultMap="PrintLogResult">
+        <include refid="selectPrintLogVo"/>
+        <where>
+            <if test="businessId != null and businessId != ''">
+                and business_id = #{businessId}
+            </if>
+            <if test="printUserId != null and printUserId != ''">
+                and print_user_id = #{printUserId}
+            </if>
+        </where>
+        order by print_time desc
+    </select>
+
+</mapper>
