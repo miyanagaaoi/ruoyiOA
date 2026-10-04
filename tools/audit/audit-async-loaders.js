@@ -1,14 +1,15 @@
 /**
- * 琛ュ璁★細`async` 鏂规硶閲?await 鍙栨暟銆佸け璐ヤ細鎶?loading 姘镐箙鐣欏湪 true銆? *
- * 鍓嶄竴鐗堝璁″彧璁?`.then(...)` 閾撅紝浼氭紡鎺夎繖涓€褰㈡€侊細
+ * 补审计：`async` 方法里 await 取数、失败会把 loading 永久留在 true。
+ *
+ * 前一版审计只认 `.then(...)` 链，会漏掉这一形态：
  *   async getList() {
  *     this.loading = true;
  *     const res = await listXxx(this.queryParams);
  *     this.list = res.rows;
- *     this.loading = false;      // 鈫?await 鎶涢敊灏卞埌杩欓噷涓烘
- *   }                            // 鈫?娌℃湁 try/catch
+ *     this.loading = false;      // ← await 抛错就到这里为止
+ *   }                            // ← 没有 try/catch
  *
- * 鍒ゆ嵁锛氭柟娉曚綋鍚?`this.loading = true` + 鍚?`await` + **涓嶅惈 `try`**
+ * 判据：方法体含 `this.loading = true` + 含 `await` + **不含 `try`**
  */
 const fs = require('fs')
 const path = require('path')
@@ -48,6 +49,6 @@ for (const f of files) {
 }
 
 hits.sort((a, b) => a.file.localeCompare(b.file))
-console.log(`async/await 鍙栨暟鏃?try/catch锛坙oading 浼氭案涔呬负 true锛? ${hits.length} 澶刓n`)
-hits.forEach(h => console.log(`  ${h.file}:${h.line}   ${h.method}()${h.isAsync ? '' : '   [娉ㄦ剰锛氭柟娉曟湰韬湭鏍?async]'}`))
-fs.writeFileSync('H:/dsh/ruoyiOA/.cache/async-loaders.json', JSON.stringify(hits, null, 2), 'utf8')
+console.log(`async/await 取数无 try/catch（loading 会永久为 true）: ${hits.length} 处\n`)
+hits.forEach(h => console.log(`  ${h.file}:${h.line}   ${h.method}()${h.isAsync ? '' : '   [注意：方法本身未标 async]'}`))
+fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')

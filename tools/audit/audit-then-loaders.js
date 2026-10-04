@@ -1,9 +1,13 @@
 /**
- * 瀹¤"涓绘暟鎹姞杞芥病鏈?catch"鈥斺€旂湡姝ｇ殑鏃犻檺杞湀缂洪櫡銆? *
- * 鍒ゆ嵁锛氫竴涓柟娉曚綋鍐呮弧瓒冲叏閮ㄤ笁鏉? *   1. 鍑虹幇 `this.loading = true`
- *   2. 鏈?`.then(` 涓斿叾鍚庤窡浜?`this.loading = false`锛堣鏄庡畠渚濊禆鎴愬姛璺緞澶嶄綅锛? *   3. **鏁翠釜鏂规硶浣撻噷娌℃湁 `.catch(`**
+ * 审计"主数据加载没有 catch"——真正的无限转圈缺陷。
  *
- * 杩欑被鍦ㄨ姹傚け璐ユ椂 loading 姘歌繙涓?true -> 琛ㄦ牸姘镐箙杞湀涓旀畫鐣欐棫鏁版嵁銆? */
+ * 判据：一个方法体内满足全部三条
+ *   1. 出现 `this.loading = true`
+ *   2. 有 `.then(` 且其后跟了 `this.loading = false`（说明它依赖成功路径复位）
+ *   3. **整个方法体里没有 `.catch(`**
+ *
+ * 这类在请求失败时 loading 永远为 true -> 表格永久转圈且残留旧数据。
+ */
 const fs = require('fs')
 const path = require('path')
 
@@ -25,7 +29,7 @@ for (const f of files) {
   const lines = raw.split(/\r?\n/)
   const rel = path.relative(SRC, f).replace(/\\/g, '/')
 
-  // 鎵惧嚭鎵€鏈夋柟娉曞畾涔夎
+  // 找出所有方法定义行
   const defs = []
   lines.forEach((l, i) => {
     const m = l.match(/^\s{2,6}(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{\s*$/)
@@ -38,12 +42,13 @@ for (const f of files) {
     if (!/this\.loading\s*=\s*true/.test(body)) return
     if (!/\.then\s*\(/.test(body)) return
     if (/\.catch\s*\(/.test(body)) return
-    // 纭瀹冪‘瀹炰緷璧栨垚鍔熻矾寰勫浣?    const resetsInThen = /\.then\s*\([\s\S]*?this\.loading\s*=\s*false/.test(body)
+    // 确认它确实依赖成功路径复位
+    const resetsInThen = /\.then\s*\([\s\S]*?this\.loading\s*=\s*false/.test(body)
     hits.push({ file: rel, line: d.line + 1, method: d.name, resetsInThen })
   })
 }
 
 hits.sort((a, b) => a.file.localeCompare(b.file))
-console.log(`涓绘暟鎹姞杞?鏃?catch 鈫?姘镐箙杞湀"鍏?${hits.length} 澶勶紝鍒嗗竷鍦?${new Set(hits.map(h => h.file)).size} 涓枃浠禱n`)
+console.log(`主数据加载"无 catch → 永久转圈"共 ${hits.length} 处，分布在 ${new Set(hits.map(h => h.file)).size} 个文件\n`)
 hits.forEach(h => console.log(`  ${h.file}:${h.line}   ${h.method}()`))
-fs.writeFileSync('H:/dsh/ruoyiOA/.cache/no-catch-loaders.json', JSON.stringify(hits, null, 2), 'utf8')
+fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')
