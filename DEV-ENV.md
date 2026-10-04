@@ -175,6 +175,23 @@ git config user.name "你的名字" ; git config user.email "you@example.com"
 8. 新增业务模块建议照 `ruoyi-kbs` / `ruoyi-schedule` 的分层
    （controller/domain/mapper/service + `src/main/resources/mapper/**/XxxMapper.xml`），
    并在根 `pom.xml` 的 `<modules>` 与 `ruoyi-admin/pom.xml` 里登记。
+9. **改主题色必须同时改三处，否则会出现"两套蓝"**（已踩过）：
+   1. `src/assets/styles/element-variables.scss` 的 `$--color-primary` —— Element UI **编译期**主题；
+   2. `public/styles/theme-chalk/index.css` —— `ThemePicker` 运行时拉取并整体重着色的那份静态 CSS，
+      必须与 (1) 的主色 + 完整色簇（tint 0.1~0.9 + shade 0.1）一致；
+   3. `src/components/ThemePicker/index.vue` 的 `ORIGINAL_THEME` —— 重着色算法的**锚点**，
+      它必须等于 (2) 里实际写死的主色，否则换色静默失效或串色。
+   另外 `src/store/modules/settings.js` 的默认 `theme` 与旧值迁移也要跟着改：
+   `ThemePicker.created()` 发现 `settings.theme !== ORIGINAL_THEME` 就会主动换色，
+   老用户 localStorage 里的旧色会把品牌蓝刷回去。
+10. **`public/styles/theme-chalk/index.css` 是 `public/` 静态资源**，`npm run dev` 不编译它，
+    改完**必须重启 dev server**（或至少让浏览器重新拉取，它没有 HMR）。
+11. **运行时换色只对 dev 有效**：`ThemePicker` 是靠改写内存里的 `<style>` 标签实现的，
+    生产构建的 CSS 走 `<link>`，改不到。所以页面里**不要写裸色值**，
+    用 `var(--oa-color-primary)`（令牌见 `src/assets/styles/oa-tokens.scss`，由 `main.js` 全局引入）。
+12. **手工删 Flowable 部署（裸 SQL）之后必须重启后端**：引擎有部署/流程定义缓存，
+    只删库不改缓存会留下"缓存里有、库里没有"的悬空定义，之后按 key 启动流程会报错。
+    正常途径是用引擎 API 的 `repositoryService.deleteDeployment(id, true)` 级联删除。
 
 ## 7. 结论
 
