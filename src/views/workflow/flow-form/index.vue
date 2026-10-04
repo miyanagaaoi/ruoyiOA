@@ -5,7 +5,16 @@
       <el-tab-pane label="基本信息" name="info" v-loading="loading">
         <el-row :gutter="24">
           <el-col :span="baseSpan">
-            <div class="basic-title">{{ templateConf.name }} - {{ taskName }}</div>
+            <div class="basic-title pull-left">{{ templateConf.name }} - {{ taskName }}</div>
+            <!--
+              表单打印入口（PRD 7.2 入口1：单据详情页）。
+              ⚠ 必须放在**右侧操作列之外**：那一列的条件是 `pageType != '2'`，
+              而 PRD 要求的入口恰恰是详情页（pageType=2）—— 放在里面等于详情页没有打印按钮。
+            -->
+            <div class="basic-title-actions pull-right">
+              <el-button v-if="businessId" icon="el-icon-printer" size="mini" @click="printBtn">打印</el-button>
+            </div>
+            <div class="clearfix"></div>
             <div v-if="loadCompleted" class="basic-form">
               <div v-if="!isCustomForm">
                 <!-- 动态表单、业务表单使用的解析方式 -->
@@ -53,8 +62,23 @@
               </div>
               <!-- 流程操作按钮 -->
               <div class="mb10 pull-right">
-                <!-- 表单打印（PRD 7.2 入口1：单据详情页）。对单据有查看权即可打印，不叠加权限点 -->
-                <el-button v-if="businessId" class="mt10 mb10" icon="el-icon-printer" size="mini" @click="printBtn">打印</el-button>
+                <!-- 手写签名（PRD 8.2/8.6）：有实际任务时才可签；已签则显示状态并可重签。
+                     放在右侧操作列是**正确**的 —— 签名是审批动作的一部分，
+                     只在审批页（pageType != '2'）出现。打印则必须在详情页也有，故已移到标题行。 -->
+                <template v-if="taskForm.taskId">
+                  <el-tag v-if="signedFileId" type="success" size="mini" class="mr10">已签名</el-tag>
+                  <el-button class="mt10 mb10" icon="el-icon-edit-outline" size="mini" @click="openSign">
+                    {{ signedFileId ? '重新签名' : '签名' }}
+                  </el-button>
+                </template>
+                <signature-pad
+                  :visible.sync="signVisible"
+                  :business-id="businessId"
+                  :task-id="taskForm.taskId"
+                  :task-def-key="taskForm.taskDefKey"
+                  :node-name="taskName"
+                  @signed="onSigned"
+                />
                 <el-button v-if="isReturn" type="primary" plain size="mini" @click="returnBtn">退回</el-button>
                 <el-button v-if="isReject" type="primary" plain size="mini" @click="rejectBtn">驳回</el-button>
                 <!-- 取回提交 -->
@@ -128,6 +152,8 @@ import { startFlow, commonSubmit } from "@/api/workflow/process";
 import { restoreSeal } from "@/api/workflow/mainText";
 import SelectUser from "./component/select-user";
 import DeleteMulti from "./component/delete-multi.vue";
+import SignaturePad from "@/components/SignaturePad";
+import { listEffectiveSigns } from "@/api/workflow/sign";
 import { describeError } from "@/utils/errorMessage";
 
 export default {
@@ -144,6 +170,7 @@ export default {
     FlowMainText,
     SelectUser,
     DeleteMulti,
+    SignaturePad,
   },
   props: {},
   data() {
@@ -184,7 +211,12 @@ export default {
       formConf: {}, // 默认表单字段
       valData: {}, // 表单字段值
       variablesData: {}, // 流程变量数据
-      taskName: null, // 任务节点
+      /** 任务节点名 */
+      taskName: null,
+      /** 签名弹窗 */
+      signVisible: false,
+      /** 本节点当前有效的签名图片路径（空 = 未签） */
+      signedFileId: "",
       bizName: null, // 业务名称
       startUser: null, // 发起人信息,
       // 常用意见查询参数
@@ -259,6 +291,7 @@ export default {
         this.taskName = res.data.taskName;
         this.taskForm.taskId = res.data.taskId;
         this.taskForm.taskDefKey = res.data.taskDefKey;
+        this.loadSigned();
         this.taskForm.defId = res.data.procDefId;
         this.taskForm.deployId = res.data.deployId;
         this.taskForm.procInsId = res.data.procInsId;
@@ -281,6 +314,29 @@ export default {
       if (!w) {
         this.$router.push(route)
       }
+    },
+    /** 打开签名弹窗（PRD 8.3：手写签名采集） */
+    openSign() {
+      this.signVisible = true;
+    },
+    /** 签名成功回调：立刻反映"已签名"状态 */
+    onSigned(rec) {
+      this.signedFileId = (rec && rec.fileId) || "";
+    },
+    /**
+     * 载入本节点当前有效的签名。
+     * 取不到时静默 —— 签名状态是辅助信息，不能影响审批主流程，
+     * 更不能因为一次查询失败就让"提交"按钮不可用。
+     */
+    loadSigned() {
+      const taskId = this.taskForm.taskId;
+      if (!this.businessId || !taskId) return;
+      listEffectiveSigns(this.businessId)
+        .then((res) => {
+          const map = (res && res.data) || {};
+          this.signedFileId = map[taskId] || "";
+        })
+        .catch(() => {});
     },
     handleButtonClick(btnCode) {
       switch (btnCode) {
