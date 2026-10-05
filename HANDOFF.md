@@ -3,7 +3,15 @@
 > 面向对象：**下一个接手本仓库的 AI Agent**。目标：不看历史，用最短时间搞清楚
 > "现在在哪、下一步做什么、怎么证明做对了、哪些坑不能再踩"。
 >
-> 最后更新：**2026-10-05（第六轮：合同审批「能发起 + 能走完」+ 三个缺陷修复 + 浏览器 E2E 套件，见 §3.9）**
+> 最后更新：**2026-10-06（第七轮：B4「进销存」52 项全部交付 + 浏览器 E2E 40/0 + 门禁全绿 + 独立终验 pass + 已推送 GitHub）**
+> 上一轮（第六轮，§3.9）：合同审批「能发起 + 能走完」+ 三个缺陷修复 + 浏览器 E2E 套件。
+> **本轮（B4 进销存，变更集 `openspec/changes/oa-purchase-sales-stock/`）做完：**
+> ① **8 类单据**（采购申请/采购单/销售申请/销售订单/入库/出库/盘点/调拨）+ **库存结存/流水**全量落地（18 张表、状态机、下推、过账/红冲、调拨/盘点、数据范围四档、导出）；
+> ② **门禁**：浏览器 E2E **40 passed / 0 failed**；`erp-check` 全段 **88 通过 / 0 失败 / 25 跳过 / exit 0**；后端单测 **550/0**；前端 **205/205**；审计 **10/10**；`erp-smoke -Strict` **27/27**；`erp-scope-check` 四档 **59/0**；
+> ③ **独立终验 `verdict = pass`**（终验发现并修掉了 blocker **F-01**）；
+> ④ 三个仓库已提交并**推送到 GitHub**（`master` 单仓快照 + `backend`/`frontend`/`outer` 三条分支历史，见 §3.10）；
+> ⑤ 本轮查出并修掉 **8 条真实缺陷**（单测结构性看不到，详见 §3.10），并登记 **9 条非阻断残留 G-01~G-09**。
+> 上轮遗留的"§8 门禁跑不满"已澄清：`flow-regression` 本轮**实跑全绿**（见 §3.2 末尾更新）。
 > 上轮（第五轮，§3.8）：发布校验报的问题与画布对不上（**已修**，纯前端）。
 > **本轮做完：① 合同审批模板↔流程绑定（此前「新启流程」里根本没有它）；② 流程条件比较值口径 label→码值（提交报 `Error while evaluating expression`）；③ 待办标题为空的根因（`getTitle` 命中了「分组标题」排版控件）；④ 拟稿阶段屏蔽审批意见；⑤ 新增浏览器 E2E 套件 `ruoyi-vue-oa-ui-master\tests\e2e` 并跑通全链路（含发起→4 级审批→办结）。**
 > 本轮新增阻塞（**未修，需决策**）：`sys_role_menu` 是空表 + `SecurityUtils.isAdmin` 只认 `superAdmin` ⇒ **非超管用户零菜单零权限**（见 §3.9.5）。
@@ -22,7 +30,12 @@ RuoYi-Vue-OA 的 2.0 二次开发，**B3「合同台账」**（OpenSpec 变更�
 下一轮的候选：§3 的 **T20-F1** 收口（二选一）、**B4「进销存」**（52 项任务）、四个变更集的**归档**（§9）、
 以及本轮新增的待决事项（**§11 的第 12~19 行**：测试数据清理方案 A/B/C、非超管用户的菜单权限、需求①③④②的落地）。
 
+**2026-10-06 更新（B4 已交付）**：**B4「进销存」变更集 `openspec/changes/oa-purchase-sales-stock/`（52 项任务）已全部交付并勾选完毕（`tasks.md` 0 项未勾）**，浏览器 E2E **40/0**、门禁全绿、独立终验 **pass**、三仓已推送 GitHub。细节见 **§3.10**。
+⇒ 上面那句"下一轮的候选：**B4「进销存」**"**已完成**；剩余候选收敛为：**B4 的非阻断残留 G-01~G-09**（§3.10 末）、`T20-F1` 收口、四个变更集的**归档**（`openspec archive`）、以及 §11 的待决事项（用户明确"待决策项不做"）。
+
 ### 0.1 ⚠ 接手第一件事：先看未提交的东西（改动**尚未提交**）
+
+> **⚠ 2026-10-06 更新：B4 的改动已全部提交并推送**（`master` 单仓快照 + `backend`/`frontend`/`outer` 分支，commit 与推送表见 **§3.10 第 ⑤ 节**）。下面这段描述的是 **B3/前几轮**的历史未提交状态，**仅作追溯用**；接手时请以 `git status` 与远端 `ls-remote` 为准。
 
 第四轮只动了 **前端 2 个文件**（后端/数据/外层脚本零改动）；**第六轮的改动见本节末尾的【第六轮】块**：
 
@@ -216,6 +229,8 @@ cd ..\ruoyi-vue-oa-ui-master\tests\e2e ; npx playwright test                    
 ---
 
 ## 3.2 ⚠ 2026-10-05 实测：**§8 的"门禁 16/16 全绿"在当前环境已不成立**
+
+> **✅ 2026-10-06 更新（B4 轮）：本条已澄清并关闭。** 当时"跑不满"的那一项是 `tools\flow-regression.ps1`（`testParallel`/`testCombo` 的并行会审 ALL 合流卡死）。B4 轮里该脚本**实跑全绿**（t13 门禁全表 + t18 终验均复跑通过），根因与修复见 `doc/缺陷-并行会审全部完成不合流.md` 与 `openspec/changes/oa-purchase-sales-stock/notes/` 下 t15/t16 的交付记录。⇒ **§8 的现行门禁全表以文末 §8.1（2026-10-06）为准。**
 
 `tools\flow-regression.ps1` 整表**串行复跑**（本轮）：**通过 15 / 失败 5**。
 
@@ -638,6 +653,59 @@ cd ..\ruoyi-vue-oa-ui-master\tests\e2e ; npx playwright test                    
 
 ---
 
+## 3.10 ✅ 2026-10-06（第七轮）：**B4「进销存」52 项全部交付** + 门禁全绿 + 独立终验 pass + 已推送 GitHub
+
+**变更集**：`openspec/changes/oa-purchase-sales-stock/`（`proposal.md` / `design.md` / `specs/erp/**` / `tasks.md`（**52 项，0 项未勾**）/ `notes/**` 十余份交付记录）。
+
+### ① 做了什么（功能面）
+- **18 张表**（`ruoyi-vue-oa-master/sql/二开-进销存.sql`：8 类单据表 + 行项表、`t_ctms_stock`、`t_ctms_stock_ledger`）+ 菜单/权限增量（`sql/二开-进销存-菜单.sql`：121 行菜单 / 107 个权限点，幂等，连跑两次计数不变）；
+- **后端** `ruoyi-ctms` 新增包 `com.ruoyi.ctms.erp.**`（`base`/`posting`/`procurement`/`sales`/`stockops`/`ledger`）：状态机（5×6×2 矩阵）、金额"**先舍入再汇总**"唯一实现点、取号（`ICodeGenService` + 月桶）、过账/红冲、下推（采购单→入库单、销售订单→出库单）、调拨两阶段两流水、盘点（全盘/抽盘、盘盈盘亏自动过账、盘亏豁免）、结存/流水与一致性校验、数据范围四档、导出（xlsx 流 + GET/POST）；
+- **前端** `src/views/erp/**`（列表壳/表单壳 + 8 类单据页 + 库存明细/流水页 + 选项/字典/状态装载模块）+ `src/api/erp/**`；
+- **脚本**：`tools/erp-smoke.ps1`（只读冒烟 27）、`tools/erp-check.ps1`（接口验收 **88/0/25**，自带判别力自证与夹具自清）、`tools/erp-scope-check.ps1`（数据范围四档 **59**）、`tools/flow-form-consistency-check.ps1`（模板 `formId` 一致性 + PRD V-8 反向校验）、`tools/locked-run.ps1`（`build`/`env` 互斥锁，**所有改库/构建的门禁都必须经它串行**）。
+
+### ② 门禁（2026-10-06 复跑，**全部 exit 0**）
+| 门禁 | 读数 |
+| --- | --- |
+| 浏览器 E2E `cd ruoyi-vue-oa-ui-master\tests\e2e ; npx playwright test` | **40 passed / 0 failed** |
+| `tools\erp-check.ps1`（全段） | **88 通过 / 0 失败 / 25 跳过** |
+| `tools\erp-smoke.ps1 -Strict` | **27/27** |
+| `tools\erp-scope-check.ps1` | **59/0**（四档 + 还原 + 哨兵 + 零残留 + 全库无 `data_scope='5'`） |
+| `mvn -B -pl ruoyi-ctms test` | **550/0/0** |
+| 前端 `node tests\run.js` / `npm.cmd run build:prod` | **205/205** / EXIT 0 |
+| `node tools\audit\run-all.js` | **10/10** |
+| `ctms-attachment-check` / `flow-form-consistency` / `authz-check` | 107/0 / 27/0 / 45/0 |
+
+### ③ 本轮查出并修掉的 **8 条真实缺陷**（都是"单测结构性看不到"那一类）
+| 缺陷 | 为什么单测看不到 | 修复 |
+| --- | --- | --- |
+| `C-1` `posted` 歧义 getter（8 类单据写路径全 500） | 单测用内存桩**不走 OGNL**；MyBatis **版本偏斜**（测试类路径 3.5.13 容忍、打包件 3.5.7 不容忍）；异常**惰性**，真读属性才抛 | 改名 `isPostedFlag()` + 回归网 `ErpDomainReflectorTest`（逐个读属性 + 反向对照） |
+| `D-29` `/sal/request/list` 500 | 页内无行时提前 `return` ⇒ **空表绿、建单后红**；订单侧被 `total=0` 掩盖 | `@MapKey` 误用（`Map<K,List<V>>`）改为平铺 `List` + 服务层分组 |
+| `P-②` 表单下拉恒空 | 列表类接口体是 `{rows}` 而前端裸读 `res.data` ⇒ **请求发出去了、页面只是空**、无报错 | `erp-response.js`（`rowsOf`/`dataOf`）逐点声明层级 |
+| `P-④` 字典下拉"有选项、无文字" | 字典行 `{dictLabel,dictValue}` 与模板 `o.label/o.value` 不匹配 | `doc-select-shape.js` 统一映射（三类筛选收敛一处） |
+| `P-⑤` 单位列表**从未请求**（+ `uomDecimals` 静默退回 3 位，**用户可感知**） | `neededOptions()` 联动判定早于 products 扫描 | 抽出 `doc-options-need.js`，联动移到三个 scan 之后 |
+| `T46-1` 库存两页同源 P0 | 门禁扫描范围只覆盖 `doc/**` ⇒ 同类残留逃逸 | 逐点修 + 门禁扫描扩到 `views/erp/**` |
+| `F-01` 按商品类型（含子树）筛选**静默失效** | **门禁随库规模翻转**：类型表小时恰好命中 | 新增 `prepareQuery()`，把子树展开移到 `startPage()` **之前** |
+| `t33` 表头仓库快照 | 缺 `warehouseId` 时撞 DB 原生 1048 | 应用层可读拒绝 + 服务端回填名称快照 |
+
+### ④ 非阻断残留（`G-01~G-09`，已登记，owner 待定）
+`G-01` 25 条 SKIP 的 owner 指向**已关闭的 t13**、部分理由过期（"t8 交付后补"）⇒ 逐条"重指派 / 登记裁剪·延后+owner"；`G-02` `DEV-ENV §7` 规格条数与脚本条目数缺映射表；`G-03` F-5/F-6 无门禁；`G-04` 10 条反直觉口径 4/10；`G-05` 长跑门禁（`b1-e2e-check`/`ctms-migration-prep` 等）未执行；`G-06` **`AC-26` 应标"未验证"**（`sign-feature-check` 42/1 为夹具缺失，不计通过）；`G-07` `related-approval-check` 15/8 属 **B 系列**（非本批改动面）；`G-08` 证据路径写法（`.last-run.json` 实际在 `tests/e2e/reports/artifacts/`）；`G-09` 采购线创建把新单 id 放 `msg` / 下推只接受裸数组（接口一致性）+ **`L-12` 导出腿未实现**。
+技术债 `D-1~D-32` 全表见 `openspec/changes/oa-purchase-sales-stock/notes/00-team-brief.md §9.3`。
+
+### ⑤ 已推送 GitHub（SSH 私钥 `~/.ssh/id_ed25519`；`git@github.com:miyanagaaoi/ruoyiOA.git`）
+| ref | 内容 |
+| --- | --- |
+| `master` | **单仓快照**（外层 + `ruoyi-vue-oa-master/` + `ruoyi-vue-oa-ui-master/`，**含 F-01 修复**） |
+| `backend` / `frontend` / `outer` | 三个仓库各自的完整历史 |
+
+> **红线**：`.auth/` 令牌、`env/`（含 MySQL 私钥）、`.cache/`、`logs/`、`node_modules/`、`target/` 均已 `.gitignore` 排除，并逐一用 `git check-ignore` 验证。
+> 推送方案与复现命令：`openspec/changes/oa-purchase-sales-stock/notes/99-release-push-plan.md`。
+
+### ⑥ 接手要点
+`tasks.md` 已 **52/52**；证据分布：`notes/13a-package-smoke.md`（门禁全表 + 逐条定性）、`notes/10-e2e.md`（E2E 收口 + 残留归属）、`notes/09-integration.md`（集成检查 + AC 逐条对照）、`notes/00-team-brief.md`（跨组冻结口径 + 技术债 D-1~D-32）。
+**所有改库/构建的门禁必须经 `tools\locked-run.ps1` 串行**（`-LockName build` 给 Maven、`-LockName env` 给停启后端/接口脚本/Playwright）。
+
+---
+
 ## 4. 铁律（违反＝返工）
 
 1. **规格是唯一真源**：需求以 `openspec\changes\<变更集>\specs\**\spec.md` 为准；与 `doc\2.0\2.0-PRD-OA升级开发.md` 有歧义时看 `design.md` 的 D-* 决策记录，**不要自己发明口径**。
@@ -717,6 +785,30 @@ F:\dsh\ruoyiOA\
 
 ## 8. 交付门禁（DEV-ENV.md §7 全表 · 共 16 项）
 
+> **⚠ 2026-10-06 更新**：门禁表已扩到 **21 项**（新增 B4 的 4 个脚本 + 前端 B4 单测 + 浏览器 E2E），**现行全表以 `DEV-ENV.md §7` 为准**（其第 1~19 项 + 下表补的两行）。
+> 下表 §8.1 是 **B4 轮的复跑读数**（全部 exit 0），可直接作为"目标基线"对照；下面 §8 原始那段命令清单保留作**历史**（其中 `mvn -pl ruoyi-ctms test` 的 217 条、前端 39 条等数字已过时）。
+
+### 8.1 2026-10-06 现行门禁读数（全绿）
+```powershell
+cd F:\dsh\ruoyiOA
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-env.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1      # token 会过期，跑接口脚本前先跑
+
+# —— 静态 ——
+node tools\audit\run-all.js                                                        # 10/10
+cd ruoyi-vue-oa-ui-master ; node tests\run.js ; npm.cmd run build:prod ; cd ..      # 205/205 + EXIT 0
+# —— 后端单测 ——
+cd ruoyi-vue-oa-master ; mvn -B -pl ruoyi-ctms test ; cd ..                         # 550/0（含 ruoyi-workflow 19 / ruoyi-serial 24）
+# —— 运行时（全部经 env 锁串行）——
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\locked-run.ps1 -LockName env -Command "cd F:\dsh\ruoyiOA; powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-smoke.ps1 -Strict"     # 27/27
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\locked-run.ps1 -LockName env -Command "cd F:\dsh\ruoyiOA; powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-check.ps1"            # 88 通过 / 0 失败 / 25 跳过
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\locked-run.ps1 -LockName env -Command "cd F:\dsh\ruoyiOA; powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-scope-check.ps1"        # 59/0
+# —— 浏览器 E2E（必须 cd 到 tests\e2e；在仓库根跑会 0 tests）——
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\locked-run.ps1 -LockName env -Command "cd F:\dsh\ruoyiOA\ruoyi-vue-oa-ui-master\tests\e2e; npx playwright test"                                  # 40 passed / 0 failed
+# 其余：authz 45/0、perm-audit 15/15、b3-sql-drill 68/0、flow-form-consistency 27/0、attachment 107/0、contract 261/0、masterdata 79/0、serial 32/0、print 98/0、b1-binding 25/0、ctms-e2e 91/0、flow-regression / migration / commercials 全绿
+```
+**已知非本批红项（不要当成自己改坏了）**：`sign-feature-check` 42/1（`AC-26` **夹具缺失 ⇒ 该条实际未验证**）、`related-approval-check` 15/8（**B 系列**，非 B4 改动面）。
+
 > ⚠ **先看 §3.2**：本表是**目标基线**，但其中 `tools\flow-regression.ps1` 在当前环境**实测 15 通过 / 5 失败**
 > （`testParallel` / `testCombo` 的并行会审 ALL 合流卡死，属**既有问题**、非本轮引入）。
 > 即**这张表跑不满**；不要把"某一项没过"直接当成自己改坏了，也不要反过来把"全绿"当成既成事实。
@@ -774,7 +866,12 @@ npx playwright test          # 3 passed / 约 1.4 分钟（含 2 次登录 setup
 - [x] 所有门禁全绿（§8 共 16 项；B3 最后复跑 16/16 exit 0）
 - [x] 新踩的坑写进 `DEV-ENV.md` §6（编号顺延：本轮新增 §6.49 / §6.50 / §6.51 / §6.52，并重写 §6.33）
 - [ ] **归档**：`openspec archive oa-contract-ledger`（**全部任务完成后**再做；B3 已具备条件，只差人工确认）
-- [ ] **提交**：三个仓库（外层 / 后端 / 前端）的改动尚未提交，提交信息建议按变更集分组
+- [x] **B4 已对照完毕**：`tasks.md` **52/52 全勾**且每条有交付记录与证据；门禁实测 **E2E 40/0、erp-check 88/0/25 exit 0、mvn 550/0、前端 205/205、audit 10/10、smoke 27/27、scope 59/0**（见 §3.10 §②）
+- [x] **B4 新踩的坑已写进 `DEV-ENV.md §6`**（编号顺延：§6.61~§6.66，见 §3.10 与 DEV-ENV 正文）
+- [x] **提交并推送**：三个仓库已提交并推送到 `git@github.com:miyanagaaoi/ruoyiOA.git`（`master` 单仓快照 + `backend`/`frontend`/`outer`，见 §3.10 第 ⑤ 节）
+- [x] **独立终验 `verdict = pass`**（t18 attempt 2；F-01 三个复核点全中 + AC 逐条对照）
+- [ ] **B4 非阻断残留 `G-01~G-09` 逐条处置**（见 §3.10 第 ④ 节；优先 `G-01` 的 SKIP 归属与 `G-09` 的接口一致性 + `L-12` 导出腿）
+- [ ] **归档**：四个变更集的 `openspec archive`（`oa-contract-ledger` / `oa-purchase-sales-stock` 等均具备条件，**只差人工确认**）
 - [ ] **已知边界 T20-F1**：决定按 §3 的 (a) 或 (b) 收口，或明确接受为已知边界并在交付说明中写明
 
 ---

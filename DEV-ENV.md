@@ -339,11 +339,19 @@ npm run build:prod     # 产物 dist/
 
 ### 5.1 git 基线（已建好）
 
-| 仓库 | 位置 | 基线提交 | 跟踪文件 |
+| 仓库 | 位置 | 基线提交 | 说明 |
 | --- | --- | --- | --- |
-| 外层（手册/脚本/参考文档） | `F:\dsh\ruoyiOA` | `2fbfc99` | 15 |
-| 后端 | `F:\dsh\ruoyiOA\ruoyi-vue-oa-master` | `23ece02` | 1094 |
-| 前端 | `F:\dsh\ruoyiOA\ruoyi-vue-oa-ui-master` | `beadb41` | 675 |
+| 外层（手册/脚本/参考文档） | `F:\dsh\ruoyiOA` | `2fbfc99` → **`a32d2f5`**（2026-10-06 B4 收口） | 含 `openspec/` 变更集、`tools/` 门禁脚本、`doc/`、本手册 |
+| 后端 | `F:\dsh\ruoyiOA\ruoyi-vue-oa-master` | `23ece02` → **`cfa8466`**（含 F-01 修复） | 1094 → 更多跟踪文件 |
+| 前端 | `F:\dsh\ruoyiOA\ruoyi-vue-oa-ui-master` | `beadb41` → **`9915d20`**（含 P-②/④/⑤ 修复） | 675 → 更多跟踪文件 |
+
+**远端（2026-10-06 起）**：三仓均已配置 `origin = git@github.com:miyanagaaoi/ruoyiOA.git`（**SSH 私钥** `~/.ssh/id_ed25519`），并推送为**不同分支**：
+| 远端 ref | 内容 |
+| --- | --- |
+| `master` | **单仓快照**（外层 + `ruoyi-vue-oa-master/` + `ruoyi-vue-oa-ui-master/`）——由 `git archive` 三个仓库的工作树 + 新建 `git init` 组成 |
+| `backend` / `frontend` / `outer` | 三个仓库**各自的完整历史** |
+> 推送方案与复现命令：`openspec/changes/oa-purchase-sales-stock/notes/99-release-push-plan.md`。
+> **红线（每次推送前核）**：`.auth/`（E2E 登录态令牌）、`env/`（含 MySQL 私钥 `*.pem`）、`.cache/`、`logs/`、`node_modules/`、`target/` **不得入库** —— 用 `git check-ignore <path>` 逐一验证。
 
 三个仓库均已配置仓库级身份 `OA Dev <oa-dev@local>`，**请按需改成你自己的**：
 
@@ -1042,6 +1050,41 @@ git config user.name "你的名字" ; git config user.email "you@example.com"
     3. 干净基线：`test-compile` 为 0 时，全模块 `mvn -B -pl ruoyi-ctms test` 的计数才是可信的（见 §7 第 14 条）。
     出处：`.cache\t31\prefix-test-red.log`（修复前红）、`ErpPrecisionTest.java:39,48-64,159-176`（源码→类映射与 `Class.forName`）、
     `ErpDomainReflectorTest.java` 的 `scanErpClasses()`、t1/t2/t23/t29 的过程记录（多次"编译红 → 非本组文件"）。
+### §6.61 MySQL 临时表的两个方言坑（B4 实测）
+- **同一条语句里不能两次引用同一个 `TEMPORARY` 表** ⇒ `ERROR 1137 (HY000) Can't reopen table: 't_xxx'`。修法：**弃用临时表**，用 `IdListCsv` 把 id 拼成 `IN ('…','…')`（推荐）；或改普通表 + 收尾 `DROP`（须让残留断言覆盖它自己）；或保证每条语句只引用一次。
+- **自建临时表的 collation 与业务表不一致** ⇒ 比较时 `ERROR 1267 Illegal mix of collations`（B4 表是 `utf8mb4_0900_ai_ci`，临时表默认 `utf8mb4_general_ci`）。修法：临时表列显式 `COLLATE utf8mb4_0900_ai_ci`。
+
+### §6.62 RuoYi 把 `sys_config` 缓存进 Redis —— 只改库**不生效**
+`UPDATE sys_config SET config_value=…` 之后运行期仍读旧值（实测键 `sys_config:stock_allow_negative`）。**必须**再 `DEL sys_config:<configKey>`（`env\redis\server\redis-cli.exe`），**且用后必须还原**（改回原值 + 再 `DEL`）。B4 的"参数开启后允许负库存"用例第一版就是因此假红。
+
+### §6.63 PowerShell 5.1 字符串插值：`"$id?k=v"` 会吞掉 `?` 之后的字符
+`".../unapprove/$id?reason=…"` 被解析成**未定义变量 `$id?reason`** ⇒ 变量为空、URL 残缺（实测表现为 **HTTP 404**，而脚本 helper 把它记成 `code=-1`、字段全空，**看起来像服务端故障**）。
+修法：查询串**拼接**（`$url + '?reason=' + …`）或 `${id}?reason=…`；含中文/特殊字符时显式 `[uri]::EscapeDataString`。
+
+### §6.64 **PageHelper 会污染"辅助查询"**（B4 F-01 的根因）
+控制器 `startPage()` 之后，线程里**下一条**查询会吃到这个分页 —— 若服务在分页上下文里再查一张"全表清单"（B4 是"商品类型树"用于展开子树），它会被**截成前 `pageSize` 行**，于是"按父类型筛选（含子树）"在**前端默认 `pageSize=10`** 时**静默失效**（类型表小时恰好命中，所以很久没被发现）。
+修法：这类辅助查询**移到 `startPage()` 之前**（B4 新增 `prepareQuery(query)` 契约，list 与 export 两处同口径）。
+**换专用 mapper 不管用**（PageHelper 拦的是线程里下一条查询）；`PageHelper.clearPage()` 会**把明细查询自己的分页一起清掉**（等于用一个 bug 换另一个）；`setLocalPage` 在 pagehelper 5.3.3 里**不在 `PageHelper` 上**（在 `PageMethod`）。
+
+### §6.65 **门禁判据不得依赖库规模 / 夹具位置**（B4 F-02 的教训）
+同一个脚本会因为累积的测试数据量而**结果翻转**（B4 的 `erp-check` L-06：类型表小的时候"父类型恰好落在前 10 行"⇒ 绿；`E2E4%` 残留累积到 47 行后 ⇒ 必红）。
+修法：判据写成**与规模无关**的形式（B4 用 `pageSize=10` 与 `pageSize=500` **双跑对拍**：`total(父,10)==total(父,500) ≥ total(子,10) > 0`），并在**失败时打印可观测量**（两档 total、表行数、关键 id/code）。
+
+### §6.66 证据形态决定判定速度（B4 三次"过时证据"的教训）
+- **接口类失败**必须记录「方法 + **完整（已编码）URL** + HTTP 状态码 + **原始 body**」——B4 的 `ApiDiag()` 就是靠这条**一轮**定位了"空 id 404"。
+- **引用 artifact 前做存在性核验**（B4 曾把 `tests/e2e/.last-run.json` 当长期证据，实际它会在后续运行中被清理；正确路径是 `tests/e2e/reports/artifacts/.last-run.json`）。
+- **引用行号前重读当前文件**（B4 曾按 20 分钟前的读取把已修好的 `pending` 当成缺陷报上来）。
+- **`.ps1` 的结论前先自证工具健康**：前 3 字节 = `239,187,191`（有 BOM）+ `[Parser]::ParseFile` 解析错误 = 0（B4 有过"半写脚本丢 BOM ⇒ 7 通过/6 失败"的整批作废）。
+
+### §6.67 共享资源的串行纪律：`tools\locked-run.ps1`
+多人/多 Agent 并发跑门禁时，**所有会改库或改构建产物的动作**都必须取锁：
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\locked-run.ps1 -LockName build -Command "<maven 命令>"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\locked-run.ps1 -LockName env   -Command "<停启后端 / 接口脚本 / npx playwright test>"
+```
+`build` 给 Maven（避免踩 `target/`），`env` 给停启后端与所有会建单据的脚本/E2E（避免互相制造"别人的夹具"假红）。**取锁超时退出码 97 ⇒ 稍后重试，不要绕锁。**
+另：夹具**只清自己的前缀**（如 `E2E4%` / `FIX-` / `T26######`），`t_ctms_change_log` 是跨轮审计累积、**不计残留**。
+
 ## 7. 2.0 交付门禁（每次交付前必跑，失败即阻断）
 
 > 来源：`doc/2.0/2.0-PRD-OA升级开发.md` 第 10 章（`REQ-NFR-010`/`REQ-NFR-011`）与第 11.6 节（`AC-83`）；
@@ -1073,12 +1116,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1
 | 11 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-masterdata-check.ps1` | **B3 主数据档案接口验收（79 条断言）**：客户/供应商 CRUD 与唯一性、简称必填与账期非负、物料域类型树 5 级/叶子约束/单位小数位/引用保护、启停用与引用保护、不做数据范围隔离 | 需要已登录；夹具 ASCII 前缀 `C…/S…`，收尾全清；**幂等**（连跑两次残留 0 行） |
 | 12 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-contract-check.ps1` | **B3 合同主体接口验收（261 条断言）**：登记/编辑、状态自由流转、多维筛选与标签交集、软删除 30 天边界、框架四条守卫、自动标签、变更历史、详情只读、数据范围 403、编号由服务端生成；**4.8b 数据范围矩阵**（AC-79：7 档 × 4 夹具 × 列表/详情/导出三面 + 范围外编辑/删除/恢复三个旁路，逐格与基线比对、整集逐 id 相等） | 需要已登录；夹具 ASCII 前缀 `CTM*`；**有运行锁**，不可并发（见 §6.42）；**幂等**（连跑两次残留 0）；清理顺序纪律见 §6.45；会临时借用 `common`/`bm` 角色改授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.48）；断言数 **113 → 253**（9.2 矩阵段）**→ 261**（10.2 的 R1 修复：导出面改按 xlsx 判定 + 补"行数 == 列表 total"双证 + 反向越权断言，见 §6.50 与 notes/integration-check.md §7.4-R1）。另：B3 菜单在真库是 **27 行 = 1 个 M 类目录 + 4 个 C 类菜单 + 22 个 F 类按钮**（其中 26 行带 `ctms:*` 权限点），别把 27 与"权限点数 26"混为一谈 |
 | 13 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-commercials-check.ps1` | **B3 商务要素/质保/编号接口验收（116 条断言）**：C-1 金额先舍入再汇总、行项校验与物料快照、标的物摘要落库、质保到期算法与金额↔比例互换、关闭质保清空 7 字段、质保提醒窗口边界与释放闭环、付款比例（不扣质保金/金额 0 空值）、编号格式与按「类型码+主体码+年份」分桶/跨年重置/预览不占号/停用占号不复用/类型主体校验 | 需要已登录；夹具 ASCII 前缀 `CTMSAL/CCOM`；**有运行锁**，不可并发；**幂等**（连跑两次残留 0 行）；编号断言全部用"同轮前后对照"，不假设 Redis 计数器起点（见文件头 ⚠） |
-| 14 | `cd ruoyi-vue-oa-master ; mvn -B -pl ruoyi-ctms test` | 后端单测（**535 条**：B3 的 174 条 + B4 进销存全量 —— 状态机/精度唯一实现点/取号/过账与红冲/并发不丢更新/采购与销售下推/调拨盘点/库存账与一致性/附件对象对账/元数据守卫 `ErpDomainReflectorTest`；**只增不减**：174 → 531（t29）→ 535（t31）） | 需要直连 settings（仓库根 `.mvn/maven.config` 已配） |
-| 15 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-attachment-check.ps1` | **B3 附件接入接口验收（69 条断言）**：对象挂载层与对象存在性、未注册对象类型被拒、`(object_type,object_id)` 复合索引、**白名单比平台窄**（zip/mp4 判别用例）、20MB 双向边界、**HTTP 413** 与半成品清理、随机命名与中文名、按对象查看权（403）与数据范围 403、删除留痕（字段名`附件`）与删除后不可下载 | 需要已登录；夹具 ASCII 前缀 `ATTC*/ATCUS*`；**有运行锁**，不可并发；**幂等**（连跑两次残留 0 行）；会临时借用 `common` 角色授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.47/§6.48） |
+| 14 | `cd ruoyi-vue-oa-master ; mvn -B -pl ruoyi-ctms test` | 后端单测（**550 条**（2026-10-06 B4 收口复跑；历史 174 → 531 → 535 → 539 → 543 → **550**）：B3 的 174 条 + B4 进销存全量 —— 状态机/精度唯一实现点/取号/过账与红冲/并发不丢更新/采购与销售下推/调拨盘点/库存账与一致性/附件对象对账/元数据守卫 `ErpDomainReflectorTest`；**只增不减**：174 → 531（t29）→ 535（t31）） | 需要直连 settings（仓库根 `.mvn/maven.config` 已配） |
+| 15 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-attachment-check.ps1` | **B3 附件接入接口验收（107 条断言）**（2026-10-06 B4 收口复跑；历史 69 → 76 → **107**）：对象挂载层与对象存在性、未注册对象类型被拒、`(object_type,object_id)` 复合索引、**白名单比平台窄**（zip/mp4 判别用例）、20MB 双向边界、**HTTP 413** 与半成品清理、随机命名与中文名、按对象查看权（403）与数据范围 403、删除留痕（字段名`附件`）与删除后不可下载 | 需要已登录；夹具 ASCII 前缀 `ATTC*/ATCUS*`；**有运行锁**，不可并发；**幂等**（连跑两次残留 0 行）；会临时借用 `common` 角色授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.47/§6.48） |
 | 16 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-scope-check.ps1` | **B4 库存域数据范围四档矩阵（§8.2 / AC-79 库存域部分）**：单据（入库单列表/详情）＋结存（`/stk/stock`）＋流水（`/stk/ledger`）× 四档（`1` 全部 / `3` 本部门 / `4` 本部门及下级 / `5` 本人）逐格实测 **+ 多角色取并集 + 导出与列表同范围同筛选（xlsx 解包数行数）+ 范围外详情/结存/流水越权 403** | 需要已登录；夹具 ASCII 前缀 `T10S*`（单位/仓库/类型/物料/4 张入库单）；**四档必须彼此可判别**：观察者 zhangwei 临时调根部门（区分 `'4'` 与 `'3'`）、zhaomin 临时调入财务部（区分 `'3'` 与 `'5'`，同时验证"归属部门创建时快照"）；借 `common` 角色授权与 `data_scope`，**入口自愈 + 收尾还原 + `sys_role.remark` 哨兵**（§6.48），收尾断言 `data_scope` 不留库且夹具零残留；⚠ **脚本内没有锁实现**（2026-10-05 复核：`grep -i "lock|locked-run"` **0 命中**，而 `ctms-contract-check.ps1:320` / `ctms-attachment-check.ps1:223` / `ctms-commercials-check.ps1:184` / `ctms-e2e-check.ps1` / `ctms-migration-check.ps1` 都有 `.cache\<脚本>.lock` 锁文件）⇒ **必须经 `tools\locked-run.ps1 -LockName env` 串行执行**：它会借 `common` 角色改授权与 `data_scope`，并发跑会互相覆盖并留下残留 |
 | 17 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-smoke.ps1` | **B4 只读冒烟（27 条探针）**：8 类单据列表、`/stk/stock`（list/detail/recalc 默认不修复）、`/stk/ledger`（list/detail）、3 个主数据 `/options`、附件的 `object-types`（逐项核对 `registered` = 9）、8 类单据的动作路由形态；输出「端点 × HTTP code × body code × 关键字段」清单，404/405/参数名/权限点不一致在这里低成本暴露 | 需要已登录（`tools\oa-login.ps1`）；**只读、不建任何业务数据**（不污染 E2E 基线）；默认有 FAIL 也退出码 0，`-Strict` 时有 FAIL 退出码 1；**不做断言调优**（未打包/404 照样逐条列出）；判 HTTP 与 body.code 双证（§6.56） |
 | 18 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-check.ps1` | **B4 接口验收 + 判别力自证 + 夹具自建自清**：P-*（03-posting §8，23 条）A-*（04a §5.1，30 条）B-*（04b，16 条）S-*（05a §5，24 条）T-*（06-stockops §8，23 条）L-*（07-ledger §7，16 条）E2E-*（采购线/调拨/盘点/并发过账） | 需要后端在跑 + token + MySQL；`-Selftest` 自证判别力、`-Only <前缀>` 只跑某段；退出码 0=全绿 / 1=有 FAIL / 2=前置不满足；**未实现的条目一律 SKIP 且单独计数（SKIP 不是 PASS）**；夹具按 ASCII 前缀走业务接口 + SQL 收尾并断言**零残留**；⚠ 脚本内**无锁**（同第 16 条）⇒ 经 `locked-run -LockName env` 串行 |
 | 19 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\flow-form-consistency-check.ps1` | **模板 `form_id` ↔ 流程 `content.formId` 一致性巡检 + PRD V-8 反向校验**（t16/HANDOFF §11-8/9）：只读打 `GET /workflow/simple-flow/form-consistency` 并体检 8 类问题（MISMATCH / FLOW_FORM_MISSING·DELETED·DISABLED …）；再用 `T16PROBE-` 探针验证"构造错位→检出""字段失效→阻断且不留半成品""字段仍有效→放行但告警""改指新版→巡检转干净" | 需要已登录 + MySQL(3306)/Redis/RabbitMQ 与后端在线（token 见 `tools\oa-login.ps1`）；`-OnlyReadOnly` 只跑只读巡检、`-KeepProbeFixtures` 留夹具复核；探针**从不发布流程**（不产生 `ACT_*` 行），收尾删夹具并复核巡检回基线；每次调用判 body 的 `code`（§6.56：认证失败 200+401、业务异常 200+500）；⚠ 脚本内**无锁** ⇒ 经 `locked-run -LockName env` 串行 |
+
+| 20 | `cd ruoyi-vue-oa-ui-master ; node tests\run.js`（+ `npm.cmd run build:prod`） | **B4 前端用例（205 条，基线只增不减）**：选项装载层级（`rowsOf`/`dataOf`）、字典/状态/主数据三类筛选形状、`neededOptions` 联动位置、api 导入形状、四条下推链 `pending ⇔ 端点存在` 等 | 纯 Node，不依赖浏览器；`build:prod` 必须 EXIT 0 |
+| 21 | `cd ruoyi-vue-oa-ui-master\tests\e2e ; npx playwright test` | **B4 浏览器 E2E（40 条）**：采购线/销售线/调拨盘点/并发过账/UI 骨架 8 类 + **入库单 UI 写路径**（保存→提交→审核过账→反审核红冲）+ 既有合同审批回归 | ⚠ **必须在 `tests/e2e` 目录下跑**（仓库根会 `0 tests`）；**必须经 `locked-run -LockName env`**；跑批期间**任何人不得重建/重启后端或改前端源码**（HMR 热重编译会制造"空 iframe"假红）；清理只认 `E2E4%`；`change_log` 不计残留 |
 
 **2.0 批次新增回归脚本清单**（AC-83 要求的 3 个，落到对应变更集的 `tasks.md`）：
 
