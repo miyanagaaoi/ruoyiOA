@@ -51,11 +51,30 @@ public class ErpStockLedgerQueryServiceImpl implements IErpStockLedgerQueryServi
     private CtmsProductTypeMapper productTypeMapper;
 
     @Override
-    public List<ErpStockBalance> selectBalanceList(ErpStockBalance query)
+    public ErpStockBalance prepareQuery(ErpStockBalance query)
     {
         ErpStockBalance effective = query == null ? new ErpStockBalance() : query;
         effective.setProductTypeIds(expandProductTypes(effective.getProductTypeId()));
         effective.setDataScopeSql(currentScopeSql());
+        return effective;
+    }
+
+    @Override
+    public List<ErpStockBalance> selectBalanceList(ErpStockBalance query)
+    {
+        ErpStockBalance effective = query == null ? new ErpStockBalance() : query;
+        // ⚠ F-01：**只在未 prepare 过时**才在这里展开类型子树。展开要读"类型清单"（全表），
+        //   而这种辅助查询一旦落在分页上下文里就会被 PageHelper 截成前 pageSize 行
+        //   （见 prepareQuery 的 javadoc）。因此正常入口（Controller）先 prepare 再 startPage；
+        //   这里保留兜底是为了服务层单独调用/单测时不至于完全不展开。
+        if (effective.getProductTypeIds() == null)
+        {
+            effective.setProductTypeIds(expandProductTypes(effective.getProductTypeId()));
+        }
+        if (effective.getDataScopeSql() == null)
+        {
+            effective.setDataScopeSql(currentScopeSql());
+        }
         return stockBalanceMapper.selectBalanceList(effective);
     }
 
@@ -122,6 +141,19 @@ public class ErpStockLedgerQueryServiceImpl implements IErpStockLedgerQueryServi
 
     /**
      * 把"商品类型根节点"展开成子树 ID 列表（空白 → null，表示不过滤）。
+     *
+     * <p> <b>⚠ F-01（blocker）的根因就在这一句查询上</b>：{@code selectProductTypeList} 读的是
+     * <b>全表类型</b>，而 RuoYi 的 {@code startPage()} 会把"下一个 MyBatis 查询"当成要分页的那条
+     * （ThreadLocal 里的 Page 被<b>第一条</b>查询消费）。若本方法在 {@code startPage()} 之后被调用
+     * （曾经就是这样：Controller 先 startPage → 服务里先展开类型 → 再查明细），两次都错：
+     * <ol>
+     *   <li> 类型清单被截成前 {@code pageSize} 行 ⇒ 根类型不在前 N 行时子树算不出来 ⇒
+     *        "按父类型筛选"查不到子类型物料（F-01 现象，页大小一变结果就翻转）； </li>
+     *   <li> 分页被这条辅助查询"吃掉" ⇒ 随后的明细查询反而不再分页。 </li>
+     * </ol>
+     * 因此调用顺序被固定为：**先 {@code prepareQuery}（无分页上下文）再 {@code startPage}**。
+     * 之所以不选 {@code PageHelper.clearPage()}：那会连明细查询自己的分页一起清掉（静默改变页大小）；
+     * 也不选"让调用方传大 pageSize"：那只是把 bug 藏起来，库一大就复发。 </p>
      *
      * @param productTypeId 根类型ID
      * @return 子树ID列表；无需过滤时返回 null

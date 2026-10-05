@@ -415,10 +415,29 @@ public final class ErpLedgerTestSupport
             types.add(type);
         }
 
+        /** 模拟 PageHelper 拦截：线程里有活动页时只返回前 pageSize 行，并"消费"掉该页（F-01 回归用）。 */
+        public boolean simulatePageHelper = true;
+
+        /** 被"分页截断"的次数（断言桩确实生效过）。 */
+        public int truncatedCalls;
+
         @Override
         public List<CtmsProductType> selectProductTypeList(CtmsProductType query)
         {
-            return new ArrayList<>(types);
+            List<CtmsProductType> all = new ArrayList<>(types);
+            if (!simulatePageHelper)
+            {
+                return all;
+            }
+            com.github.pagehelper.Page<?> page = com.github.pagehelper.PageHelper.getLocalPage();
+            if (page == null || page.getPageSize() <= 0)
+            {
+                return all;
+            }
+            com.github.pagehelper.PageHelper.clearPage();   // 与真实拦截器一致：这次分页被本查询消费
+            truncatedCalls++;
+            int limit = Math.min(page.getPageSize(), all.size());
+            return new ArrayList<>(all.subList(0, limit));
         }
 
         @Override

@@ -31,6 +31,21 @@ public interface IErpStockLedgerQueryService
      * @param query 查询条件（商品类型传根节点即可，服务层展开子树；数据范围由服务层装配）
      * @return 明细行集合（含额度与派生字段）
      */
+    /**
+     * <p> 列表/导出的<b>查询前置</b>：展开商品类型子树 + 装配数据范围片段。 </p>
+     *
+     * <p> <b>必须在 {@code startPage()} 之前调用</b>（F-01）：展开要读全表"类型清单"，
+     * 而 {@code startPage()} 会把 ThreadLocal 里的 Page 交给**下一条** MyBatis 查询 ——
+     * 若这条辅助查询落在分页上下文里，类型清单会被截成前 {@code pageSize} 行，
+     * 根类型不在其中时子树就算不出来（"按父类型筛选"漏子类型物料，且随页大小翻转）。 </p>
+     *
+     * <p> 幂等：重复调用只是重算同样的值；返回的是同一个入参对象（便于 Controller 链式使用）。 </p>
+     *
+     * @param query 查询条件（可空）
+     * @return 装配后的查询对象
+     */
+    ErpStockBalance prepareQuery(ErpStockBalance query);
+
     List<ErpStockBalance> selectBalanceList(ErpStockBalance query);
 
     /**

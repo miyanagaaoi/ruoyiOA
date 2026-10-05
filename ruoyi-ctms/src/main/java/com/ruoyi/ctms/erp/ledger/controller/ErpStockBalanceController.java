@@ -70,6 +70,10 @@ public class ErpStockBalanceController extends BaseController
     @GetMapping("/list")
     public TableDataInfo list(ErpStockBalance query)
     {
+        // ⚠ F-01：**先 prepareQuery 再 startPage**。prepareQuery 要读全表"类型清单"来展开子树，
+        //   而 startPage 会把分页交给下一条查询 —— 顺序反了就会把类型清单截成前 pageSize 行，
+        //   导致"按父类型筛选"漏掉子类型物料（且随页大小翻转）。
+        ledgerQueryService.prepareQuery(query);
         startPage();
         List<ErpStockBalance> list = ledgerQueryService.selectBalanceList(query);
         return getDataTable(list);
@@ -115,6 +119,8 @@ public class ErpStockBalanceController extends BaseController
      */
     public List<ErpStockBalanceExportRow> exportRows(ErpStockBalance query)
     {
+        // 导出同样先展开子树（导出不调用 startPage，但保持与列表同一处口径）
+        ledgerQueryService.prepareQuery(query);
         List<ErpStockBalance> list = ledgerQueryService.selectBalanceList(query);
         List<ErpStockBalanceExportRow> rows = new ArrayList<>();
         if (list != null)
