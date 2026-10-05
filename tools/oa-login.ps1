@@ -28,8 +28,8 @@ param(
     # 注意：$PSScriptRoot 在 param 默认值里取不到（参数绑定早于它可用），
     #       所以这两个默认值留空，在脚本体内再补。
     [string]$CacheDir,
-    [string]$MySqlCli = 'H:\dsh\OA\.cache\mysql\extract\mysql-8.0.40-winx64\bin\mysql.exe',
-    [string]$RedisCli = 'H:\dsh\OA\.cache\redis\redis-5.0.14.1\redis-cli.exe',
+    [string]$MySqlCli = 'F:\dsh\ruoyiOA\env\mysql\server\bin\mysql.exe',
+    [string]$RedisCli = 'F:\dsh\ruoyiOA\env\redis\server\redis-cli.exe',
     [string]$RsaTool,
     [string]$Database = 'rad_oa'
 )

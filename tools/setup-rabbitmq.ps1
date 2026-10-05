@@ -5,7 +5,7 @@
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Cache   = 'H:\dsh\ruoyiOA\.cache'
+$Cache   = 'F:\dsh\ruoyiOA\.cache'
 $Tools   = 'C:\Tools'
 $ErlDir  = Join-Path $Tools 'erl-26.2.5.3'
 $ErlExe  = Join-Path $Cache 'otp_win64_26.2.5.3.exe'

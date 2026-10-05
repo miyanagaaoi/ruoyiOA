@@ -6,6 +6,7 @@ ruoyi-vue-oa-ui-master/
 logs/
 uploadPath/
 .cache/
+env/
 *.log
 erl_crash.dump
 

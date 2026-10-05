@@ -26,7 +26,10 @@ const { spawnSync } = require('child_process')
 
 const HERE = __dirname
 const BASELINE_FILE = path.join(HERE, 'baseline.json')
-const UI = 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const UI = 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const BACKEND = 'F:/dsh/ruoyiOA/ruoyi-vue-oa-master'
+/** 外层仓库根：跨前后端的审计（如内置打印版式）用它作为扫描根 */
+const REPO_ROOT = 'F:/dsh/ruoyiOA'
 
 const argv = process.argv.slice(2)
 const UPDATE = argv.includes('--update')
@@ -37,6 +40,7 @@ const VERBOSE = argv.includes('--verbose')
  * 每个审计的清单。
  *  gate: 'zero' | 'baseline' | 'info'
  *  pick: 从该审计输出的 JSON 里取出用于门禁的数字
+ *  src:  该审计扫描的源码根（默认前端 src；后端链路审计传 BACKEND）
  */
 const AUDITS = [
   {
@@ -74,6 +78,37 @@ const AUDITS = [
     title: '模板引用了不存在的名字',
     gate: 'baseline',
     pick: j => (j.hits ? j.hits.length : 0)
+  },
+  {
+    file: 'audit-flow-template-binding.js',
+    title: '2.0 B1：流程↔模板绑定链路完整（by-template / 发布回写 / tpl_ 派生唯一）',
+    gate: 'zero',
+    src: BACKEND,
+    pick: j => (Array.isArray(j) ? j.length : (j.hits ? j.hits.length : 0))
+  },
+  {
+    file: 'audit-template-tabs.js',
+    title: '2.0 B1：模板四页签重构（四页签 / 逐页签校验 / 死字段已删 / 设计器已内嵌）',
+    gate: 'zero',
+    pick: j => (Array.isArray(j) ? j.length : (j.hits ? j.hits.length : 0))
+  },
+  {
+    file: 'audit-print-builtin-templates.js',
+    title: '2.0 B2：内置打印版式按类型选用 + 版式常量收口 + 留痕硬门禁',
+    gate: 'zero',
+    src: REPO_ROOT,
+    pick: j => (Array.isArray(j) ? j.length : (j.hits ? j.hits.length : 0))
+  },
+  {
+    // 2026-10-05 新增（由 B3 §8.4 顺手发现的一类静默缺陷）：`var(--oa-xxx)` 用了不存在的令牌
+    // 时，CSS 会**静默**落到硬编码回退值 —— 页面看不出异常，但那处颜色永远不跟随主题令牌
+    // （违反 DEV-ENV §6.9/§6.11「不写裸色值」），换主题时表现为"别的都变了、这几处没变"。
+    // 判据取 orphans（used − declared）必须为 0；declared − used 属预留，仅信息。
+    // 审计自身带 --selftest（含"注释里的令牌名不算使用点"的回归守卫）。
+    file: 'audit-theme-tokens.js',
+    title: '主题令牌：var(--oa-*) 引用的令牌必须都已声明（否则静默走硬编码回退值）',
+    gate: 'zero',
+    pick: j => (Array.isArray(j) ? j.length : (j.orphans ? j.orphans.length : 0))
   }
 ]
 
@@ -107,7 +142,7 @@ for (const a of AUDITS) {
 
   // ② 正式跑
   try { fs.unlinkSync(tmpJson) } catch { /* 不存在就算了 */ }
-  const r = run(a.file, [UI, tmpJson])
+  const r = run(a.file, [a.src || UI, tmpJson])
   row.exit = r.code
   if (r.code !== 0 && !fs.existsSync(tmpJson)) {
     row.count = null

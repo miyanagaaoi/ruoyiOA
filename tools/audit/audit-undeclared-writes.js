@@ -18,7 +18,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const SRC = process.argv[2] || 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 
 function findNodeModules(start) {
   let dir = path.resolve(start)
@@ -31,7 +31,7 @@ function findNodeModules(start) {
   }
   return null
 }
-const NM = process.env.DSH_AUDIT_NM || findNodeModules(SRC) || findNodeModules('H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src')
+const NM = process.env.DSH_AUDIT_NM || findNodeModules(SRC) || findNodeModules('F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src')
 if (!NM) { console.error('找不到 node_modules/@babel/parser（可用 DSH_AUDIT_NM 指定路径）'); process.exit(1) }
 const parser = require(path.join(NM, '@babel', 'parser'))
 const traverse = require(path.join(NM, '@babel', 'traverse')).default
@@ -398,5 +398,5 @@ if (failedFiles.length) {
   console.log()
 }
 
-fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/undeclared-writes.json',
+fs.writeFileSync(process.argv[3] || 'F:/dsh/ruoyiOA/.cache/undeclared-writes.json',
   JSON.stringify({ risky, benign, failedFiles }, null, 2), 'utf8')

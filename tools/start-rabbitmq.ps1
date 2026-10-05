@@ -3,8 +3,8 @@
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Runner = 'H:\dsh\ruoyiOA\tools\run-rabbitmq.cmd'
-$Log    = 'H:\dsh\ruoyiOA\logs\rabbitmq.log'
+$Runner = 'F:\dsh\ruoyiOA\tools\run-rabbitmq.cmd'
+$Log    = 'F:\dsh\ruoyiOA\logs\rabbitmq.log'
 
 function Test-Port([int]$Port, [int]$TimeoutMs = 800) {
     $c = New-Object System.Net.Sockets.TcpClient

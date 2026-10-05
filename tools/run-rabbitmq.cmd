@@ -8,7 +8,7 @@ rem ============================================================================
 setlocal
 set "ERLANG_HOME=C:\Tools\erl-26.2.5.3"
 set "PATH=%ERLANG_HOME%\bin;%PATH%"
-set "RABBITMQ_BASE=H:\dsh\ruoyiOA\.cache\rabbitmq"
+set "RABBITMQ_BASE=F:\dsh\ruoyiOA\.cache\rabbitmq"
 if not exist "%RABBITMQ_BASE%" mkdir "%RABBITMQ_BASE%"
 cd /d "C:\Tools\rabbitmq_server-3.12.14"
-call sbin\rabbitmq-server.bat > "H:\dsh\ruoyiOA\logs\rabbitmq.log" 2>&1
+call sbin\rabbitmq-server.bat > "F:\dsh\ruoyiOA\logs\rabbitmq.log" 2>&1

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  直连用 Maven settings（**不经过本机代理**）。
+
+  存在理由（2026-10-05 实测）：全局 `~/.m2/settings.xml` 把 http/https 全部代理到
+  `127.0.0.1:7899`，而那个代理**不是随机器自启的**守护进程 —— 机器重启后它没起来时，
+  任何需要下载依赖的 Maven 目标都会失败：
+
+      Could not transfer artifact ... from/to public (https://maven.aliyun.com/...):
+      Connect to 127.0.0.1:7899 [/127.0.0.1] failed: Connection refused
+
+  典型受害者是 `mvn test`：surefire 需要**按需下载** provider（`surefire-junit3` 等），
+  本地 `.m2` 里只有 `.lastUpdated` 标记，于是构建以 “Failed to collect dependencies” 失败 ——
+  看起来像测试挂了，其实是代理没起。
+
+  实测本机到 `maven.aliyun.com` / `repo.maven.apache.org` 的 **443 直连是通的**，
+  所以代理没起时用这份 settings 直连即可：
+
+      mvn -s tools\maven-settings-direct.xml -B -pl ruoyi-workflow test
+
+  后端仓库根另有 `.mvn/maven.config` 让 `mvn` **不带参数**也走直连（见 DEV-ENV §3.3）。
+
+  ⚠ 代理起来之后（需要拉 GitHub 资源时），把 `.mvn/maven.config` 里的 `-s` 去掉即可回到
+    全局代理；这份文件不影响 `~/.m2/settings.xml`（**没有改全局配置**）。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+  <localRepository>${user.home}/.m2/repository</localRepository>
+  <!-- 刻意不声明任何 <proxies>：直连。 -->
+</settings>

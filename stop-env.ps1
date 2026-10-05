@@ -1,12 +1,14 @@
 ﻿<#
 ================================================================================
- stop-env.ps1 —— 停止 ruoyiOA 本地开发环境（放在仓库根目录）
+ stop-env.ps1 —— 停止 ruoyiOA 本地开发环境（F: 独立环境版）
 --------------------------------------------------------------------------------
  用法（在仓库根目录）：
    powershell -NoProfile -ExecutionPolicy Bypass -File .\stop-env.ps1
    powershell ... -File .\stop-env.ps1 -IncludeInfra    # 连 MySQL/Redis/RabbitMQ 一起停
 
- 默认只停「本项目的」后端与前端；基础设施默认保留（它们被别的工程共用）。
+ 默认只停「本项目的」后端与前端；基础设施默认保留。
+ 注意：F: 这套 MySQL/Redis/RabbitMQ 是本仓库 env\ 下自带的实例，端口仍是
+ 3306/6379/5672；H:\dsh\OA 用的是另一套（H: 上的那份），互不干扰。
 
  安全约定（踩过的坑）：
    1) **先打印再杀** —— 把待终止进程的 PID 和命令行都列出来，确认无误才动手。
@@ -27,8 +29,12 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $Root        = $PSScriptRoot
+$EnvDir      = Join-Path $Root 'env'
 $BackendDir  = Join-Path $Root 'ruoyi-vue-oa-master'
 $FrontendDir = Join-Path $Root 'ruoyi-vue-oa-ui-master'
+
+$MySqlAdmin = Join-Path $EnvDir 'mysql\server\bin\mysqladmin.exe'
+$RedisCli   = Join-Path $EnvDir 'redis\server\redis-cli.exe'
 
 function Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Ok  ($m) { Write-Host "    [OK] $m" -ForegroundColor Green }
@@ -106,26 +112,30 @@ if ($IncludeInfra) {
     Start-Sleep -Seconds 3
 
     Step '停止 Redis (6379)'
-    # 优先用 redis-cli shutdown（落盘后优雅退出）
-    $cli = 'H:\dsh\OA\.cache\redis\redis-5.0.14.1\redis-cli.exe'
-    if (Test-Path $cli) {
-        & $cli -h 127.0.0.1 -p 6379 shutdown nosave 2>&1 | Out-Null
+    # 只停「本仓库 env\redis 起的」实例：按 --dir 指向本仓库判断
+    $redisInst = @(Get-CimInstance Win32_Process -Filter "Name='redis-server.exe'" -ErrorAction SilentlyContinue |
+                   Where-Object { $_.CommandLine -like "*$EnvDir*" })
+    if ($redisInst.Count -gt 0 -and (Test-Path $RedisCli)) {
+        # 优先用 redis-cli shutdown（AOF 落盘后优雅退出）
+        & $RedisCli -h 127.0.0.1 -p 6379 shutdown nosave 2>&1 | Out-Null
         Start-Sleep -Seconds 2
     }
     if (Get-NetTCPConnection -LocalPort 6379 -State Listen -ErrorAction SilentlyContinue) {
-        $null = Show-And-Kill (Find-Procs 'redis-server') 'Redis'
+        $null = Show-And-Kill $redisInst 'Redis'
     } else { Ok 'Redis 已停止' }
 
     Step '停止 MySQL (3306)'
-    $admin = 'H:\dsh\OA\.cache\mysql\extract\mysql-8.0.40-winx64\bin\mysqladmin.exe'
-    if (Test-Path $admin) {
-        # 便携版 root 是空口令；shutdown 走的是 my.ini 里配置的 socket/端口
-        & $admin '--host=127.0.0.1' '--user=root' '--port=3306' shutdown 2>&1 | Out-Null
+    # 只停「本仓库 env\mysql 起的」实例：按 --defaults-file 指向本仓库判断
+    $mysqlInst = @(Get-CimInstance Win32_Process -Filter "Name='mysqld.exe'" -ErrorAction SilentlyContinue |
+                   Where-Object { $_.CommandLine -like "*$EnvDir*" })
+    if ($mysqlInst.Count -gt 0 -and (Test-Path $MySqlAdmin)) {
+        # 便携版 root 是空口令；shutdown 走的是 my.ini 里配置的端口
+        & $MySqlAdmin '--host=127.0.0.1' '--user=root' '--port=3306' shutdown 2>&1 | Out-Null
         Start-Sleep -Seconds 4
     }
     if (Get-NetTCPConnection -LocalPort 3306 -State Listen -ErrorAction SilentlyContinue) {
-        Info 'mysqladmin 未生效，改为强制终止'
-        $null = Show-And-Kill (Find-Procs 'mysqld') 'MySQL'
+        Info 'mysqladmin 未生效，改为强制终止（仅限本仓库实例）'
+        $null = Show-And-Kill $mysqlInst 'MySQL'
     } else { Ok 'MySQL 已停止' }
 }
 
@@ -139,6 +149,6 @@ foreach ($r in @(@{p=3306;n='MySQL'}, @{p=6379;n='Redis'}, @{p=5672;n='RabbitMQ'
 }
 Write-Host ''
 if (-not $IncludeInfra) {
-    Info 'MySQL / Redis / RabbitMQ 未处理（它们被别的工程共用）；要一起停请加 -IncludeInfra'
+    Info 'MySQL / Redis / RabbitMQ 未处理（默认保留）；要一起停请加 -IncludeInfra'
 }
 Info '重新启动：powershell -NoProfile -ExecutionPolicy Bypass -File .\start-env.ps1'

@@ -83,7 +83,7 @@ export default {
   ])
 }
 
-const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const SRC = process.argv[2] || 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 const files = []
 ;(function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -120,4 +120,4 @@ for (const f of files) {
 hits.sort((a, b) => a.file.localeCompare(b.file))
 console.log(`async/await 取数无 try/catch（loading 会永久为 true）: ${hits.length} 处\n`)
 hits.forEach(h => console.log(`  ${h.file}:${h.line}   ${h.method}()${h.isAsync ? '' : '   [注意：方法本身未标 async]'}`))
-fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')
+fs.writeFileSync(process.argv[3] || 'F:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')

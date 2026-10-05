@@ -4,13 +4,13 @@
 **控制台一片安静**，只能靠读代码或靠工具发现。
 
 ```powershell
-cd H:\dsh\ruoyiOA
+cd F:\dsh\ruoyiOA
 node tools/audit/run-all.js           # 跑全部：先自检，再对比基线
 node tools/audit/run-all.js --update  # 用当前结果重写基线（要有意识地做）
 node tools/audit/run-all.js --no-selftest
 ```
 
-## 四条轴 / 六个脚本
+## 四条轴 / 七个脚本
 
 | 脚本 | 查什么 | 门禁 |
 | --- | --- | --- |
@@ -20,6 +20,14 @@ node tools/audit/run-all.js --no-selftest
 | `audit-loading-pairs.js` | **AST 强判据**：每个 `loading` 类标志都必须有配对复位，且成功路径的复位必须**无条件** | `baseline` |
 | `audit-undeclared-writes.js` | 给**未声明**的 `this.X` 赋值（Vue 2 非响应式）——只门禁"真风险"那一档 | `baseline` |
 | `audit-template-refs.js` | 模板绑定里引用了**不存在**的名字（渲染出 `undefined`） | `baseline` |
+| `audit-flow-template-binding.js` | **2.0 B1（查后端）**：流程↔模板绑定链路是否完整 —— `by-template` 端点、发布回写调用链、回写必须是原地 `updateTemplate`、`tpl_` 派生规则全仓唯一、反查语句存在 | `zero` |
+| `audit-template-tabs.js` | **2.0 B1（查前端）**：模板配置页是否真是四个页签、是否换成逐页签校验、死字段 `activeNames/activeName` 是否删净、设计器是否已内嵌（而不是仍挂独立路由） | `zero` |
+| `audit-print-builtin-templates.js` | **2.0 B2（查跨端）**：内置打印版式按单据类型选用、版式常量收口到后端唯一真源、留痕硬门禁 | `zero` |
+| `audit-theme-tokens.js` | **`var(--oa-xxx)` 引用的令牌是否都已声明**（用了不存在的令牌名时 CSS 会**静默**落到硬编码回退值、不跟随主题换色；见 `DEV-ENV.md` §6.51）。判据 = used − declared；`declared − used`（预留未用）只打印不门禁。**先剥注释再找使用点**，否则"注释里解释某令牌为什么被换掉"会把门禁自己打红 | `zero` |
+
+> 后 3 个审计扫描的是**跨端/后端**（`audit-flow-template-binding` 与 `audit-print-builtin-templates` 扫
+> `ruoyi-vue-oa-master` / 仓库根），其余扫前端 `ruoyi-vue-oa-ui-master/src`；
+> `run-all.js` 的 `AUDITS` 表里用 `src` 字段区分（缺省 = 前端）。
 
 `gate` 的三种语义：
 - **`zero`** —— 必须为 0。涨了就是真实缺陷回归。
@@ -67,5 +75,6 @@ node tools/audit/audit-loading-pairs.js --selftest
 | `audit-loading-pairs` 报的 `views/login.vue`、`register.vue` | 成功路径**故意**不复位（按钮要显示"登 录 中…"直到路由跳走） |
 | `audit-template-refs` 报的 `layout/components/Sidebar/SidebarItem.vue` 的 `onlyOneChild` | vue-element-admin 习语：`data()` 里赋 null，渲染期由 `hasOneShowingChild()` 赋值并在同一次渲染读回。**动它反而可能触发无限更新循环** |
 | `audit-undeclared-writes` 的"无害暂存"档 | bpmn-js 模型对象、monaco 编辑器实例、遗留死字段 —— 非响应式是**正确**的 |
+| `audit-silent-catch` 报的 `views/workflow/flow-form/index.vue` 的 `loadSigned()` | 签名策略查询**故意**静默降级为"未配置"：真实验证在服务端（`TaskSignGuard`），这里失败不该把提交弄坏。**基线因此从 69 → 70**（2026-10-04 有意识更新；该 `.catch` 由打印/签名链路那次提交引入，基线当时没跟着刷） |
 
 > 审计只能标出"值得看一眼"的名单，**最终定性必须人读代码**。

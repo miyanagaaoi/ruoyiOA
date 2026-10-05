@@ -81,7 +81,7 @@ export default {
   ])
 }
 
-const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const SRC = process.argv[2] || 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 const files = []
 ;(function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -121,4 +121,4 @@ for (const f of files) {
 hits.sort((a, b) => a.file.localeCompare(b.file))
 console.log(`主数据加载"无 catch → 永久转圈"共 ${hits.length} 处，分布在 ${new Set(hits.map(h => h.file)).size} 个文件\n`)
 hits.forEach(h => console.log(`  ${h.file}:${h.line}   ${h.method}()`))
-fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')
+fs.writeFileSync(process.argv[3] || 'F:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')

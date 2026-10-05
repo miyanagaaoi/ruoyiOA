@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>OA 2.0 · B3/B4 低保真原型：合同台账 / 采购 / 销售 / 出入库</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font:13px/1.55 "Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;color:#333}
+.screen{width:1280px;height:820px;overflow:hidden;position:relative;background:#fff}
+.cap{height:34px;background:#2f2f2f;color:#fff;font-size:12px;display:flex;align-items:center;padding:0 22px 0 12px;gap:10px}
+.cap span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap .spacer{flex:1;min-width:0}
+.cap .tag{background:#fff;color:#222;border-radius:2px;padding:0 6px;font-weight:700}
+.app{height:786px;display:flex;flex-direction:column;border:1px solid #ccc;border-top:0}
+.topbar{height:56px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;padding:0 14px;gap:10px;background:#fafafa;flex:none}
+.logo{width:26px;height:26px;border:1px solid #999;border-radius:4px;background:#eee;flex:none}
+.title{font-weight:700;font-size:14px}
+.pill{border:1px solid #bbb;border-radius:12px;padding:1px 10px;font-size:12px;background:#fff;color:#666}
+.spacer{flex:1}
+.body{flex:1;display:flex;overflow:hidden}
+.main{flex:1;padding:14px;overflow:hidden;position:relative}
+.side{width:230px;border-right:1px solid #e3e3e3;padding:10px;background:#fcfcfc;overflow:hidden;flex:none}
+.panel{width:320px;border-left:1px solid #d8d8d8;background:#fbfbfb;padding:12px;overflow:hidden;flex:none}
+.inp{height:28px;border:1px solid #c4c4c4;border-radius:3px;background:#fafafa;color:#aaa;font-size:12px;display:flex;align-items:center;padding:0 8px}
+.btn{border:1px solid #a8a8a8;border-radius:4px;background:#f2f2f2;font-size:12px;padding:3px 10px;display:inline-flex;align-items:center;white-space:nowrap}
+.btn.pri{background:#d5d5d5;border-color:#8a8a8a;font-weight:700}
+.btn.danger{border-color:#c98a8a;color:#7a2e2e;background:#fdecec}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.lbl{width:104px;color:#555;font-size:12.5px;flex:none}
+.chip{border:1px dashed #b5b5b5;border-radius:4px;background:#fdfdfd;color:#555;font-size:12px;padding:5px 6px;text-align:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px}
+.sec{font-size:11.5px;color:#8a8a8a;margin:9px 0 6px;letter-spacing:.5px}
+.note{background:#fff8d6;border:1px dashed #c9a227;color:#6b5410;font-size:12px;padding:5px 8px;border-radius:4px}
+.note.g{background:#eef4ee;border-color:#8aa88a;color:#3d5a3d}
+.note.r{background:#fdecec;border-color:#c98a8a;color:#7a2e2e}
+.radio{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#444;margin-right:12px;white-space:nowrap}
+.radio i{width:12px;height:12px;border:1px solid #999;border-radius:50%;display:inline-block;flex:none}
+.radio i.on{background:#555;box-shadow:inset 0 0 0 2px #fff}
+.tag2{font-size:11px;border:1px solid #aaa;border-radius:3px;padding:0 5px;color:#666;white-space:nowrap}
+.tag2.act{background:#333;color:#fff;border-color:#333}
+.tag2.warn{background:#fdecec;border-color:#c98a8a;color:#7a2e2e}
+.tag2.ok{background:#eef4ee;border-color:#8aa88a;color:#3d5a3d}
+.small{font-size:11.5px;color:#999}
+.cbox{border:1px solid #c4c4c4;border-radius:4px;background:#fff;padding:10px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th,.tbl td{border:1px solid #ddd;padding:4px 6px;text-align:left}
+.tbl th{background:#f6f6f6;font-weight:700;color:#555}
+.tbl tr.sum td{background:#fafafa;font-weight:700}
+.tbl td.num,.tbl th.num{text-align:right}
+.tabbar{display:flex;gap:0;border-bottom:1px solid #ddd;margin-bottom:10px}
+.tabbar span{font-size:12.5px;color:#8a8a8a;padding:7px 14px;border:1px solid transparent;border-bottom:0;margin-bottom:-1px}
+.tabbar span.on{color:#111;font-weight:700;background:#fff;border-color:#ddd;border-radius:4px 4px 0 0}
+.catalog{width:1280px;padding:14px 18px;background:#fff;border-bottom:2px solid #333}
+.catalog h1{font-size:16px;margin:0 0 8px}
+.catalog table{width:100%;border-collapse:collapse;font-size:12px}
+.catalog th,.catalog td{border:1px solid #ddd;padding:4px 8px;text-align:left}
+.catalog th{background:#f6f6f6}
+.cat2{font-size:11.5px;color:#999}
+.timeline{border-left:2px solid #ddd;margin-left:6px;padding-left:12px}
+.timeline .ti{position:relative;padding-bottom:10px;font-size:12px}
+.timeline .ti:before{content:"";position:absolute;left:-17px;top:5px;width:8px;height:8px;border-radius:50%;background:#999}
+.kpi{display:flex;gap:10px}
+.kpi .k{flex:1;border:1px solid #ddd;border-radius:4px;padding:8px;text-align:center;background:#fff}
+.kpi .k b{display:block;font-size:16px;margin-bottom:2px}
+.warnrow{background:#fdecec}
+</style>
+</head>
+<body>
+
+<!-- ================= 目录 ================= -->
+<div class="catalog">
+  <h1>OA 2.0 · B3/B4 低保真原型 —— 合同台账 / 往来单位 / 采购 / 销售 / 出入库</h1>
+  <div class="cat2">对应变更集 <b>oa-contract-ledger</b>（B3）与 <b>oa-purchase-sales-stock</b>（B4），均为 <b>2.2 交付</b>；口径依据 <code>doc/2.0/2.0-PRD-OA升级开发.md</code> 第 7 章、验收 AC-68~AC-79。
+  业务规则真源为 <code>doc/2.0/参考仓库-CTMS-移植清单.md</code>。视觉语言与 B1/B2 原型一致。</div>
+  <table style="margin-top:10px">
+    <tr><th style="width:70px">编号</th><th style="width:340px">画面</th><th>看什么</th></tr>
+    <tr><td>S50</td><td>合同台账列表（多维筛选 + 软删除窗口）</td><td>已终止 / 框架合同 / 质保到期；软删除第 30 天可恢复、第 31 天不可</td></tr>
+    <tr><td>S51</td><td>合同详情（区块化 + 关联单据只读）</td><td>基本信息 / 行项 / 质保 / 标签 / 变更历史（含操作人）/ 关联单据</td></tr>
+    <tr><td>S52</td><td>合同新增 / 编辑（含行项、金额口径）</td><td><b>先舍入再汇总</b>：3 × 1.665 → 5.01（不是 5.00）</td></tr>
+    <tr><td>S53</td><td>质保金跟踪与到期提醒</td><td>生效日 +（期限−1）个月 → 取该月最后一天（2025-06-01 + 12 → 2026-05-31）</td></tr>
+    <tr><td>S54</td><td>客户 / 供应商档案（甲乙方案档化）</td><td>合同甲乙方改为引用档案，保留文本兜底；供应商简称必填</td></tr>
+    <tr><td>S55</td><td>采购线：采购申请单 → 采购单（下推）</td><td>剩余量三字段与「归零即完成」</td></tr>
+    <tr><td>S56</td><td>销售线：销售申请单 → 销售订单（下推）</td><td>采购引供应商、销售引客户</td></tr>
+    <tr><td>S57</td><td>入库单（审核即过账）</td><td>草稿 → 待审核 → <b>已审核即终态</b>（库存类不用"已完成"）</td></tr>
+    <tr><td>S58</td><td>出库单 + 负库存拦截</td><td>超库存出库被拦；结存与状态都不变</td></tr>
+    <tr><td>S59</td><td>调拨单（两阶段先校验后写入）</td><td>一单两条流水（调出/调入）；<b>不计入</b>货品总额度</td></tr>
+    <tr><td>S60</td><td>盘点单（盘盈 / 盘亏 + 反审核级联）</td><td>盘亏<b>豁免</b>负库存校验；反审核级联处理生成的盘盈/盘亏单</td></tr>
+    <tr><td>S61</td><td>库存明细与流水（结存一致性）</td><td>货品总额度的反直觉口径；红冲以负数追加</td></tr>
+    <tr><td>S62</td><td>库存不变式校验与修复（recalc）</td><td>结存 == 流水累计和；不一致可检出并修复</td></tr>
+    <tr><td>S63</td><td>并发过账实测（结存不丢更新）</td><td>100 − 30 − 30 → 40（不是 70）；再红冲 → 70</td></tr>
+    <tr><td>S64</td><td>越权与数据范围（本人 / 本部门 / 全部）</td><td>四档可见集合实测；关联合同/往来单位未交付时文本兜底</td></tr>
+  </table>
+</div>
+
+<!-- ============ S50 合同台账列表 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S50</span><span>合同台账列表 · 多维筛选 + 软删除窗口 + 质保提醒</span><span class="spacer"></span><span>REQ-CTMS-001 / AC-69</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同管理 · 合同台账</div>
+      <div class="spacer"></div>
+      <span class="inp" style="width:180px">搜索合同编号 / 名称 / 对方</span>
+      <span class="btn">高级筛选</span><span class="btn">导出 Excel</span><span class="btn pri">新增合同</span>
+    </div>
+    <div class="body">
+      <div class="main">
+        <div class="kpi" style="margin-bottom:10px">
+          <div class="k"><b>128</b><span class="small">合同总数</span></div>
+          <div class="k"><b>46</b><span class="small">履约中</span></div>
+          <div class="k" style="border-color:#c9a227;background:#fff8d6"><b>3</b><span class="small">质保 30 天内到期</span></div>
+          <div class="k"><b>2</b><span class="small">框架合同（挂 7 个子合同）</span></div>
+        </div>
+
+        <div class="row" style="flex-wrap:wrap">
+          <span class="small">合同类型</span><span class="tag2 act">全部</span><span class="tag2">采购</span><span class="tag2">销售</span><span class="tag2">其他</span>
+          <span class="small" style="margin-left:10px">状态</span><span class="tag2 act">全部</span><span class="tag2">内部审批中</span><span class="tag2">已签订</span><span class="tag2">付款中</span><span class="tag2">已终止</span>
+          <span class="small" style="margin-left:10px">到货</span><span class="tag2 act">全部</span><span class="tag2">未到货</span><span class="tag2">部分到货</span><span class="tag2">已到货</span>
+          <span class="small" style="margin-left:10px">标签</span><span class="tag2 act">采购</span><span class="tag2">框架合同</span><span class="tag2">项目A</span>
+        </div>
+
+        <table class="tbl">
+          <tr>
+            <th style="width:34px"><span class="radio"><i></i></span></th>
+            <th style="width:140px">合同编号</th><th>合同名称</th><th style="width:60px">类型</th>
+            <th style="width:150px">甲方 / 乙方</th><th class="num" style="width:96px">合同金额</th>
+            <th class="num" style="width:70px">已付</th><th class="num" style="width:66px">付款比例</th>
+            <th style="width:92px">状态</th><th style="width:94px">质保到期</th><th style="width:120px">标签</th><th style="width:150px">操作</th>
+          </tr>
+          <tr>
+            <td><span class="radio"><i></i></span></td>
+            <td>HT202604150001</td><td>创新创业孵化服务合作协议</td><td>采购</td>
+            <td>忻州澜蓝汇智创城<br><span class="small">／云羲（山西）数字科技</span></td>
+            <td class="num">36,524.10</td><td class="num">0.00</td><td class="num">0.00%</td>
+            <td><span class="tag2">内部审批中</span></td><td>—</td>
+            <td><span class="tag2">采购</span></td>
+            <td><span class="btn">详情</span><span class="btn">编辑</span></td>
+          </tr>
+          <tr>
+            <td><span class="radio"><i></i></span></td>
+            <td>HT202603010002</td><td>服务器三年维保框架合同</td><td>采购</td>
+            <td>云羲（山西）数字科技<br><span class="small">／北京华信泓安工程</span></td>
+            <td class="num">1,200,000.00</td><td class="num">480,000.00</td><td class="num">40.00%</td>
+            <td><span class="tag2">付款中</span></td><td><span class="tag2 warn">2026-05-31</span></td>
+            <td><span class="tag2 act">框架合同</span> <span class="tag2">采购</span></td>
+            <td><span class="btn">详情</span><span class="btn">编辑</span><span class="btn">子合同(7)</span></td>
+          </tr>
+          <tr>
+            <td><span class="radio"><i></i></span></td>
+            <td>HT202602100005</td><td>办公场所租赁合同</td><td>其他</td>
+            <td>忻州澜蓝汇智创城<br><span class="small">／云羲（山西）数字科技</span></td>
+            <td class="num">36,524.10</td><td class="num">36,524.10</td><td class="num">100.00%</td>
+            <td><span class="tag2">已终止</span></td><td>—</td><td><span class="tag2">项目B</span></td>
+            <td><span class="btn">详情</span><span class="btn">编辑</span></td>
+          </tr>
+          <tr style="opacity:.55">
+            <td><span class="radio"><i></i></span></td>
+            <td>HT202601050011</td><td>（已删除）球阀备件采购合同</td><td>采购</td>
+            <td>云羲／浙江京衡律所</td><td class="num">50,000.00</td><td class="num">0.00</td><td class="num">0.00%</td>
+            <td><span class="tag2 warn">已删除 · 第 12 天</span></td><td>—</td><td>—</td>
+            <td><span class="btn">恢复</span></td>
+          </tr>
+        </table>
+
+        <div class="row" style="margin-top:10px">
+          <span class="small">共 128 条</span><span class="spacer"></span>
+          <span class="btn">上一页</span><span class="tag2 act">1</span><span class="tag2">2</span><span class="tag2">3</span><span class="btn">下一页</span>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">软删除窗口</div>
+        <div class="note g">删除后 30 天内可恢复（列表中灰显 + 剩余天数）；<b>第 31 天起不可恢复</b>。这是参考仓库的冻结口径，边界按天计算。</div>
+        <div class="sec">列表通用能力（沿用参考仓库语义）</div>
+        <div class="note">关键词跨 5~8 个字段 OR 匹配；标签支持<b>交集</b>筛选（同时含多个标签）；导出 = 当前筛选结果 + 同数据范围 + 导出列可配置 + 记住上次选择。</div>
+        <div class="sec">质保提醒</div>
+        <div class="note">站内看板展示"即将到期 / 已到期"；<b>不做</b>邮件或 IM 推送（参考仓库口径）。提醒窗口默认 30 天（<code>sys_config</code> 可调）。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S51 合同详情 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S51</span><span>合同详情 · 区块化 + 关联单据（只读）</span><span class="spacer"></span><span>REQ-CTMS-008 / AC-77 / 口径 D12</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">HT202603010002 · 服务器三年维保框架合同</div>
+      <span class="pill">付款中</span><span class="tag2 act">框架合同</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn">变更历史</span><span class="btn">编辑</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="sec" style="margin-top:0">基本信息</div>
+        <table class="tbl">
+          <tr><th style="width:120px">合同编号</th><td>HT202603010002</td><th style="width:120px">合同类型</th><td>采购</td><th style="width:110px">签订日期</th><td>2026-03-01</td></tr>
+          <tr><th>合同名称</th><td colspan="5">服务器三年维保框架合同</td></tr>
+          <tr><th>甲方</th><td colspan="2">云羲（山西）数字科技有限公司 <span class="tag2 ok">档案引用</span></td>
+              <th>乙方</th><td colspan="2">北京华信泓安工程有限公司山西分公司 <span class="tag2 ok">档案引用</span></td></tr>
+          <tr><th>合同金额</th><td>¥ 1,200,000.00</td><th>累计已付</th><td>¥ 480,000.00</td><th>付款比例</th><td>40.00%（自动计算）</td></tr>
+          <tr><th>是否框架</th><td>是（挂 7 个子合同）</td><th>生效日期</th><td>2026-03-01</td><th>标的物</th><td>服务器维保服务</td></tr>
+          <tr><th>经办人</th><td>郑妍</td><th>归属组织</th><td>智澈公司 / 经发部</td><th>创建人</th><td>郑妍 · 2026-03-01 10:22</td></tr>
+        </table>
+
+        <div class="sec">合同行项（金额先舍入再汇总）</div>
+        <table class="tbl">
+          <tr><th style="width:40px">序号</th><th style="width:70px">类型</th><th>名称</th><th style="width:120px">物料</th><th style="width:90px">规格型号</th>
+              <th class="num" style="width:70px">数量</th><th class="num" style="width:84px">单价</th><th class="num" style="width:90px">总价</th><th>备注</th></tr>
+          <tr><td>1</td><td>采购</td><td>机架式服务器</td><td>WL-0007 服务器</td><td>R740</td><td class="num">3.000</td><td class="num">1.665</td><td class="num">5.01</td><td>—</td></tr>
+          <tr><td>2</td><td>服务</td><td>三年上门维保</td><td>WL-0031 维保服务</td><td>—</td><td class="num">1.000</td><td class="num">1,199,994.99</td><td class="num">1,199,994.99</td><td>含 4 小时响应</td></tr>
+          <tr class="sum"><td colspan="7" style="text-align:right">合计（先逐行舍入到分，再求和）</td><td class="num">1,200,000.00</td><td></td></tr>
+        </table>
+        <div class="note" style="margin-top:6px">口径校验：若"先求和再舍入"，第 1 行会算成 4.995 → 5.00，合计差 1 分。参考仓库冻结口径为 <b>先舍入再汇总</b>。</div>
+
+        <div class="sec">质保金</div>
+        <table class="tbl">
+          <tr><th style="width:110px">是否质保</th><td>是</td><th style="width:110px">质保金额</th><td>¥ 60,000.00</td><th style="width:110px">比例</th><td>5.0000%</td></tr>
+          <tr><th>生效日期</th><td>2025-06-01</td><th>期限（月）</th><td>12</td><th>到期日（自动）</th><td><b>2026-05-31</b> <span class="small">← 生效日 +（12−1）月 → 该月最后一天</span></td></tr>
+          <tr><th>是否已释放</th><td>否</td><th>释放日期</th><td>—</td><th>备注</th><td>—</td></tr>
+        </table>
+
+        <div class="sec">关联单据 <span class="small">只读 · 不回写合同字段（口径 D12）</span></div>
+        <table class="tbl">
+          <tr><th style="width:150px">单据号</th><th style="width:110px">单据类型</th><th style="width:90px">状态</th><th class="num" style="width:100px">金额</th><th>摘要</th></tr>
+          <tr><td>CG202603010001</td><td>采购单</td><td><span class="tag2 ok">已审核</span></td><td class="num">1,199,994.99</td><td>服务器维保首期采购</td></tr>
+          <tr><td>RK202603050002</td><td>入库单</td><td><span class="tag2 ok">已审核</span></td><td class="num">1,199,994.99</td><td>采购入库（过账）</td></tr>
+        </table>
+
+        <div class="sec">变更历史（含操作人）</div>
+        <div class="timeline">
+          <div class="ti"><b>2026-03-01 10:22</b> 郑妍 · 创建合同 <span class="small">（来源：手动）</span></div>
+          <div class="ti"><b>2026-03-05 09:41</b> 李玥洋 · <code>status</code>：内部审批中 → 已签订 <span class="small">（手动）</span></div>
+          <div class="ti"><b>2026-03-05 09:41</b> 系统 · <code>warranty_end</code>：— → 2026-05-31 <span class="small">（自动 · 服务端计算）</span></div>
+          <div class="ti"><b>2026-04-01 16:03</b> 张倩 · <code>paid_amount</code>：0.00 → 480,000.00 <span class="small">（手动）</span></div>
+        </div>
+      </div>
+      <div class="panel" style="width:310px">
+        <div class="sec">口径要点</div>
+        <div class="note g">关联单据区块<b>只读汇总</b>：单据侧可关联合同（非强制），但<b>不回写</b>合同字段。</div>
+        <div class="note" style="margin-top:8px">两份"文档有、代码没做"的差异按<b>文档口径</b>实现（Q-B10）：质保到期日在<b>新增与编辑都服务端计算</b>；行项"标的物摘要"要真正落库并记一条自动来源的变更历史。</div>
+        <div class="sec">框架合同</div>
+        <div class="note">1 框架挂 N 子合同；创建框架合同时<b>自动附加</b>「框架合同」标签。</div>
+        <div class="sec">删除</div>
+        <div class="note">软删除 + 30 天可恢复；恢复入口在列表的灰显行上。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S52 合同新增/编辑 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S52</span><span>合同新增 / 编辑 · 行项与金额口径</span><span class="spacer"></span><span>REQ-CTMS-004 / AC-70</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">新增合同</div>
+      <div class="spacer"></div>
+      <span class="btn">存草稿</span><span class="btn pri">保存</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="sec" style="margin-top:0">基本信息</div>
+        <div class="grid3">
+          <div class="row"><div class="lbl" style="width:80px">合同编号</div><div class="inp" style="flex:1">HT202604150003</div></div>
+          <div class="row"><div class="lbl" style="width:70px">合同类型</div><div class="inp" style="flex:1">采购 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:70px">签订日期</div><div class="inp" style="flex:1">2026-04-15</div></div>
+        </div>
+        <div class="row"><div class="lbl" style="width:80px">合同名称</div><div class="inp" style="flex:1">创新创业孵化服务合作协议</div></div>
+        <div class="grid2">
+          <div class="row"><div class="lbl" style="width:80px">甲方（我方）</div><div class="inp" style="flex:1">云羲（山西）数字科技 ▾</div><span class="tag2 ok">档案</span></div>
+          <div class="row"><div class="lbl" style="width:80px">乙方</div><div class="inp" style="flex:1">忻州澜蓝汇智创城科技发展 ▾</div><span class="tag2">可文本兜底</span></div>
+        </div>
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:70px">币种</div><div class="inp" style="flex:1">CNY ▾</div></div>
+          <div class="row"><div class="lbl" style="width:60px">金额</div><div class="inp" style="flex:1">36,524.10</div></div>
+          <div class="row"><div class="lbl" style="width:80px">是否框架</div><span class="radio"><i></i>否</span><span class="radio"><i class="on"></i>是</span></div>
+          <div class="row"><div class="lbl" style="width:80px">所属框架</div><div class="inp" style="flex:1">— ▾</div></div>
+        </div>
+        <div class="row"><div class="lbl" style="width:80px">标签</div>
+          <span class="tag2 act">采购</span><span class="tag2">框架合同</span><span class="tag2">项目A</span><span class="btn">+ 新建标签</span>
+          <span class="small" style="margin-left:8px">新建框架合同时自动打「框架合同」</span>
+        </div>
+
+        <div class="sec">行项明细</div>
+        <table class="tbl">
+          <tr><th style="width:36px">序号</th><th style="width:74px">类型</th><th>名称</th><th style="width:130px">物料（必选）</th><th style="width:90px">规格型号</th>
+              <th class="num" style="width:66px">数量</th><th class="num" style="width:78px">单价</th><th class="num" style="width:84px">总价</th><th>备注</th><th style="width:40px"></th></tr>
+          <tr><td>1</td><td><span class="inp" style="height:22px;padding:0 4px">采购 ▾</span></td><td><span class="inp" style="height:22px;padding:0 4px">机架式服务器</span></td><td><span class="inp" style="height:22px;padding:0 4px">WL-0007 服务器</span></td><td><span class="inp" style="height:22px;padding:0 4px">R740</span></td><td class="num"><span class="inp" style="height:22px;padding:0 4px">3.000</span></td><td class="num"><span class="inp" style="height:22px;padding:0 4px">1.665</span></td><td class="num"><b>5.01</b></td><td>—</td><td class="small">✕</td></tr>
+          <tr><td>2</td><td><span class="inp" style="height:22px;padding:0 4px">服务 ▾</span></td><td><span class="inp" style="height:22px;padding:0 4px">三年上门维保</span></td><td><span class="inp" style="height:22px;padding:0 4px">WL-0031</span></td><td><span class="inp" style="height:22px;padding:0 4px">—</span></td><td class="num"><span class="inp" style="height:22px;padding:0 4px">1.000</span></td><td class="num"><span class="inp" style="height:22px;padding:0 4px">36,519.09</span></td><td class="num"><b>36,519.09</b></td><td>—</td><td class="small">✕</td></tr>
+          <tr class="sum"><td colspan="7" style="text-align:right">合同金额（= 行项合计，先逐行舍入到分再求和）</td><td class="num">36,524.10</td><td colspan="2"></td></tr>
+        </table>
+        <div class="row" style="margin-top:6px"><span class="btn">+ 添加行项</span><span class="small">数量按单位小数位（默认 3~2 位）、单价 4 位、金额 2 位；物料为主数据必选项</span></div>
+
+        <div class="sec">质保金 / 履约 / 其他</div>
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:70px">质保</div><span class="radio"><i class="on"></i>有</span><span class="radio"><i></i>无</span></div>
+          <div class="row"><div class="lbl" style="width:70px">质保金额</div><div class="inp" style="flex:1">1,826.21</div></div>
+          <div class="row"><div class="lbl" style="width:70px">期限(月)</div><div class="inp" style="flex:1">12</div></div>
+          <div class="row"><div class="lbl" style="width:80px">质保生效</div><div class="inp" style="flex:1">2026-04-15</div></div>
+        </div>
+        <div class="grid3">
+          <div class="row"><div class="lbl" style="width:80px">到货状态</div><div class="inp" style="flex:1">未到货 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:80px">预计到货</div><div class="inp" style="flex:1">2026-05-10</div></div>
+          <div class="row"><div class="lbl" style="width:80px">经办人</div><div class="inp" style="flex:1">郑妍 ▾</div></div>
+        </div>
+        <div class="row"><div class="lbl" style="width:80px">附件</div><span class="btn">选择文件</span><span class="small">正文/扫描件；沿用 OA 统一附件能力（挂到任意业务对象 + 按对象鉴权）</span></div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">金额口径（最易错）</div>
+        <div class="note r">必须 <b>BigDecimal</b>，禁止 double/float；<b>逐行 HALF_UP 到 2 位再求和</b>。上图第 1 行 3 × 1.665 = 4.995 → <b>5.01</b>（先汇总再舍入会得 5.00，差 1 分）。</div>
+        <div class="sec">合同编号</div>
+        <div class="note">类型码 + 主体码 + <b>按年</b>重置；停用占号不复用；编号服务<b>必须从前缀之后提取数字</b>再比较。</div>
+        <div class="note r" style="margin-top:8px">S0 结论：<code>ruoyi-serial</code> 现有规则<b>表达不了</b>该编号（无分桶、DATE 取当前日期、年度重置靠定时任务）。需按向后兼容的最小扩展实现，见 PRD 7.2.1 / F-8。</div>
+        <div class="sec">甲乙方案档化</div>
+        <div class="note">采购类引供应商、销售类引客户；<b>保留文本兜底</b>（存量无档案时按文本展示）。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S53 质保跟踪 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S53</span><span>质保金跟踪与到期提醒 · 到期日算法是冻结口径</span><span class="spacer"></span><span>REQ-CTMS-003 / AC-70</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">质保金跟踪</div>
+      <div class="spacer"></div>
+      <span class="tag2 act">即将到期</span><span class="tag2">已到期</span><span class="tag2">已释放</span><span class="btn">导出</span>
+    </div>
+    <div class="body">
+      <div class="main">
+        <table class="tbl">
+          <tr><th style="width:140px">合同编号</th><th>合同名称</th><th class="num" style="width:100px">合同金额</th>
+              <th class="num" style="width:100px">质保金额</th><th style="width:96px">质保生效</th><th style="width:60px">期限</th>
+              <th style="width:100px">到期日</th><th style="width:88px">剩余天数</th><th style="width:80px">状态</th><th style="width:120px">操作</th></tr>
+          <tr class="warnrow"><td>HT202603010002</td><td>服务器三年维保框架合同</td><td class="num">1,200,000.00</td><td class="num">60,000.00</td><td>2025-06-01</td><td>12 个月</td><td><b>2026-05-31</b></td><td>—</td><td><span class="tag2 warn">已到期</span></td><td><span class="btn">释放</span><span class="btn">详情</span></td></tr>
+          <tr><td>HT202604150001</td><td>创新创业孵化服务合作协议</td><td class="num">36,524.10</td><td class="num">1,826.21</td><td>2026-04-15</td><td>12 个月</td><td>2027-03-31</td><td>320</td><td><span class="tag2">跟踪中</span></td><td><span class="btn">释放</span><span class="btn">详情</span></td></tr>
+          <tr><td>HT202503100008</td><td>办公场地物业合同</td><td class="num">106,240.00</td><td class="num">5,312.00</td><td>2025-03-15</td><td>24 个月</td><td>2027-02-28</td><td>289</td><td><span class="tag2">跟踪中</span></td><td><span class="btn">释放</span><span class="btn">详情</span></td></tr>
+          <tr style="opacity:.6"><td>HT202402200004</td><td>厂区绿化养护合同</td><td class="num">88,000.00</td><td class="num">4,400.00</td><td>2024-02-29</td><td>12 个月</td><td>2025-01-31</td><td>—</td><td><span class="tag2 ok">已释放</span></td><td><span class="btn">详情</span></td></tr>
+        </table>
+
+        <div class="sec">到期日算法（必须逐条复刻，不能"顺手优化"）</div>
+        <table class="tbl">
+          <tr><th style="width:150px">生效日</th><th style="width:90px">期限</th><th style="width:150px">到期日</th><th>说明</th></tr>
+          <tr><td>2025-06-01</td><td>12 个月</td><td><b>2026-05-31</b></td><td>生效日 +(12−1) 月 = 2026-05-01 → 取该月最后一天</td></tr>
+          <tr><td>2026-01-31</td><td>2 个月</td><td><b>2026-02-28</b></td><td>进位到 2026-01-31 → 取 2 月最后一天（28 日）</td></tr>
+          <tr><td>2026-04-15</td><td>12 个月</td><td><b>2027-03-31</b></td><td>2027-03-15 → 该月最后一天</td></tr>
+          <tr><td>2024-02-29</td><td>12 个月</td><td><b>2025-01-31</b></td><td>闰日进位后取 1 月最后一天</td></tr>
+        </table>
+        <div class="note r" style="margin-top:6px">参考实现的坑：到期日<b>只在编辑时重算，新增时不重算</b>（依赖前端回传）。本批次按文档口径改为<b>新增与编辑都由服务端计算</b>，前端不回传也能算对。</div>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">提醒口径</div>
+        <div class="note">站内看板：即将到期（默认 30 天内）/ 已到期；<b>不做</b>邮件与 IM 推送。</div>
+        <div class="sec">释放</div>
+        <div class="note">记录是否释放 + 释放日期 + 备注；<b>不做</b>释放审批流（参考仓库口径）。</div>
+        <div class="sec">已删除合同</div>
+        <div class="note">软删除的合同<b>不出现</b>在质保列表与框架树里（沿用参考仓库行为）。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S54 客户/供应商档案 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S54</span><span>往来单位档案 · 客户 / 供应商（甲乙方案档化的依据）</span><span class="spacer"></span><span>REQ-CTMS-005 / AC-69</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资料库 · 往来单位</div>
+      <div class="spacer"></div>
+      <span class="inp" style="width:200px">搜索名称 / 简称 / 税号</span><span class="btn">导入</span><span class="btn">导出</span><span class="btn pri">新增</span>
+    </div>
+    <div class="body">
+      <div class="main">
+        <div class="tabbar"><span class="on">供应商</span><span>客户</span></div>
+        <table class="tbl">
+          <tr><th style="width:40px"><span class="radio"><i></i></span></th><th style="width:110px">编码</th><th>全称</th><th style="width:110px">简称 <span class="req">必填</span></th>
+              <th style="width:150px">统一社会信用代码</th><th style="width:110px">联系人</th><th style="width:120px">电话</th><th style="width:80px">状态</th><th style="width:130px">操作</th></tr>
+          <tr><td><span class="radio"><i></i></span></td><td>GYS-0001</td><td>北京华信泓安工程有限公司山西分公司</td><td><b>华信泓安</b></td><td>91140100MA0K…</td><td>李工</td><td>138-0000-0000</td><td><span class="tag2 ok">启用</span></td><td><span class="btn">详情</span><span class="btn">编辑</span></td></tr>
+          <tr><td><span class="radio"><i></i></span></td><td>GYS-0002</td><td>浙江京衡（郑州）律师事务所</td><td><b>京衡律所</b></td><td>31410000MD…</td><td>王律师</td><td>139-0000-0000</td><td><span class="tag2 ok">启用</span></td><td><span class="btn">详情</span><span class="btn">编辑</span></td></tr>
+          <tr><td><span class="radio"><i></i></span></td><td>GYS-0003</td><td>太原热力集团有限公司</td><td><span class="tag2 warn">缺简称</span></td><td>—</td><td>—</td><td>—</td><td><span class="tag2">停用</span></td><td><span class="btn">详情</span><span class="btn">编辑</span></td></tr>
+        </table>
+        <div class="note" style="margin-top:8px">简称是<b>供应商必填</b>（V2.2 起，客户不变）；简称作为单据列表、下拉与打印的默认显示名。存量无简称的档案<b>不自动改写</b>，按全称回退显示。</div>
+
+        <div class="sec">历史档案迁移（不强制 · 生成待认领草案）</div>
+        <div class="cbox">
+          <div class="row" style="margin:0 0 8px"><span class="lbl" style="width:120px">来源</span><span class="tag2">合同表里的甲乙方自由文本</span><span class="spacer"></span><span class="btn">扫描并生成草案</span></div>
+          <table class="tbl">
+            <tr><th style="width:96px">草案号</th><th>名称（原文）</th><th style="width:96px">类型</th><th style="width:110px">状态</th><th style="width:150px">操作</th></tr>
+            <tr><td>D-0001</td><td>忻州澜蓝汇智创城科技发展有限公司</td><td>客户</td><td><span class="tag2">待认领</span></td><td><span class="btn">认领并建档</span><span class="btn">忽略</span></td></tr>
+            <tr><td>D-0002</td><td>云羲（山西）数字科技有限公司</td><td>供应商</td><td><span class="tag2">待认领</span></td><td><span class="btn">认领并建档</span><span class="btn">忽略</span></td></tr>
+          </table>
+          <div class="note g" style="margin-top:8px">迁移<b>不强制</b>：未认领的合同继续按文本展示，不阻塞业务（口径 O14）。</div>
+        </div>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">档案字段（沿用参考仓库）</div>
+        <div class="note">全称 / 简称 / 统一社会信用代码 / 联系人 / 电话 / 地址 / 等级（A~D）/ 状态 / 归属组织 / 备注。</div>
+        <div class="sec">与合同的联动</div>
+        <div class="note">采购类合同 → 乙方引用<b>供应商</b>；销售类 → 甲方引用<b>客户</b>；未建档时保留文本兜底。</div>
+        <div class="sec">不做的</div>
+        <div class="note">不做客户/供应商的审批流，不做信用额度与账期管理（参考仓库范围外）。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S55 采购线下推 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S55</span><span>采购线 · 采购申请单 → 采购单（下推 + 剩余量回写）</span><span class="spacer"></span><span>REQ-PUR-001 / AC-72</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">采购申请单 CG202603010001</div>
+      <span class="pill">已审核</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn pri">下推为采购单</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:76px">单据号</div><div class="inp" style="flex:1">CG202603010001</div></div>
+          <div class="row"><div class="lbl" style="width:60px">单据日期</div><div class="inp" style="flex:1">2026-03-01</div></div>
+          <div class="row"><div class="lbl" style="width:60px">经办人</div><div class="inp" style="flex:1">郑妍</div></div>
+          <div class="row"><div class="lbl" style="width:76px">归属组织</div><div class="inp" style="flex:1">智澈 / 经发部</div></div>
+        </div>
+        <div class="row"><div class="lbl" style="width:76px">关联合同</div><span class="tag2 act">HT202603010002 · 服务器三年维保框架合同</span><span class="small">可关联、非强制</span></div>
+
+        <div class="sec">行项（关注两个"已下单"与"已入库"三列）</div>
+        <table class="tbl">
+          <tr><th style="width:36px">序号</th><th>物料</th><th style="width:90px">规格</th>
+              <th class="num" style="width:70px">申请数量</th><th class="num" style="width:70px">已下单<br>ordered_qty</th><th class="num" style="width:70px">已入库<br>received_qty</th><th class="num" style="width:70px">剩余</th><th style="width:78px">状态</th></tr>
+          <tr><td>1</td><td>WL-0007 服务器</td><td>R740</td><td class="num">10.000</td><td class="num">10.000</td><td class="num">10.000</td><td class="num">0.000</td><td><span class="tag2 ok">已完成</span></td></tr>
+          <tr><td>2</td><td>WL-0009 交换机</td><td>S5720</td><td class="num">6.000</td><td class="num">4.000</td><td class="num">0.000</td><td class="num">2.000</td><td><span class="tag2">部分</span></td></tr>
+          <tr><td>3</td><td>WL-0031 维保服务</td><td>—</td><td class="num">1.000</td><td class="num">0.000</td><td class="num">0.000</td><td class="num">1.000</td><td><span class="tag2">未开始</span></td></tr>
+        </table>
+        <div class="note g" style="margin-top:6px">下推规则：申请的"剩余量"进入采购单；采购单审核后回写 <code>ordered_qty</code>；入库过账时累加 <code>received_qty</code>；<b>三列都归零即自动置"已完成"</b>。</div>
+
+        <div class="sec">操作痕迹</div>
+        <div class="timeline">
+          <div class="ti"><b>2026-03-01 10:00</b> 郑妍 · 创建（草稿）</div>
+          <div class="ti"><b>2026-03-01 10:30</b> 郑妍 · 提交审核</div>
+          <div class="ti"><b>2026-03-01 14:00</b> 李玥洋 · 审核通过 <span class="small">（单级审核，不接 Flowable）</span></div>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">状态机（单级 · 已确认 Q-B7）</div>
+        <div class="note g">草稿 → 待审核 → 已审核（可驳回回草稿）；<code>已完成</code>为手工/自动完成态。采购与销售单据走单级审核，<b>不接 Flowable</b>。</div>
+        <div class="sec">下推三字段</div>
+        <div class="note"><code>ordered_qty</code> / <code>received_qty</code> / <code>shipped_qty</code>；<b>归零即完成</b>。反审核时要检查是否有下游单据（有则拦截）。</div>
+        <div class="sec">作废上游</div>
+        <div class="note r">参考实现只在"反审核"里拦下游，<b>作废</b>没拦。按文档口径：作废/反审核时若已有下游单据，一律拦截并提示（Q-B10）。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S56 销售线 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S56</span><span>销售线 · 销售申请单 → 销售订单</span><span class="spacer"></span><span>REQ-SAL-001 / 采购引供应商 · 销售引客户</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">销售订单 XS202603080004</div>
+      <span class="pill">待审核</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn">驳回</span><span class="btn pri">审核通过</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:76px">单据号</div><div class="inp" style="flex:1">XS202603080004</div></div>
+          <div class="row"><div class="lbl" style="width:60px">客户</div><div class="inp" style="flex:1">忻州澜蓝汇智创城 ▾</div><span class="tag2 ok">档案</span></div>
+          <div class="row"><div class="lbl" style="width:60px">结算</div><div class="inp" style="flex:1">银行转账 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:76px">来源单据</div><div class="inp" style="flex:1">XS-SQ202603050002</div></div>
+        </div>
+        <div class="row"><div class="lbl" style="width:76px">关联合同</div><span class="tag2 act">HT202602100005 · 办公场所租赁合同</span></div>
+
+        <table class="tbl">
+          <tr><th style="width:36px">序号</th><th>物料</th><th style="width:90px">仓库</th><th class="num" style="width:70px">订单数量</th>
+              <th class="num" style="width:70px">已发货<br>shipped_qty</th><th class="num" style="width:84px">单价</th><th class="num" style="width:96px">金额</th><th class="num" style="width:60px">已出库</th></tr>
+          <tr><td>1</td><td>WL-0012 智能球阀</td><td>中心仓</td><td class="num">20.000</td><td class="num">12.000</td><td class="num">380.0000</td><td class="num">7,600.00</td><td class="num">12.000</td></tr>
+          <tr><td>2</td><td>WL-0013 阀体组件</td><td>中心仓</td><td class="num">20.000</td><td class="num">0.000</td><td class="num">95.5000</td><td class="num">1,910.00</td><td class="num">0.000</td></tr>
+          <tr class="sum"><td colspan="6" style="text-align:right">合计</td><td class="num">9,510.00</td><td></td></tr>
+        </table>
+
+        <div class="sec">下推历史</div>
+        <table class="tbl">
+          <tr><th style="width:150px">来源</th><th style="width:150px">目标</th><th style="width:110px">时间</th><th>说明</th></tr>
+          <tr><td>销售申请单 XS-SQ202603050002</td><td>销售订单 XS202603080004</td><td>2026-03-08 09:30</td><td>整单下推（申请剩余量 20 + 20）</td></tr>
+          <tr><td>销售订单 XS202603080004</td><td>出库单 CK202603100001</td><td>2026-03-10 14:00</td><td>部分下推（球阀 12）</td></tr>
+        </table>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">方向映射</div>
+        <div class="note g">采购 → 乙方引<b>供应商</b>；销售 → 甲方引<b>客户</b>（口径 D10）。</div>
+        <div class="sec">出库与订单的关系</div>
+        <div class="note">出库单过账时累加订单的 <code>shipped_qty</code>；归零则订单自动完成。</div>
+        <div class="sec">超量保护</div>
+        <div class="note r">下推数量不得超过来源单的剩余量；出库不得超订单未发量。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S57 入库单过账 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S57</span><span>入库单 · 审核即过账（库存类单据 approved 即终态）</span><span class="spacer"></span><span>REQ-STK-001 / AC-73</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">入库单 RK202603050002</div>
+      <span class="pill">已审核 · 已过账</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn danger">反审核（红冲）</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:76px">入库类型</div><div class="inp" style="flex:1">采购入库 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:60px">仓库</div><div class="inp" style="flex:1">中心仓 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:76px">供应商</div><div class="inp" style="flex:1">华信泓安 ▾</div><span class="tag2 ok">档案</span></div>
+          <div class="row"><div class="lbl" style="width:76px">来源单据</div><div class="inp" style="flex:1">CG202603010001</div></div>
+        </div>
+        <div class="row"><div class="lbl" style="width:76px">关联合同</div><span class="tag2 act">HT202603010002</span><span class="small">可关联、非强制</span></div>
+
+        <table class="tbl">
+          <tr><th style="width:36px">序号</th><th>物料</th><th style="width:90px">规格</th><th class="num" style="width:80px">数量</th>
+              <th class="num" style="width:90px">单价</th><th class="num" style="width:100px">金额</th><th>备注</th><th style="width:90px">过账</th></tr>
+          <tr><td>1</td><td>WL-0007 服务器</td><td>R740</td><td class="num">10.000</td><td class="num">119,999.4990</td><td class="num">1,199,994.99</td><td>—</td><td><span class="tag2 ok">已过账</span></td></tr>
+          <tr class="sum"><td colspan="5" style="text-align:right">合计</td><td class="num">1,199,994.99</td><td colspan="2"></td></tr>
+        </table>
+
+        <div class="sec">本次过账产生的库存流水（只增不改）</div>
+        <table class="tbl">
+          <tr><th style="width:120px">物料</th><th style="width:80px">仓库</th><th style="width:90px">业务类型</th><th style="width:130px">单据号</th>
+              <th class="num" style="width:90px">数量变动</th><th class="num" style="width:90px">变动后结存</th><th class="num" style="width:90px">单价</th><th style="width:140px">时间 / 操作人</th></tr>
+          <tr><td>WL-0007 服务器</td><td>中心仓</td><td>采购入库</td><td>RK202603050002</td><td class="num">+10.000</td><td class="num">10.000</td><td class="num">119,999.4990</td><td>2026-03-05 09:41 / 李玥洋</td></tr>
+        </table>
+        <div class="note g" style="margin-top:6px">反审核不会删掉上面这行，而是<b>追加一条负数流水</b>（红冲），原流水保留可查。</div>
+      </div>
+      <div class="panel" style="width:310px">
+        <div class="sec">状态机（库存类）</div>
+        <div class="note r">草稿 → 待审核 → <b>已审核（终态）</b>；库存类单据<b>不使用「已完成」</b>。审核动作即触发过账。</div>
+        <div class="sec">过账一致性（必须加锁）</div>
+        <div class="note r">参考实现靠"服务层不 commit + SQLite 串行写"掩盖并发。MySQL 下必须：<b>显式事务 + 行锁</b>（结存行 <code>SELECT … FOR UPDATE</code>）+ 结存表<b>唯一索引 + 重复键重试</b>。</div>
+        <div class="sec">不变式</div>
+        <div class="note">任取一个（物料, 仓库）：<b>结存数量 == 该组合全部流水的数量变动之和</b>。可用运维接口校验与修复。</div>
+        <div class="sec">反审核前提</div>
+        <div class="note">若已有下游单据（如已出库），拦截并提示。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S58 出库单 + 负库存拦截 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S58</span><span>出库单 · 负库存拦截（默认不允许，参数可开）</span><span class="spacer"></span><span>REQ-STK-001 / Q-B8</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">出库单 CK202603100001</div>
+      <span class="pill">待审核</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn pri">审核并过账</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:76px">出库类型</div><div class="inp" style="flex:1">销售出库 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:60px">仓库</div><div class="inp" style="flex:1">中心仓 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:60px">客户</div><div class="inp" style="flex:1">忻州澜蓝汇智创城 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:76px">来源单据</div><div class="inp" style="flex:1">XS202603080004</div></div>
+        </div>
+
+        <table class="tbl">
+          <tr><th style="width:36px">序号</th><th>物料</th><th class="num" style="width:80px">出库数量</th><th class="num" style="width:90px">当前结存</th>
+              <th class="num" style="width:90px">出库后结存</th><th style="width:120px">校验</th></tr>
+          <tr><td>1</td><td>WL-0012 智能球阀</td><td class="num">12.000</td><td class="num">30.000</td><td class="num">18.000</td><td><span class="tag2 ok">通过</span></td></tr>
+          <tr class="warnrow"><td>2</td><td>WL-0013 阀体组件</td><td class="num">25.000</td><td class="num">20.000</td><td class="num" style="color:#7a2e2e"><b>−5.000</b></td>
+            <td><span class="tag2 warn">拦截：库存不足</span></td></tr>
+        </table>
+
+        <div class="cbox" style="border-color:#c98a8a;margin-top:10px">
+          <div class="note r">审核被拒绝：物料「WL-0013 阀体组件」在「中心仓」的结存为 20.000，本次出库 25.000 会造成负库存。</div>
+          <div class="small" style="margin-top:6px">结果：单据状态保持「待审核」，<b>不产生任何库存流水</b>，结存数字不变。</div>
+          <div style="margin-top:8px"><span class="btn">修改数量</span><span class="btn">拆分出库</span><span class="small" style="margin-left:8px">系统参数可放开负库存（默认不允许）</span></div>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">校验时机</div>
+        <div class="note">出库<b>审核过账时</b>逐行校验结存；任一行不足则整单拒绝（不部分过账）。</div>
+        <div class="sec">盘亏是唯一豁免</div>
+        <div class="note g">盘点产生的<b>盘亏出库</b>不校验负库存——盘亏是既成事实，拦它反而会让账实不符。</div>
+        <div class="sec">领用/其他出库</div>
+        <div class="note">出库类型：销售出库 / 领用出库 / 其他出库；类型决定流水里的业务类型，不改变校验规则。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S59 调拨单 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S59</span><span>调拨单 · 两阶段（先全量校验，再统一写入）；一单两条流水</span><span class="spacer"></span><span>REQ-STK-004 / AC-75</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">调拨单 DB202603120001</div>
+      <span class="pill">待审核</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn pri">审核并过账</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:76px">调出仓</div><div class="inp" style="flex:1">中心仓 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:76px">调入仓</div><div class="inp" style="flex:1">备件仓 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:60px">经办人</div><div class="inp" style="flex:1">王佳琦</div></div>
+          <div class="row"><div class="lbl" style="width:76px">附件</div><span class="btn">选择文件</span></div>
+        </div>
+
+        <table class="tbl">
+          <tr><th style="width:36px">序号</th><th>物料</th><th class="num" style="width:80px">调拨数量</th>
+              <th class="num" style="width:90px">调出仓结存</th><th class="num" style="width:90px">调入仓结存</th><th style="width:130px">阶段一：校验</th></tr>
+          <tr><td>1</td><td>WL-0012 智能球阀</td><td class="num">5.000</td><td class="num">18.000</td><td class="num">2.000</td><td><span class="tag2 ok">通过</span></td></tr>
+          <tr class="warnrow"><td>2</td><td>WL-0013 阀体组件</td><td class="num">30.000</td><td class="num">20.000</td><td class="num">0.000</td><td><span class="tag2 warn">不足，整单拒绝</span></td></tr>
+        </table>
+        <div class="note r" style="margin-top:6px">阶段一只要有一行不通过，就<b>整单拒绝且第一行也不写入</b>——不能出现"调了一半"。</div>
+
+        <div class="sec">阶段二：校验全通过后，统一写入两条流水</div>
+        <table class="tbl">
+          <tr><th style="width:120px">物料</th><th style="width:80px">仓库</th><th style="width:90px">业务类型</th><th style="width:130px">单据号</th>
+              <th class="num" style="width:90px">数量变动</th><th class="num" style="width:90px">变动后结存</th><th>说明</th></tr>
+          <tr><td>WL-0012 智能球阀</td><td>中心仓</td><td>调拨出库</td><td>DB202603120001</td><td class="num">−5.000</td><td class="num">13.000</td><td>调出</td></tr>
+          <tr><td>WL-0012 智能球阀</td><td>备件仓</td><td>调拨入库</td><td>DB202603120001</td><td class="num">+5.000</td><td class="num">7.000</td><td>调入</td></tr>
+        </table>
+        <div class="note g" style="margin-top:6px">同一张调拨单号产生两条流水（一出一入）。<b>「调拨入库」不计入货品总额度</b>——见 S61 的口径说明。</div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">为什么必须两阶段</div>
+        <div class="note">"先逐行过账、遇错再回滚"在并发下容易留半成品；参考仓库的做法是<b>先全量校验再统一写入</b>，本批次照搬。</div>
+        <div class="sec">附件</div>
+        <div class="note g">参考实现的附件白名单<b>漏了调拨单</b>；按文档口径本批次要支持（Q-B10）。</div>
+        <div class="sec">额度口径</div>
+        <div class="note r">调拨入库若被计入"入库"，会让货品总额度虚高。判方向必须按 <code>biz_type</code>，不能按 <code>qty_change &gt; 0</code>。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S60 盘点单 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S60</span><span>盘点单 · 盘盈/盘亏自动生成单据 + 反审核级联</span><span class="spacer"></span><span>REQ-STK-005 / AC-75 / Q-B10</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">盘点单 PD202603150001</div>
+      <span class="pill">全盘 · 中心仓</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn pri">审核盘点</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="grid4">
+          <div class="row"><div class="lbl" style="width:76px">盘点类型</div><span class="radio"><i class="on"></i>全盘</span><span class="radio"><i></i>抽盘</span></div>
+          <div class="row"><div class="lbl" style="width:60px">仓库</div><div class="inp" style="flex:1">中心仓 ▾</div></div>
+          <div class="row"><div class="lbl" style="width:76px">盘点人</div><div class="inp" style="flex:1">王佳琦</div></div>
+          <div class="row"><div class="lbl" style="width:76px">账面时点</div><div class="inp" style="flex:1">2026-03-15 09:00</div></div>
+        </div>
+
+        <table class="tbl">
+          <tr><th style="width:36px">序号</th><th>物料</th><th class="num" style="width:90px">账面数量</th><th class="num" style="width:90px">实盘数量</th>
+              <th class="num" style="width:80px">差异</th><th style="width:110px">处理</th></tr>
+          <tr><td>1</td><td>WL-0012 智能球阀</td><td class="num">13.000</td><td class="num">15.000</td><td class="num" style="color:#3d5a3d">+2.000</td><td><span class="tag2 ok">盘盈入库</span></td></tr>
+          <tr class="warnrow"><td>2</td><td>WL-0013 阀体组件</td><td class="num">20.000</td><td class="num">18.500</td><td class="num" style="color:#7a2e2e">−1.500</td><td><span class="tag2 warn">盘亏出库</span></td></tr>
+          <tr><td>3</td><td>WL-0007 服务器</td><td class="num">10.000</td><td class="num">10.000</td><td class="num">0.000</td><td><span class="tag2">无差异</span></td></tr>
+        </table>
+
+        <div class="sec">审核盘点后自动生成的单据</div>
+        <table class="tbl">
+          <tr><th style="width:150px">生成单据</th><th style="width:110px">类型</th><th class="num" style="width:90px">数量</th><th style="width:100px">状态</th><th>说明</th></tr>
+          <tr><td>RK202603150003</td><td>入库单</td><td class="num">+2.000</td><td><span class="tag2 ok">已审核·已过账</span></td><td>盘盈入库（自动生成并过账）</td></tr>
+          <tr><td>CK202603150004</td><td>出库单</td><td class="num">−1.500</td><td><span class="tag2 ok">已审核·已过账</span></td><td>盘亏出库（<b>豁免负库存校验</b>）</td></tr>
+        </table>
+        <div class="note g" style="margin-top:6px">盘亏豁免负库存：盘亏是既成事实，拦它只会让账实继续不符。</div>
+
+        <div class="sec">反审核（本批次必须补的级联）</div>
+        <div class="cbox" style="border-color:#c98a8a">
+          <div class="note r">参考实现的盘点单<b>没有注册反审核处理</b>，且下游映射里也没有盘点单——会出现"盘点反审核了，但盘盈/盘亏单还在过账状态"。</div>
+          <div class="note g" style="margin-top:6px">2.0 按文档口径：反审核盘点单时<b>级联反审核</b>它生成的盘盈入库/盘亏出库单（或先要求反审核它们）。</div>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">抽盘的取值规则</div>
+        <div class="note">抽盘可按物料类型（含子树）圈定范围，这是参考仓库的既有行为。</div>
+        <div class="sec">盘点的过账</div>
+        <div class="note">差异不直接改结存，而是<b>生成入库/出库单并过账</b>——所有结存变动都必须有对应的单据与流水。</div>
+        <div class="sec">待确认（不影响本批任务拆分）</div>
+        <div class="note">盘点单是否显式记录"盘点时点"（参考实现只记账面快照），已登记在 B4 的 design Open Questions。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S61 库存明细与流水 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S61</span><span>库存明细与流水 · 货品总额度的反直觉口径 + 红冲以负数追加</span><span class="spacer"></span><span>REQ-STK-003 / AC-73 / C-3</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">库存 · 明细与流水</div>
+      <div class="spacer"></div>
+      <span class="btn">导出 Excel</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="tabbar"><span class="on">库存明细（结存）</span><span>库存流水</span></div>
+        <table class="tbl">
+          <tr><th style="width:150px">商品类型</th><th>物料名称</th><th style="width:110px">物料编码</th><th style="width:90px">仓库</th>
+              <th class="num" style="width:90px">结存数量</th><th class="num" style="width:90px">单位</th><th style="width:130px">最近变动</th></tr>
+          <tr><td>硬件-服务器</td><td>机架式服务器</td><td>WL-0007</td><td>中心仓</td><td class="num">10.000</td><td class="num">台</td><td>2026-03-05 09:41</td></tr>
+          <tr><td>硬件-阀门</td><td>智能球阀</td><td>WL-0012</td><td>中心仓</td><td class="num">13.000</td><td class="num">个</td><td>2026-03-15 10:22</td></tr>
+          <tr><td>硬件-阀门</td><td>智能球阀</td><td>WL-0012</td><td>备件仓</td><td class="num">7.000</td><td class="num">个</td><td>2026-03-12 15:00</td></tr>
+          <tr><td>硬件-阀门</td><td>阀体组件</td><td>WL-0013</td><td>中心仓</td><td class="num">18.500</td><td class="num">个</td><td>2026-03-15 10:22</td></tr>
+        </table>
+        <div class="note g" style="margin-top:6px">明细命名沿用参考仓库口径：<b>「商品类型-物料名称」</b>（如「硬件-阀门-智能球阀」）。</div>
+
+        <div class="sec">库存流水（只增不改；红冲以负数追加）</div>
+        <table class="tbl">
+          <tr><th style="width:110px">物料</th><th style="width:80px">仓库</th><th style="width:96px">业务类型</th><th style="width:130px">单据号</th>
+              <th class="num" style="width:84px">数量变动</th><th class="num" style="width:90px">变动后结存</th><th class="num" style="width:90px">单价</th><th style="width:120px">时间</th></tr>
+          <tr><td>WL-0007</td><td>中心仓</td><td>采购入库</td><td>RK202603050002</td><td class="num">+10.000</td><td class="num">10.000</td><td class="num">119,999.4990</td><td>2026-03-05 09:41</td></tr>
+          <tr><td>WL-0007</td><td>中心仓</td><td><span class="tag2 warn">红冲-采购入库</span></td><td>RK202603050002</td><td class="num">−10.000</td><td class="num">0.000</td><td class="num">119,999.4990</td><td>2026-03-06 10:05</td></tr>
+          <tr><td>WL-0007</td><td>中心仓</td><td>采购入库</td><td>RK202603060004</td><td class="num">+10.000</td><td class="num">10.000</td><td class="num">119,999.4990</td><td>2026-03-06 10:12</td></tr>
+        </table>
+
+        <div class="sec">货品总额度：口径演示（写成枚举白名单就会错）</div>
+        <table class="tbl">
+          <tr><th style="width:230px">筛选口径</th><th class="num" style="width:130px">计算结果</th><th>说明</th></tr>
+          <tr><td><code>biz_type LIKE '%入库%' AND NOT LIKE '%调拨入库%'</code> 后 <code>SUM(qty_change × unit_price)</code></td>
+              <td class="num"><b>0.00</b></td><td>正确：一入一冲正好归零</td></tr>
+          <tr class="warnrow"><td>改成 <code>qty_change &gt; 0</code> 判方向</td>
+              <td class="num" style="color:#7a2e2e"><b>2,399,989.98</b></td><td>错误：红冲的负数被忽略，额度<b>虚高</b></td></tr>
+        </table>
+        <div class="note r" style="margin-top:6px">参考实现源码注释明确警告：<b>不能用 <code>qty_change &gt; 0</code> 判方向</b>，否则红冲无法冲减。</div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">流水的三条硬约束</div>
+        <div class="note g">① 只增不改；② 红冲 = 追加负数；③ 每条都有 <code>qty_after</code> 快照便于对账下钻。</div>
+        <div class="sec">只记数量不记成本</div>
+        <div class="note">库存只记数量（口径 D4），不做成本核算、批次与保质期；单价仅作参考记录。</div>
+        <div class="sec">索引</div>
+        <div class="note r">参考实现文档声称建了 <code>(物料,仓库)</code> 与 <code>(单据)</code> 两个流水索引，但 ORM 里没声明 → MySQL 侧<b>必须补建</b>，否则流水下钻全表扫。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S62 一致性校验与修复 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S62</span><span>库存不变式校验与修复（运维接口 recalc）</span><span class="spacer"></span><span>REQ-STK-006 / AC-76</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">库存 · 一致性校验</div>
+      <div class="spacer"></div>
+      <span class="btn">重新校验</span><span class="btn danger">修复差异</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="note g" style="margin-bottom:10px">不变式：任取「物料 × 仓库」→ <b>结存数量 == 该组合全部流水的数量变动之和</b>。</div>
+
+        <div class="sec">① 一致时</div>
+        <table class="tbl">
+          <tr><th style="width:110px">物料</th><th style="width:90px">仓库</th><th class="num" style="width:100px">结存</th><th class="num" style="width:120px">流水累计</th><th style="width:110px">结论</th></tr>
+          <tr><td>WL-0007</td><td>中心仓</td><td class="num">10.000</td><td class="num">10.000</td><td><span class="tag2 ok">一致</span></td></tr>
+          <tr><td>WL-0012</td><td>中心仓</td><td class="num">13.000</td><td class="num">13.000</td><td><span class="tag2 ok">一致</span></td></tr>
+        </table>
+        <div class="small" style="margin-top:6px">校验结果：<b>0 条不一致</b>。</div>
+
+        <div class="sec">② 人为制造不一致后（用例基线）</div>
+        <table class="tbl">
+          <tr><th style="width:110px">物料</th><th style="width:90px">仓库</th><th class="num" style="width:100px">结存</th><th class="num" style="width:120px">流水累计</th><th class="num" style="width:100px">差额</th><th style="width:110px">结论</th></tr>
+          <tr class="warnrow"><td>WL-0013</td><td>中心仓</td><td class="num">18.500</td><td class="num">20.000</td><td class="num" style="color:#7a2e2e">−1.500</td><td><span class="tag2 warn">不一致 · 已检出</span></td></tr>
+        </table>
+        <div class="small" style="margin-top:6px">校验结果：<b>检出 1 条</b>不一致。</div>
+
+        <div class="sec">③ 修复后复检</div>
+        <table class="tbl">
+          <tr><th style="width:110px">物料</th><th style="width:90px">仓库</th><th class="num" style="width:100px">结存（修复后）</th><th class="num" style="width:120px">流水累计</th><th style="width:110px">结论</th></tr>
+          <tr><td>WL-0013</td><td>中心仓</td><td class="num">20.000</td><td class="num">20.000</td><td><span class="tag2 ok">一致</span></td></tr>
+        </table>
+        <div class="note" style="margin-top:6px">修复动作会把结存校正为流水累计值，并写一条操作日志（谁、何时、修了哪个组合、差额多少）。</div>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">为什么必须有这个接口</div>
+        <div class="note">并发丢更新、脚本误写、迁移导入都可能破坏不变式。有了它，运维能<b>先发现再修复</b>，而不是等对账时才发现。</div>
+        <div class="sec">什么时候跑</div>
+        <div class="note g">上线后每日定时 + 每次大批量导入后 + 出现问题时的第一手段。</div>
+        <div class="sec">不算"自动修复"</div>
+        <div class="note r">默认只<b>检出并报告</b>；修复必须由人显式触发并留痕。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S63 并发过账实测 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S63</span><span>并发过账实测 · 结存不丢更新（100 − 30 − 30 = 40）</span><span class="spacer"></span><span>REQ-STK-002 / AC-74 / F-1 / F-2</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">并发验收用例 · 同一物料同一仓库</div>
+      <span class="pill">验收基线</span>
+      <div class="spacer"></div>
+      <span class="btn">重跑用例</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="sec" style="margin-top:0">步骤与期望</div>
+        <table class="tbl">
+          <tr><th style="width:60px">步骤</th><th>动作</th><th class="num" style="width:110px">期望结存</th><th class="num" style="width:120px">流水累计</th><th style="width:120px">结论</th></tr>
+          <tr><td>0</td><td>初始：WL-0012 / 中心仓 有 100.000</td><td class="num">100.000</td><td class="num">100.000</td><td><span class="tag2 ok">基线</span></td></tr>
+          <tr><td>1</td><td>并发提交两张出库单，各 30.000（<b>同时</b>审核）</td><td class="num">40.000</td><td class="num">40.000</td><td><span class="tag2 ok">正确</span></td></tr>
+          <tr class="warnrow"><td>1'</td><td>若不加行锁："读—改—写"丢失更新</td><td class="num" style="color:#7a2e2e">70.000</td><td class="num">40.000</td><td><span class="tag2 warn">丢更新 · 不变式被破坏</span></td></tr>
+          <tr><td>2</td><td>反审核其中一张出库单（红冲 −30.000）</td><td class="num">70.000</td><td class="num">70.000</td><td><span class="tag2 ok">正确</span></td></tr>
+        </table>
+        <div class="note r" style="margin-top:6px">判据不只看数字：<b>结存必须恒等于流水的累计和</b>。第 1' 步的 70 与 40 不等，正好暴露丢更新。</div>
+
+        <div class="sec">必须同时满足的三项实现要求</div>
+        <div class="grid3">
+          <div class="cbox"><div style="font-weight:700">显式事务</div><div class="small" style="margin-top:4px">过账/红冲/下推在一个 <code>@Transactional(rollbackFor = Exception.class)</code> 内完成</div></div>
+          <div class="cbox"><div style="font-weight:700">行锁</div><div class="small" style="margin-top:4px">结存行 <code>SELECT … FOR UPDATE</code>，把"读—改—写"保护起来</div></div>
+          <div class="cbox"><div style="font-weight:700">唯一索引 + 重试</div><div class="small" style="margin-top:4px">结存表 (物料, 仓库) 唯一索引；首次插入冲突时捕获重复键并重试</div></div>
+        </div>
+
+        <div class="sec">为什么参考实现看不出这个问题</div>
+        <div class="note">它跑在 SQLite + WAL 上，写操作串行化，"先查后插结存行"的竞态被掩盖了；其源码注释已经预告"切到 PostgreSQL 要加行锁"。MySQL 下必须显式补上。</div>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">验收方式</div>
+        <div class="note g">并发用例必须真跑（两个并发请求），不能只看代码；断言"结存 == 流水累计"。建议纳入批次回归脚本。</div>
+        <div class="sec">相关字段</div>
+        <div class="note">单价 4 位、数量 3 位、金额 2 位；全程 BigDecimal，禁止 double/float。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S64 数据范围与越权 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S64</span><span>数据范围与越权 · 四档可见集合 + 降级交付提示</span><span class="spacer"></span><span>REQ-NFR-003 / AC-79 / AC-81</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">合同台账（同一批数据，四个不同范围的账号）</div>
+      <div class="spacer"></div>
+      <span class="pill">范围切换示意</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto">
+        <div class="sec" style="margin-top:0">四档范围的预期可见集合</div>
+        <table class="tbl">
+          <tr><th style="width:170px">数据范围</th><th>判定口径</th><th class="num" style="width:100px">可见条数</th><th style="width:220px">说明</th></tr>
+          <tr><td>仅本人</td><td>创建人 = 当前账号</td><td class="num">12</td><td>参考仓库用 <code>created_by</code>；本侧映射为创建人</td></tr>
+          <tr><td>本部门</td><td>归属部门 = 当前账号部门</td><td class="num">34</td><td>参考仓库用 <code>org_id</code>；本侧用 <code>dept_id</code></td></tr>
+          <tr><td>本部门及下级</td><td>归属部门 ∈ 本部门 + 其后代</td><td class="num">58</td><td>用 <code>sys_dept.ancestors</code> 前缀匹配</td></tr>
+          <tr><td>全部</td><td>不限</td><td class="num">128</td><td>集团层面账号</td></tr>
+        </table>
+        <div class="note" style="margin-top:6px">多角色账号：可见集合 = 各角色范围的<b>并集</b>（比参考实现的"取最宽"语义更明确，需按本侧口径实测）。</div>
+
+        <div class="sec">越权路径必须全部 403</div>
+        <table class="tbl">
+          <tr><th style="width:280px">越权动作</th><th style="width:110px">期望</th><th>说明</th></tr>
+          <tr><td>按编号直查他人部门的数据范围外的单据</td><td><span class="tag2 warn">403</span></td><td>防"改个 id 就能看"</td></tr>
+          <tr><td>对范围外单据执行审核 / 反审核 / 作废</td><td><span class="tag2 warn">403</span></td><td>写操作一律服务端校验</td></tr>
+          <tr><td>下载范围外单据的附件</td><td><span class="tag2 warn">403</span></td><td>附件按业务对象鉴权</td></tr>
+          <tr><td>数据库备份接口（运维类）</td><td><span class="tag2 warn">403</span></td><td>仅运维账号；且备份文件名白名单防路径穿越</td></tr>
+        </table>
+
+        <div class="sec">模块边界（本批次必须守住）</div>
+        <div class="grid3">
+          <div class="cbox"><div style="font-weight:700">复用</div><div class="small" style="margin-top:4px">统一登录 / sys_dept 组织 / 角色菜单权限 / sys_dict_* 字典 / ruoyi-serial 编号 / ruoyi-file 附件 / @Log 日志 / 打印模板</div></div>
+          <div class="cbox" style="border-color:#c98a8a"><div style="font-weight:700;color:#7a2e2e">禁止</div><div class="small" style="margin-top:4px">第二套账号表、第二套组织树、自研 JWT、代码常量权限表</div></div>
+          <div class="cbox" style="border-color:#c98a8a"><div style="font-weight:700;color:#7a2e2e">绝不移植</div><div class="small" style="margin-top:4px">参考仓库的免认证调试开关（关掉认证即可访问全部数据）</div></div>
+        </div>
+
+        <div class="sec">依赖未就绪时的降级提示（实现期需在界面上显式告知）</div>
+        <div class="note r">若 B3 的往来单位档案与合同台账尚未交付，B4 单据的"关联合同"与供应商/客户引用<b>只能文本兜底</b>——属降级交付，必须在验收时标注，不能当作完成。</div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">为什么自建而不是复用 @DataScope</div>
+        <div class="note">RuoYi 的 <code>@DataScope</code> 只用在系统模块 5 处（部门/用户/角色），按 <code>user_id</code>/<code>dept_id</code> 展开，与"业务单表的数据范围"不是一回事；且参考仓库的 SELF 用 <code>created_by</code>、DEPT 用 <code>org_id</code>，与本侧默认列名不同，直接套用会越权或"该看的看不到"。</div>
+        <div class="sec">权限点命名</div>
+        <div class="note">统一 <code>&lt;域&gt;:&lt;资源&gt;:&lt;动作&gt;</code> 全小写：<code>ctms:contract:list</code> / <code>pur:order:approve</code> / <code>stk:in-order:unapprove</code>。存量权限点<b>不改名</b>（会打断已授权角色）。</div>
+        <div class="sec">验收矩阵</div>
+        <div class="note">四档范围 × 4 类业务对象（合同 / 单据 / 附件 / 导出）必须逐格实测，纳入批次回归。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

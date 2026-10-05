@@ -19,8 +19,8 @@ const path = require('path')
 
 const ARGS = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const SELFTEST = process.argv.includes('--selftest')
-const SRC = ARGS[0] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
-const OUT = ARGS[1] || 'H:/dsh/ruoyiOA/.cache/template-refs.json'
+const SRC = ARGS[0] || 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const OUT = ARGS[1] || 'F:/dsh/ruoyiOA/.cache/template-refs.json'
 
 function findNodeModules(start) {
   let dir = path.resolve(start)
@@ -487,5 +487,5 @@ if (failed.length) {
 }
 console.log('\n明细：')
 list.forEach(h => console.log(`  ${h.file}  {{ ${h.name} }}   例：${h.expr}`))
-fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/template-refs.json',
+fs.writeFileSync(process.argv[3] || 'F:/dsh/ruoyiOA/.cache/template-refs.json',
   JSON.stringify({ hits: list, failed }, null, 2), 'utf8')

@@ -18,7 +18,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const SRC = process.argv[2] || 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 
 /**
  * 本脚本可能放在仓库之外（例如 tools/audit/），那时 require('@babel/parser') 解析不到
@@ -38,7 +38,7 @@ function findNodeModules(start) {
 }
 // 依赖定位的兜底顺序：环境变量 -> 从 SRC 向上找 -> 默认仓库路径。
 // 自检时 SRC 指向临时目录（那里没有 node_modules），所以必须有后两级兜底。
-const DEFAULT_REPO_SRC = 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const DEFAULT_REPO_SRC = 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 const NM = process.env.DSH_AUDIT_NM || findNodeModules(SRC) || findNodeModules(DEFAULT_REPO_SRC)
 if (!NM) {
   console.error('找不到可用的 node_modules/@babel/parser（可用 DSH_AUDIT_NM 指定路径）')
@@ -337,4 +337,4 @@ for (const f of files) {
 hits.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
 console.log(`解析成功 ${parsed} 个文件（失败 ${parseFail}），命中 ${hits.length} 处\n`)
 hits.forEach(h => console.log(`  ${h.file}:${h.line}  ${h.method}()  [${h.flag}]  ${h.why}   (复位 ${h.resets} 个 @ ${h.ctxs}${h.isAsync ? '，async' : ''})`))
-fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')
+fs.writeFileSync(process.argv[3] || 'F:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(hits, null, 2), 'utf8')

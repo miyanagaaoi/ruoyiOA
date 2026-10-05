@@ -49,7 +49,7 @@ export default {
   ])
 }
 
-const SRC = process.argv[2] || 'H:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
+const SRC = process.argv[2] || 'F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src'
 const files = []
 ;(function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -113,5 +113,5 @@ others.forEach(s => {
   s.ctx.forEach(c => console.log(`      ${c}`))
 })
 
-fs.writeFileSync(process.argv[3] || 'H:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(sites, null, 2), 'utf8')
+fs.writeFileSync(process.argv[3] || 'F:/dsh/ruoyiOA/.cache/audit-out.json', JSON.stringify(sites, null, 2), 'utf8')
 console.log('\n完整清单已写入 .cache/silent-catch.json')

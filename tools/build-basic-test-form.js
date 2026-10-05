@@ -15,7 +15,7 @@
  */
 const fs = require('fs');
 
-const OUT = process.argv[2] || 'H:/dsh/ruoyiOA/tools/basic-test-form-content.json';
+const OUT = process.argv[2] || 'F:/dsh/ruoyiOA/tools/basic-test-form-content.json';
 
 const BASE_TS = Date.now();
 let seq = 100;

@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>OA 2.0 · B1 低保真原型：表单四页签 / 流程内嵌 / 可发起范围 / 关联审批</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font:13px/1.55 "Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;color:#333}
+.screen{width:1280px;height:820px;overflow:hidden;position:relative;background:#fff}
+.cap{height:34px;background:#2f2f2f;color:#fff;font-size:12px;display:flex;align-items:center;padding:0 22px 0 12px;gap:10px}
+.cap span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap .spacer{flex:1;min-width:0}
+.cap .tag{background:#fff;color:#222;border-radius:2px;padding:0 6px;font-weight:700}
+.app{height:786px;display:flex;flex-direction:column;border:1px solid #ccc;border-top:0}
+.topbar{height:56px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;padding:0 14px;gap:10px;background:#fafafa;flex:none}
+.logo{width:26px;height:26px;border:1px solid #999;border-radius:4px;background:#eee;flex:none}
+.title{font-weight:700;font-size:14px}
+.pill{border:1px solid #bbb;border-radius:12px;padding:1px 10px;font-size:12px;background:#fff;color:#666}
+.spacer{flex:1}
+.steps{height:44px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;gap:24px;padding:0 16px;background:#fff;font-size:13px;color:#9a9a9a;flex:none}
+.steps .on{color:#111;font-weight:700}
+.steps .no{display:inline-flex;width:18px;height:18px;border:1px solid #aaa;border-radius:50%;align-items:center;justify-content:center;font-size:11px;margin-right:6px}
+.steps .on .no{background:#333;color:#fff;border-color:#333}
+.body{flex:1;display:flex;overflow:hidden}
+.main{flex:1;padding:14px;overflow:hidden;position:relative}
+.side{width:250px;border-right:1px solid #e3e3e3;padding:10px;background:#fcfcfc;overflow:hidden;flex:none}
+.panel{width:340px;border-left:1px solid #d8d8d8;background:#fbfbfb;padding:12px;overflow:hidden;flex:none}
+.ghost{opacity:.35;filter:grayscale(1)}
+.inp{height:28px;border:1px solid #c4c4c4;border-radius:3px;background:#fafafa;color:#aaa;font-size:12px;display:flex;align-items:center;padding:0 8px}
+.btn{border:1px solid #a8a8a8;border-radius:4px;background:#f2f2f2;font-size:12px;padding:3px 10px;display:inline-flex;align-items:center;white-space:nowrap}
+.btn.pri{background:#d5d5d5;border-color:#8a8a8a;font-weight:700}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.lbl{width:104px;color:#555;font-size:12.5px;flex:none}
+.chip{border:1px dashed #b5b5b5;border-radius:4px;background:#fdfdfd;color:#555;font-size:12px;padding:5px 6px;text-align:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px}
+.grid6{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.sec{font-size:11.5px;color:#8a8a8a;margin:10px 0 6px;letter-spacing:.5px}
+.field{border:1px solid #dcdcdc;border-left:3px solid #b5b5b5;border-radius:3px;background:#fff;padding:7px 9px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.field .h{color:#c0c0c0;font-size:12px}
+.field .n{font-size:12.5px}
+.field.sel{border-color:#333;border-left-color:#333;box-shadow:0 0 0 2px #eee}
+.field.sec-row{background:#f7f7f7;border-left-color:#ddd}
+.req{color:#c00}
+.dash{border:1px dashed #bbb;border-radius:4px;color:#999;font-size:12px;display:flex;align-items:center;justify-content:center;background:#fcfcfc;text-align:center;padding:8px}
+.note{background:#fff8d6;border:1px dashed #c9a227;color:#6b5410;font-size:12px;padding:5px 8px;border-radius:4px}
+.note.g{background:#eef4ee;border-color:#8aa88a;color:#3d5a3d}
+.note.r{background:#fdecec;border-color:#c98a8a;color:#7a2e2e}
+.tabs{display:flex;gap:18px;border-bottom:1px solid #e0e0e0;margin-bottom:12px;font-size:12.5px;color:#8a8a8a}
+.tabs .on{color:#111;font-weight:700;border-bottom:2px solid #333;padding-bottom:5px}
+.node{border:1px solid #9a9a9a;border-radius:5px;background:#fff;padding:5px 10px;font-size:12.5px;min-width:120px;text-align:center}
+.node .sub{font-size:11px;color:#8a8a8a}
+.node.hl{border-width:2px;background:#efefef;box-shadow:0 0 0 3px #f4f4f4}
+.node.cc{background:#f7f7f7}
+.node.hd{border-style:dashed}
+.vline{width:1px;height:14px;background:#b5b5b5;margin:0 auto}
+.compact .node{padding:2px 10px}
+.compact .node .sub{font-size:10px;line-height:1.3}
+.compact .vline{height:6px}
+.compact .lane{padding:5px}
+.compact .branchbox{padding:6px 8px 8px}
+.hline{height:1px;background:#b5b5b5;flex:1}
+.branch{display:flex;gap:12px;align-items:flex-start}
+.lane{border:1px solid #cfcfcf;border-radius:4px;padding:8px;background:#fafafa;flex:1}
+.branchbox{border:1px dashed #9a9a9a;border-radius:6px;padding:8px 10px 10px;background:#fbfbfb}
+.branchbox-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.branchbox-head .t{font-size:11.5px;color:#777;letter-spacing:.5px;font-weight:700}
+.condchip{border:1px solid #7f7f7f;border-radius:10px;background:#fff;font-size:11.5px;padding:1px 9px;color:#333;white-space:nowrap}
+.addbtn{border:1px dashed #9a9a9a;border-radius:4px;background:#fff;font-size:11.5px;padding:2px 8px;color:#555}
+.split{position:relative;height:18px}
+.split-bar{position:absolute;top:0;left:25%;right:25%;height:1px;background:#b5b5b5}
+.stubs{display:flex;height:18px}
+.stubs span{flex:1;display:flex;justify-content:center}
+.stubs span:before{content:"";width:1px;height:18px;background:#b5b5b5;display:block}
+.merge{position:relative;height:18px}
+.merge-bar{position:absolute;bottom:0;left:25%;right:25%;height:1px;background:#b5b5b5}
+.plus{width:20px;height:20px;border:1px solid #9a9a9a;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:13px;color:#555}
+.modal{position:absolute;inset:0;background:rgba(0,0,0,.16);display:flex;align-items:center;justify-content:center;z-index:5}
+.mbox{background:#fff;border:1px solid #a8a8a8;border-radius:6px;display:flex;flex-direction:column;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.mhead{height:48px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;padding:0 16px;font-weight:700;gap:8px}
+.mbody{padding:14px 16px;overflow:hidden}
+.mfoot{height:52px;border-top:1px solid #e3e3e3;display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:0 16px}
+.card{border:1px solid #d5d5d5;border-radius:5px;background:#fdfdfd;padding:10px}
+.qr{width:150px;height:150px;border:1px solid #999;background:repeating-conic-gradient(#dcdcdc 0% 25%, #fff 0% 50%) 0 0/14px 14px}
+.radio{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#444;margin-right:14px;white-space:nowrap}
+.radio i{width:12px;height:12px;border:1px solid #999;border-radius:50%;display:inline-block;flex:none}
+.radio i.on{background:#555;box-shadow:inset 0 0 0 2px #fff}
+.sw{width:34px;height:18px;border-radius:9px;background:#ccc;position:relative;display:inline-block;flex:none}
+.sw:after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:1px;left:2px;border:1px solid #aaa}
+.sw.on{background:#8f8f8f}
+.sw.on:after{left:auto;right:2px}
+.list-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid #eee;font-size:12.5px}
+.tag2{font-size:11px;border:1px solid #aaa;border-radius:3px;padding:0 5px;color:#666}
+.tag2.act{background:#333;color:#fff;border-color:#333}
+.small{font-size:11.5px;color:#999}
+.cbox{border:1px solid #c4c4c4;border-radius:4px;background:#fff;padding:10px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th,.tbl td{border:1px solid #ddd;padding:5px 7px;text-align:left}
+.tbl th{background:#f6f6f6;font-weight:700;color:#555}
+.tabbar{display:flex;gap:0;border-bottom:1px solid #ddd;margin-bottom:10px}
+.tabbar span{font-size:12.5px;color:#8a8a8a;padding:7px 14px;border:1px solid transparent;border-bottom:0;margin-bottom:-1px}
+.tabbar span.on{color:#111;font-weight:700;background:#fff;border-color:#ddd;border-radius:4px 4px 0 0}
+.catalog{width:1280px;padding:14px 18px;background:#fff;border-bottom:2px solid #333}
+.catalog h1{font-size:16px;margin:0 0 8px}
+.catalog table{width:100%;border-collapse:collapse;font-size:12px}
+.catalog th,.catalog td{border:1px solid #ddd;padding:4px 8px;text-align:left}
+.catalog th{background:#f6f6f6}
+.cat2{font-size:11.5px;color:#999}
+</style>
+</head>
+<body>
+
+<!-- ================= 目录 ================= -->
+<div class="catalog">
+  <h1>OA 2.0 · B1 低保真原型 —— 表单四页签 / 流程内嵌 / 可发起范围 / 关联审批</h1>
+  <div class="cat2">对应变更集 <b>oa-form-flow-tabs</b>（2.1 交付）；口径依据 <code>doc/2.0/2.0-PRD-OA升级开发.md</code> 第 4/5 章、验收 AC-45~AC-60。
+  视觉语言与 <code>doc/参考文档/wireframes.html</code>（飞书对照稿）保持一致：深色标题条 + 顶栏 + 页签 + 主体分区；灰色虚框 = 待定/占位，黄色注解 = 设计约束，绿色注解 = 系统兜底行为，红色注解 = 必须拦截的错误态。</div>
+  <table style="margin-top:10px">
+    <tr><th style="width:70px">编号</th><th style="width:330px">画面</th><th>看什么</th></tr>
+    <tr><td>S20</td><td>① 基础信息（四页签容器 + 新字段）</td><td>图标预设、名称/说明、分组复用模板分类、<b>谁可以提交该审批</b>、<b>流程管理员</b>；「关联流程」已改为只读</td></tr>
+    <tr><td>S21</td><td>② 表单设计（含新控件「关联审批」）</td><td>左侧控件面板新增「关联审批」；属性面板三项配置；画布中的控件形态</td></tr>
+    <tr><td>S22</td><td>③ 流程设计（内嵌，不跳转）</td><td>流程名称/关联表单由模板带入且只读；自动生成的流程标识；发布即回写</td></tr>
+    <tr><td>S23</td><td>④ 更多设置（7 项策略 + 内容三组）</td><td>新增策略项的<b>默认值等于现状行为</b>；正文/附件/消息通知搬入本页签</td></tr>
+    <tr><td>S24</td><td>逐页签校验的错误态</td><td>在「基础信息」点保存 → 自动切到出错的页签并高亮首个字段</td></tr>
+    <tr><td>S25</td><td>发起页：按可发起范围过滤</td><td>列表服务端过滤；未分类模板归入「未分类」组；两种空态文案区分</td></tr>
+    <tr><td>S26</td><td>关联审批：发起者选择</td><td>只出现<b>本分组 + 自己已发起</b>的单据；跨分组与他人单据不可选</td></tr>
+    <tr><td>S27</td><td>关联审批：审批人浮窗（只读）</td><td>表单数据 + 审批状态；无编辑入口、无跳转详情；无权时 403</td></tr>
+    <tr><td>S28</td><td>越权与失败态</td><td>越权发起 403、流程发布失败可重试、部署成功但回写失败的显式提示</td></tr>
+  </table>
+</div>
+
+<!-- ============ S20 ① 基础信息 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S20</span><span>① 基础信息（四页签第 1 页）</span><span class="spacer"></span><span>RuoYi-OA 2.0 · 模板新增页</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资金审批</div>
+      <span class="pill">草稿 · 保存于 1 分钟前 ▾</span>
+      <div class="spacer"></div>
+      <span class="btn">预览</span><span class="btn">保存草稿</span><span class="btn pri">发布</span>
+    </div>
+    <div class="tabbar">
+      <span class="on">① 基础信息</span><span>② 表单设计</span><span>③ 流程设计</span><span>④ 更多设置</span>
+    </div>
+    <div class="body">
+      <div class="main" style="padding:18px 220px 0 56px">
+        <div class="row">
+          <div class="lbl">图标</div>
+          <div class="logo" style="width:40px;height:40px;background:#e8e8e8"></div>
+          <span class="btn">更换图标</span>
+          <span class="small">默认选中图标集第 1 个；用于发起页卡片</span>
+        </div>
+        <div class="row"><div class="lbl">名称 <span class="req">*</span></div><div class="inp" style="flex:1">资金审批</div><span class="small">≤200 字</span></div>
+        <div class="row"><div class="lbl">说明</div><div class="inp" style="flex:1">用于集团各单位的资金类事项审批</div><span class="small">≤500 字</span></div>
+        <div class="row">
+          <div class="lbl">分组 <span class="req">*</span></div>
+          <div class="inp" style="flex:1">财务类 ▾</div>
+          <span class="small">复用既有「模板分类 t_template_type」</span>
+        </div>
+
+        <div class="row" style="align-items:flex-start;margin-top:14px">
+          <div class="lbl" style="padding-top:5px">谁可以提交该审批</div>
+          <div style="flex:1">
+            <div style="margin-bottom:8px">
+              <span class="radio"><i></i>全员</span>
+              <span class="radio"><i class="on"></i>指定人员</span>
+              <span class="radio"><i></i>指定角色</span>
+              <span class="radio"><i></i>指定部门</span>
+              <span class="btn">+ 添加</span>
+            </div>
+            <div class="cbox" style="padding:8px">
+              <div class="list-row" style="padding:4px 0;border:0"><span class="tag2">人员</span> 郑妍 <span class="spacer"></span><span class="small">移除</span></div>
+              <div class="list-row" style="padding:4px 0;border:0"><span class="tag2">人员</span> 王佳琦 <span class="spacer"></span><span class="small">移除</span></div>
+            </div>
+            <div class="note" style="margin-top:8px">多条明细之间是 <b>或</b>：命中任一条即可见可发起。「指定部门」默认<b>含下级部门</b>（可在下方关闭）。</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:2px">
+          <div class="lbl"></div>
+          <label class="radio"><i class="on"></i>指定部门时包含下级部门（默认开）</label>
+        </div>
+
+        <div class="row" style="align-items:flex-start;margin-top:10px">
+          <div class="lbl" style="padding-top:5px">流程管理员</div>
+          <div style="flex:1">
+            <span class="btn">+ 添加账号</span>
+            <div class="cbox" style="padding:8px;margin-top:8px">
+              <div class="list-row" style="padding:4px 0;border:0"><span class="tag2">账号</span> 李玥洋 <span class="spacer"></span><span class="small">可编辑本模板的流程</span></div>
+            </div>
+            <div class="note g" style="margin-top:8px">为空时退回：模板创建人 + 拥有「模板编辑」权限的账号。</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div class="lbl">排序号</div><div class="inp" style="width:160px">10</div>
+          <div class="lbl" style="width:110px;text-align:right">关联流程</div>
+          <span class="tag2">tpl_9F2C0001</span>
+          <span class="small">由「③ 流程设计」自动回写，此处只读</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="sec">本页签相对现状的变化</div>
+        <div class="note">
+          1. 5 个纵向分段 → <b>4 个页签</b>；<br>
+          2. 新增：图标 / 说明 / 谁可以提交 / 流程管理员 / 包含下级部门；<br>
+          3. <b>移除</b>「关联流程」手选下拉（改由页签 ③ 回写并只读展示）；<br>
+          4. 「分组」直接复用既有「模板分类」。
+        </div>
+        <div class="sec">校验</div>
+        <div class="grid2" style="font-size:11.5px">
+          <span class="radio"><i class="on"></i>名称必填</span>
+          <span class="radio"><i class="on"></i>分组必选</span>
+          <span class="radio"><i class="on"></i>指定类范围明细非空</span>
+          <span class="radio"><i></i>说明非必填</span>
+        </div>
+        <div class="sec">保存行为</div>
+        <div class="note g">点「保存草稿」先落模板并拿到 templateId —— 页签 ③ 依赖它生成流程标识。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S21 ② 表单设计 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S21</span><span>② 表单设计（四页签第 2 页）· 新增控件「关联审批」</span><span class="spacer"></span><span>控件面板 + 画布 + 属性面板</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资金审批</div>
+      <span class="pill">草稿 · 保存于 1 分钟前 ▾</span>
+      <div class="spacer"></div>
+      <span class="btn">配置打印模板</span><span class="btn">预览</span><span class="btn pri">发布</span>
+    </div>
+    <div class="tabbar">
+      <span>① 基础信息</span><span class="on">② 表单设计</span><span>③ 流程设计</span><span>④ 更多设置</span>
+    </div>
+    <div class="body">
+      <div class="side">
+        <div class="tabs"><span class="on">控件</span><span>控件组</span></div>
+        <div class="sec">文本</div>
+        <div class="grid2"><div class="chip">单行文本</div><div class="chip">多行文本</div><div class="chip">说明</div></div>
+        <div class="sec">数值</div>
+        <div class="grid2"><div class="chip">金额</div><div class="chip">计算公式</div><div class="chip">时长（天）</div></div>
+        <div class="sec">选项 / 日期</div>
+        <div class="grid2"><div class="chip">单选</div><div class="chip">多选</div><div class="chip">日期</div><div class="chip">日期区间</div></div>
+        <div class="sec">合同二开组件</div>
+        <div class="grid2">
+          <div class="chip">分组标题</div><div class="chip">说明文字</div>
+          <div class="chip">选人</div><div class="chip">选部门</div>
+          <div class="chip">流水号</div>
+          <div class="chip" style="border-style:solid;border-color:#333;font-weight:700">关联审批 ★新</div>
+        </div>
+        <div class="note" style="margin-top:10px">新增控件必须同时登记 <b>11 处</b>，少一处就会「设计器能拖、运行时白屏」或「审批页看不见」。</div>
+      </div>
+      <div class="main">
+        <div style="display:flex;align-items:center;margin-bottom:10px">
+          <div class="small">画布（按添加顺序自上而下，可拖拽改序）</div>
+          <div class="spacer"></div>
+          <span class="btn">表单 JSON</span>
+        </div>
+        <div class="field sec-row"><span class="n"><b>基本信息</b></span><span class="small">分组标题</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">审批单位<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:220px">请输入</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">事项分类<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:220px">请选择 ▾</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">计划类别</span><span class="spacer"></span><span class="inp" style="width:220px">计划内 / 计划外 ▾</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">付款归属期</span><span class="spacer"></span><span class="inp" style="width:220px">（ ）月 ▾</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">资金审批内容<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:220px">多行文本</span></div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">金额<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:220px">¥ 0.00</span><span class="small">大写自动</span></div>
+        <div class="field sec-row"><span class="n"><b>关联单据</b></span><span class="small">分组标题</span></div>
+        <div class="field sel">
+          <span class="h">⋮⋮</span>
+          <span class="n">关联审批</span>
+          <span class="small">候选：合同审批 / 采购申请</span>
+          <span class="spacer"></span>
+          <span class="inp" style="width:220px">请选择单据 ▾</span>
+        </div>
+        <div class="field"><span class="h">⋮⋮</span><span class="n">附件</span><span class="spacer"></span><span class="btn">选择文件</span></div>
+        <div class="dash" style="height:40px;margin-top:8px">点击或拖拽左侧控件至此处</div>
+      </div>
+      <div class="panel">
+        <div class="small" style="margin-bottom:8px">选中「关联审批」后的属性面板</div>
+        <div class="sec">基础设置</div>
+        <div class="row"><div class="lbl" style="width:74px">标题</div><div class="inp" style="flex:1">关联审批</div></div>
+        <div class="row"><div class="lbl" style="width:74px">必填</div><span class="sw"></span><span class="small">默认关（非必填）</span></div>
+        <div class="row"><div class="lbl" style="width:74px">允许多条</div><span class="sw on"></span><span class="small">默认开</span></div>
+        <div class="sec">候选单据（只列已启用模板）</div>
+        <div class="cbox" style="padding:8px">
+          <div class="list-row" style="padding:4px 0;border:0"><span class="tag2 act">已启用</span> 合同审批 <span class="spacer"></span><span class="small">移除</span></div>
+          <div class="list-row" style="padding:4px 0;border:0"><span class="tag2 act">已启用</span> 采购申请 <span class="spacer"></span><span class="small">移除</span></div>
+          <div class="list-row" style="padding:4px 0;border:0"><span class="tag2">已停用</span> 旧版付款单 <span class="small" style="color:#c00">不可选</span></div>
+        </div>
+        <div class="sec">发起者可选范围（固定，不可改）</div>
+        <div class="note g">本流程所属分组内 · <b>自己已发起</b>的单据。跨分组与他人单据不出现。</div>
+        <div class="sec">浮窗突出字段</div>
+        <div class="grid2" style="font-size:11.5px"><div class="chip">合同名称</div><div class="chip">合同金额</div><div class="chip">+ 添加</div></div>
+        <div class="note" style="margin-top:10px">该控件<b>不参与</b>流程条件判断；打印件输出为被关联单据的单据号列表。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S22 ③ 流程设计（内嵌） ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S22</span><span>③ 流程设计（四页签第 3 页）· 内嵌，不跳转</span><span class="spacer"></span><span>节点清单 + 配置抽屉 + 发布回写</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资金审批</div>
+      <span class="pill">流程草稿 · 自动保存于 12 秒前 ▾</span>
+      <div class="spacer"></div>
+      <span class="btn">版本历史</span><span class="btn">预览流程</span><span class="btn pri">发布流程</span>
+    </div>
+    <div class="tabbar">
+      <span>① 基础信息</span><span>② 表单设计</span><span class="on">③ 流程设计</span><span>④ 更多设置</span>
+    </div>
+    <div class="body">
+      <div class="main compact" style="padding:8px 16px">
+        <div class="cbox" style="margin-bottom:10px;padding:8px 10px">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <span class="small">流程名称</span><span class="tag2">资金审批（随模板自动带入）</span>
+            <span class="small">流程标识</span><span class="tag2">tpl_9F2C0001</span>
+            <span class="small">关联表单</span><span class="tag2">资金审批单（随模板，只读）</span>
+            <span class="spacer"></span>
+            <span class="small" style="color:#3d5a3d">发布后标识不可修改</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;justify-content:center">
+          <div style="width:600px">
+            <div class="node" style="margin:0 auto">提交<div class="sub">提交人：郑妍、王佳琦（按可发起范围）</div></div>
+            <div class="vline"></div>
+            <div class="node hl" style="margin:0 auto">审批<div class="sub">审批人：集团职能部门负责人 · 或签</div></div>
+            <div class="vline"></div>
+            <div class="split"><div class="split-bar"></div></div>
+            <div class="stubs"><span></span><span></span></div>
+            <div class="branchbox">
+              <div class="branchbox-head"><span class="t">条件分支</span><span class="condchip">当 <b>金额</b> 大于等于 <b>100000</b></span><span class="condchip">其他情况（系统兜底）</span></div>
+              <div class="branch">
+                <div class="lane">
+                  <div class="small" style="margin-bottom:6px">分支 1</div>
+                  <div class="node" style="width:100%">审批<div class="sub">集团分管领导</div></div>
+                  <div class="vline"></div>
+                  <div class="node" style="width:100%">审批<div class="sub">集团董事长</div></div>
+                </div>
+                <div class="lane">
+                  <div class="small" style="margin-bottom:6px">其他情况</div>
+                  <div class="node" style="width:100%">审批<div class="sub">集团分管领导</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="stubs"><span></span><span></span></div>
+            <div class="merge"><div class="merge-bar"></div></div>
+            <div class="vline"></div>
+            <div class="node hd" style="margin:0 auto">办理 · 用印/上传回单<div class="sub">办理人：财务 张倩</div></div>
+            <div class="vline"></div>
+            <div class="node" style="margin:0 auto;border-radius:16px">结束<div class="sub">抄送：提交人</div></div>
+          </div>
+          <div style="width:230px;padding-top:6px">
+            <div class="note">点节点之间的 <b>+</b> 插入：审批 / 办理 / 条件分支 / 并行分支 / 抄送</div>
+            <div class="note g" style="margin-top:8px">「其他情况」由系统兜底，不可删除</div>
+            <div class="note" style="margin-top:8px">本页签内的设计器与「流程设计（简化版）」菜单<b>是同一套</b>，只是换了入口。</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="tabs"><span class="on">设置审批人</span><span>表单权限</span><span>操作权限</span></div>
+        <div class="sec">审批人来源（可多选类型）</div>
+        <div class="grid3" style="font-size:11.5px">
+          <div class="chip">指定成员</div><div class="chip">角色</div><div class="chip">部门负责人</div>
+          <div class="chip">直属上级</div><div class="chip">发起人本人</div><div class="chip">发起人自选</div>
+        </div>
+        <div class="note" style="margin-top:8px">第 1 个审批节点的「角色 / 发起人自选」置灰并给出原因（校验 V-3）。</div>
+        <div class="sec">多人方式</div>
+        <div style="margin-bottom:8px"><span class="radio"><i class="on"></i>或签</span><span class="radio"><i></i>会签</span><span class="radio"><i></i>依次</span></div>
+        <div class="sec">表单权限</div>
+        <div class="grid3" style="font-size:11.5px"><div class="chip">金额 → 只读</div><div class="chip">+ 添加</div></div>
+        <div class="sec">签名策略</div>
+        <div style="margin-bottom:8px"><span class="radio"><i></i>不需要</span><span class="radio"><i></i>可选</span><span class="radio"><i class="on"></i>必需</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S23 ④ 更多设置 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S23</span><span>④ 更多设置（四页签第 4 页）· 内容三组 + 提交与审批策略</span><span class="spacer"></span><span>全部默认值 = 现状行为</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资金审批</div>
+      <span class="pill">草稿 · 保存于 1 分钟前 ▾</span>
+      <div class="spacer"></div>
+      <span class="btn">预览</span><span class="btn pri">发布</span>
+    </div>
+    <div class="tabbar">
+      <span>① 基础信息</span><span>② 表单设计</span><span>③ 流程设计</span><span class="on">④ 更多设置</span>
+    </div>
+    <div class="body">
+      <div class="main" style="padding:14px 24px">
+        <div class="sec" style="margin-top:0">A · 内容配置（既有能力，原样搬入本页签）</div>
+        <div class="grid3">
+          <div class="cbox">
+            <div style="font-weight:700;margin-bottom:6px">正文配置</div>
+            <div class="small" style="margin-bottom:6px">需要正文：上传 / 书签替换</div>
+            <div class="inp">正文类型：不需要 ▾</div>
+          </div>
+          <div class="cbox">
+            <div style="font-weight:700;margin-bottom:6px">附件配置</div>
+            <div class="small" style="margin-bottom:6px">名称 / 大小上限 / 允许类型 / 提示语</div>
+            <div class="inp">附件名称：附件</div>
+          </div>
+          <div class="cbox">
+            <div style="font-weight:700;margin-bottom:6px">消息通知配置</div>
+            <div class="small" style="margin-bottom:6px">需要 / 不需要 · 类型 · 消息模板</div>
+            <div class="inp">不需要 ▾</div>
+          </div>
+        </div>
+
+        <div class="sec">B · 提交与审批策略（2.0 新增 · 默认值等于升级前行为）</div>
+        <div class="grid2">
+          <div class="cbox">
+            <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:150px">提交后可撤销</div>
+              <span class="radio"><i class="on"></i>不限制（默认）</span><span class="radio"><i></i>N 分钟内</span></div>
+            <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:150px">允许提交人改单</div>
+              <span class="radio"><i class="on"></i>不允许（默认）</span><span class="radio"><i></i>允许</span></div>
+            <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:150px">代他人提交</div>
+              <span class="radio"><i class="on"></i>不允许（默认）</span><span class="radio"><i></i>允许</span></div>
+            <div class="row" style="margin:0"><div class="lbl" style="width:150px">允许审批人撤回</div>
+              <span class="sw on"></span><span class="small">默认开</span></div>
+          </div>
+          <div class="cbox">
+            <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:150px">审批人批量审批</div>
+              <span class="sw on"></span><span class="small">默认开</span></div>
+            <div style="margin-bottom:8px"><div class="lbl" style="width:150px;margin-bottom:6px">审批人去重</div>
+              <div class="radio" style="display:flex;margin-bottom:5px"><i></i>① 仅审批一次，后续重复节点自动同意</div>
+              <div class="radio" style="display:flex;margin-bottom:5px"><i></i>② 仅连续节点自动同意</div>
+              <div class="radio" style="display:flex"><i class="on"></i>③ 不自动同意，每个节点都要审（默认）</div>
+            </div>
+            <div class="row" style="margin:0"><div class="lbl" style="width:150px">审批转发范围</div>
+              <div class="inp" style="flex:1">不限 ▾</div></div>
+          </div>
+        </div>
+
+        <div class="sec">C · 打印</div>
+        <div class="cbox">
+          <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:150px">打印模板</div>
+            <span class="radio"><i class="on"></i>用内置模板</span>
+            <span class="inp" style="width:200px">集团资金审批单 ▾</span>
+            <span class="radio" style="margin-left:12px"><i></i>用自定义配置模板</span></div>
+          <div class="note">内置模板由后端按 <code>builtin_print_key</code> 选用；本页签只选、不改版式。见 B2 原型。</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="sec">设计要点</div>
+        <div class="note g">B 组 7 项的默认值必须等于现状：撤销不限制、不允许改单、不允许代提交、允许撤回、允许批量、去重取③、转发不限。</div>
+        <div class="note r" style="margin-top:8px">任何一项默认值取"更严格"都会让存量模板在升级后<b>行为变化</b>，违反零回归（AC-82）。</div>
+        <div class="sec">校验</div>
+        <div class="radio" style="display:flex"><i class="on"></i>本页签无必填项，可空保存</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S24 错误态：逐页签校验 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S24</span><span>错误态 · 逐页签校验（在「基础信息」点保存，错误在别处）</span><span class="spacer"></span><span>必须定位到出错页签</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资金审批</div>
+      <span class="pill">草稿 ▾</span>
+      <div class="spacer"></div>
+      <span class="btn">预览</span><span class="btn pri">保存</span>
+    </div>
+    <div class="tabbar">
+      <span>① 基础信息</span><span>② 表单设计</span><span>③ 流程设计</span><span class="on">④ 更多设置 <span class="req">●</span></span>
+    </div>
+    <div class="body">
+      <div class="main" style="padding:16px 24px">
+        <div class="note r" style="margin-bottom:12px">保存失败：已自动切换到出错的页签 —— 「④ 更多设置」的「附件大小上限」不是有效数字。</div>
+        <div class="cbox" style="border-color:#c98a8a">
+          <div style="font-weight:700;margin-bottom:6px">附件配置</div>
+          <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:130px">附件名称</div><div class="inp" style="flex:1">附件</div></div>
+          <div class="row" style="margin:0 0 8px"><div class="lbl" style="width:130px">大小上限（M）</div>
+            <div class="inp" style="flex:1;border-color:#c00;background:#fdecec;color:#7a2e2e">abc ← 首个错误字段</div></div>
+          <div class="row" style="margin:0"><div class="lbl" style="width:130px">允许类型</div><div class="inp" style="flex:1">pdf,docx,xlsx</div></div>
+        </div>
+        <div class="sec">对比：现状的做法（要避免）</div>
+        <div class="note">现状一次性 <code>Promise.all</code> 校验 5 个表单，隐藏分段里的错误无法定位，用户只看到一句「请完善必填字段！」。</div>
+      </div>
+      <div class="panel">
+        <div class="sec">交互规则</div>
+        <div class="note g">按页签顺序校验 → 遇到第一个失败页签即切换过去 → 滚动并高亮首个错误字段。</div>
+        <div class="sec">页签标识</div>
+        <div class="note">出错页签标题右侧加红点，切回并修正后消失。</div>
+        <div class="sec">不丢内容</div>
+        <div class="note g">切换页签不得重置任何已填字段（四个子表单常驻，不销毁重建）。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S25 发起页：范围过滤 + 未分类 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S25</span><span>发起审批页 · 按可发起范围服务端过滤</span><span class="spacer"></span><span>未分类模板不再被静默丢弃</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">发起审批</div>
+      <span class="pill">当前账号：郑妍（经发部）</span>
+      <div class="spacer"></div>
+      <span class="inp" style="width:220px">搜索模板名称</span>
+    </div>
+    <div class="body">
+      <div class="main">
+        <div class="sec" style="margin-top:0">最近使用</div>
+        <div class="grid6" style="margin-bottom:14px">
+          <div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">合同审批</div></div>
+          <div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">资金审批</div></div>
+        </div>
+
+        <div class="sec">财务类（3）</div>
+        <div class="grid6" style="margin-bottom:12px">
+          <div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">资金审批</div><div class="small">可发起</div></div>
+          <div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">付款申请</div><div class="small">可发起</div></div>
+          <div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">费用报销</div><div class="small">可发起</div></div>
+        </div>
+
+        <div class="sec">合同类（2）</div>
+        <div class="grid6" style="margin-bottom:12px">
+          <div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">合同审批</div><div class="small">可发起</div></div>
+          <div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">用印申请</div><div class="small">可发起</div></div>
+        </div>
+
+        <div class="sec">未分类（1） <span class="small" style="color:#3d5a3d">← 2.0 新增：不再静默丢弃</span></div>
+        <div class="grid6">
+          <div class="card" style="text-align:center;border-style:dashed"><div class="logo" style="margin:0 auto 6px"></div><div style="font-size:12px">内部请示</div><div class="small">未设置分组</div></div>
+        </div>
+
+        <div class="row" style="margin-top:16px"><span class="lbl" style="width:auto">当前账号看不到的（示例）</span><span class="tag2">集团投资审批</span><span class="tag2">人事任免审批</span><span class="small">范围为「指定角色 / 指定部门」，当前账号未命中</span></div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">过滤规则（服务端）</div>
+        <div class="note g">模板的 <code>submit_scope_type</code> = 全员 → 所有人可见；= 指定人员 / 角色 / 部门 → 命中任一明细即可见；指定部门默认含下级（<code>sys_dept.ancestors</code> 前缀匹配）。</div>
+        <div class="note" style="margin-top:8px">系统管理员不受范围限制（否则会把自己锁在门外）。</div>
+        <div class="sec">两种空态（文案要区分）</div>
+        <div class="cbox" style="margin-bottom:8px"><div class="small">① 系统里没有任何启用模板</div><div style="font-size:12.5px;margin-top:4px">「暂无可用单据，请联系管理员配置」</div></div>
+        <div class="cbox"><div class="small">② 有模板但都没我的份</div><div style="font-size:12.5px;margin-top:4px">「暂无可由你发起的单据，如需权限请联系流程管理员」</div></div>
+        <div class="sec">越权兜底</div>
+        <div class="note r">列表过滤只解决"看不见"。发起落库前服务端必须<b>再校验一次</b>，无权返回 403 且不落库。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S26 关联审批：发起者选择 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S26</span><span>关联审批 · 发起者选择（拟稿页）</span><span class="spacer"></span><span>只出现「本分组 + 自己已发起」的单据</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资金审批 · 拟稿</div>
+      <span class="pill">发起人：郑妍</span>
+      <div class="spacer"></div>
+      <span class="btn">存草稿</span><span class="btn pri">提交</span>
+    </div>
+    <div class="body">
+      <div class="main" style="position:relative">
+        <div class="field"><span class="n">审批单位<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:260px">太原智澈节能科技有限公司</span></div>
+        <div class="field"><span class="n">金额<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:260px">¥ 36,524.10</span><span class="small">叁万陆仟伍佰贰拾肆元壹角</span></div>
+        <div class="field"><span class="n">资金审批内容<span class="req">*</span></span><span class="spacer"></span><span class="inp" style="width:260px">多行文本</span></div>
+        <div class="field" style="align-items:flex-start">
+          <span class="n" style="padding-top:4px">关联审批</span>
+          <span class="spacer"></span>
+          <div style="width:300px">
+            <div class="cbox" style="padding:8px">
+              <div class="list-row" style="padding:4px 0;border:0"><span class="tag2 act">合同审批</span> HT202604150001 · 创新创业孵化服务合作协议 <span class="spacer"></span><span class="small">✕</span></div>
+              <div class="list-row" style="padding:4px 0;border:0"><span class="tag2 act">合同审批</span> HT202604010007 · 百脉泉球阀采购合同 <span class="spacer"></span><span class="small">✕</span></div>
+            </div>
+            <div style="margin-top:6px"><span class="btn">+ 选择单据</span><span class="small" style="margin-left:8px">允许多条 · 非必填</span></div>
+          </div>
+        </div>
+
+        <!-- 选择单据弹窗 -->
+        <div class="modal">
+          <div class="mbox" style="width:720px;height:520px">
+            <div class="mhead">选择要关联的单据 <span class="small" style="font-weight:400">候选模板：合同审批 / 采购申请</span><span class="spacer"></span><span class="small">✕</span></div>
+            <div class="mbody" style="flex:1">
+              <div class="row"><span class="inp" style="flex:1">按单据号或名称搜索</span><span class="btn">搜索</span></div>
+              <div class="note" style="margin-bottom:8px">这里只出现 <b>你本人已发起</b> 且属于 <b>「合同类」分组</b> 的单据。跨分组与他人单据不出现。</div>
+              <table class="tbl">
+                <tr><th style="width:34px"></th><th>单据号</th><th>单据类型</th><th>名称 / 摘要</th><th style="width:100px">状态</th><th style="width:110px">发起时间</th></tr>
+                <tr><td><span class="radio"><i class="on"></i></span></td><td>HT202604150001</td><td>合同审批</td><td>创新创业孵化服务合作协议</td><td>审批中</td><td>2026-04-15</td></tr>
+                <tr><td><span class="radio"><i class="on"></i></span></td><td>HT202604010007</td><td>合同审批</td><td>百脉泉球阀采购合同</td><td>已通过</td><td>2026-04-01</td></tr>
+                <tr><td><span class="radio"><i></i></span></td><td>HT202603200033</td><td>合同审批</td><td>办公场所租赁合同</td><td>已终止</td><td>2026-03-20</td></tr>
+                <tr style="opacity:.45"><td>—</td><td>CG202604100002</td><td>采购申请</td><td>球阀订货单 1-1</td><td>已通过</td><td>2026-04-10</td></tr>
+              </table>
+              <div class="note" style="margin-top:8px">灰行 = 属于候选模板但<b>不是本分组</b>或<b>不是本人发起</b>，因此不可选（原型里保留展示以便评审差异）。</div>
+            </div>
+            <div class="mfoot"><span class="btn">取消</span><span class="btn pri">确定（已选 2）</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="width:280px">
+        <div class="sec">口径（已确认）</div>
+        <div class="note g">① 管理员指定的候选 = <b>已启用模板</b>；<br>② 发起者范围 = 本流程所属<b>分组</b>内 · <b>自己已发起</b>；<br>③ 审批人看到的是<b>只读浮窗</b>。</div>
+        <div class="sec">存储</div>
+        <div class="note">值存业务ID数组；另落一张关系表（宿主单据 + 控件 + 被关联单据 + 单据号快照），用于反查与鉴权。</div>
+        <div class="note r" style="margin-top:8px">绕过前端提交范围外的单据标识 → 服务端拒绝，不建立关联。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S27 关联审批：审批人浮窗 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S27</span><span>关联审批 · 审批人点击后的只读浮窗</span><span class="spacer"></span><span>只出表单数据 + 审批状态</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">资金审批 · 审批</div>
+      <span class="pill">当前节点：集团职能部门负责人</span>
+      <div class="spacer"></div>
+      <span class="btn">打印</span><span class="btn">退回</span><span class="btn">驳回</span><span class="btn pri">同意</span>
+    </div>
+    <div class="body">
+      <div class="main" style="position:relative">
+        <div class="field"><span class="n">审批单位</span><span class="spacer"></span><span style="font-size:12.5px">太原智澈节能科技有限公司</span></div>
+        <div class="field"><span class="n">金额</span><span class="spacer"></span><span style="font-size:12.5px">¥ 36,524.10</span></div>
+        <div class="field">
+          <span class="n">关联审批</span><span class="spacer"></span>
+          <span style="font-size:12.5px">
+            <span class="tag2 act" style="cursor:pointer">HT202604150001</span>
+            <span class="tag2 act" style="cursor:pointer">HT202604010007</span>
+          </span>
+        </div>
+
+        <div class="modal">
+          <div class="mbox" style="width:680px">
+            <div class="mhead">关联单据 · HT202604150001<span class="spacer"></span><span class="small" style="font-weight:400">只读</span><span class="small">✕</span></div>
+            <div class="mbody">
+              <div class="row" style="margin-bottom:10px">
+                <span class="tag2">合同审批</span>
+                <span class="tag2 act">审批中</span>
+                <span class="small">发起人 郑妍 · 发起时间 2026-04-15 09:12</span>
+              </div>
+              <table class="tbl">
+                <tr><th style="width:150px">合同名称</th><td>创新创业孵化服务合作协议</td></tr>
+                <tr><th>合同类型</th><td>经营</td></tr>
+                <tr><th>合同金额</th><td>¥ 36,524.10</td></tr>
+                <tr><th>合同签订主体 · 甲方</th><td>忻州澜蓝汇智创城科技发展有限公司</td></tr>
+                <tr><th>合同签订主体 · 乙方</th><td>云羲（山西）数字科技有限公司</td></tr>
+                <tr><th>履约期限</th><td>一年</td></tr>
+                <tr><th>合同有效期</th><td>2026-04-15 ~ 2027-04-14（时长 365 天，自动计算）</td></tr>
+                <tr><th>合同编号</th><td>HT202604150001</td></tr>
+              </table>
+              <div class="sec">审批状态</div>
+              <div class="list-row" style="border:0;padding:4px 0"><span class="tag2">已完成</span> 责任部门 · 经发部 · 同意 · 2026-04-15 11:20</div>
+              <div class="list-row" style="border:0;padding:4px 0"><span class="tag2 act">处理中</span> 法务 · 待审批</div>
+              <div class="note" style="margin-top:10px">浮窗<b>不含</b>附件、正文、流程轨迹；<b>不提供</b>跳转到该单据详情页的入口（避免越权路径）。</div>
+            </div>
+            <div class="mfoot"><span class="btn">关闭</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">接口与鉴权</div>
+        <div class="note">候选接口：<code>GET /workflow/related-approval/candidates</code><br>浮窗接口：<code>GET /workflow/related-approval/detail/{businessId}</code></div>
+        <div class="note r" style="margin-top:8px">对无权限单据或他人单据直接请求浮窗接口 → <b>403</b> 且不返回表单数据。</div>
+        <div class="sec">打印呈现</div>
+        <div class="note g">打印件里该控件输出为单据号列表（可读文本），不是标识串、不是空白。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S28 越权与失败态 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S28</span><span>越权与失败态 · 必须显式、必须可重试</span><span class="spacer"></span><span>AC-49 / AC-50 / AC-56 / AC-59</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">异常态合集</div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body">
+      <div class="main" style="padding:14px 18px">
+        <div class="sec" style="margin-top:0">① 越权发起（服务端 403，且不落库）</div>
+        <div class="cbox" style="border-color:#c98a8a;margin-bottom:12px">
+          <div style="font-size:12.5px">发起「集团投资审批」</div>
+          <div class="note r" style="margin-top:6px">403 · 你不在该单据的可发起范围内。请联系流程管理员把你的账号或所在部门加入「谁可以提交该审批」。</div>
+          <div class="small" style="margin-top:6px">数据库中：无新增表单数据、无新增流程实例。</div>
+        </div>
+
+        <div class="sec">② 无权限编辑 / 发布流程（服务端 403）</div>
+        <div class="cbox" style="border-color:#c98a8a;margin-bottom:12px">
+          <div class="note r">403 · 你不是该模板的流程管理员，也没有本模板的编辑权限。</div>
+          <div class="small" style="margin-top:6px">界面同时把「③ 流程设计」页签置为只读，并提示谁可以编辑。</div>
+        </div>
+
+        <div class="sec">③ 流程发布失败（显式 + 可重试）</div>
+        <div class="cbox" style="border-color:#c98a8a;margin-bottom:12px">
+          <div class="note r">发布未完成：流程引擎已部署，但模板绑定写入失败。系统已回滚本次部署（或保留为待重试状态）。</div>
+          <div style="margin-top:8px"><span class="btn pri">重试发布</span><span class="btn">查看详情</span><span class="small" style="margin-left:8px">不会出现「界面说发布了但发起时报找不到流程」</span></div>
+        </div>
+
+        <div class="sec">④ 关联审批浮窗越权</div>
+        <div class="cbox" style="border-color:#c98a8a">
+          <div class="note r">403 · 无权查看该单据。浮窗不展示任何字段值。</div>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">共同要求</div>
+        <div class="note g">所有权限判定必须<b>服务端强制</b>；前端隐藏只是体验，不构成防护。</div>
+        <div class="sec">回写只能落在启用行</div>
+        <div class="note r">模板编辑若"换新 ID"，发布回写会写到废弃行，打印模板与节点字段权限会失联。B1 的第一件事就是把它改成<b>原地更新</b>（见 PRD 8.3 / REQ-DATA-004）。</div>
+        <div class="sec">部分成功</div>
+        <div class="note">前端必须能区分：模板已保存 / 流程未发布 / 发布失败可重试。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

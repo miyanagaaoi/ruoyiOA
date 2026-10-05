@@ -39,8 +39,8 @@
 [CmdletBinding()]
 param(
     [string]$BaseUrl    = 'http://localhost:8080',
-    [string]$MySqlCli   = 'H:\dsh\OA\.cache\mysql\extract\mysql-8.0.40-winx64\bin\mysql.exe',
-    [string]$CacheDir   = 'H:\dsh\ruoyiOA\.cache',
+    [string]$MySqlCli   = 'F:\dsh\ruoyiOA\env\mysql\server\bin\mysql.exe',
+    [string]$CacheDir   = 'F:\dsh\ruoyiOA\.cache',
     [string]$Database   = 'rad_oa',
     [string]$SampleImage,
     [string]$TemplateId = '1ADB8299342C4D4FA59EC9F38AB5C768',
@@ -52,6 +52,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = New-Object System.Text.UTF8Encoding($false)   # 管道喂 SQL 给 mysql.exe 时必须（PS5.1 默认 ASCII 会把中文列名变 ?）
 
 if (-not $SampleImage) { $SampleImage = Join-Path $CacheDir 'sign-test.png' }
 
