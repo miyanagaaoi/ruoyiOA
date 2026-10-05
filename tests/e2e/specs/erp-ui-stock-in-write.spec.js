@@ -142,6 +142,20 @@ test.describe('B4 UI 写路径（入库单）· 保存 → 提交 → 审核 →
     await expect(row, '选物料后应带出物料编码快照').toContainText(F.product.code);
     await expect(row, '选物料后应带出单位快照').toContainText(F.uom3.name);
 
+    // 交付证据（DOM 级）：把三处下拉的**当前值**与行项「单位」单元格文本、以及行项快照 uomDecimals 打进日志
+    // （P-②/P-④/P-⑤ 三条修复的直接证据；通过运行不产 error-context，所以显式打印）
+    const domEvidence = {
+      仓库: await page.locator('.el-form-item', { hasText: '仓库' }).first().locator('input').inputValue(),
+      入库类型: await page.locator('.el-form-item', { hasText: '入库类型' }).first().locator('input').inputValue(),
+      物料: await row.locator('.el-select input').first().inputValue(),
+      单位单元格: (await row.locator('td').nth(4).innerText()).trim(),
+      uomDecimals: await page.evaluate(() => {
+        const vm = document.querySelector('.erp-doc-form').__vue__;
+        return ((vm.items || [])[0] || {}).uomDecimals;
+      }),
+    };
+    console.log('[E2E4U-W][DOM 证据] ' + JSON.stringify(domEvidence));
+
     // 数量与单价（el-input-number 失焦才触发 change）
     const nums = row.locator('.el-input-number input');
     await nums.nth(0).fill('3');
@@ -154,7 +168,12 @@ test.describe('B4 UI 写路径（入库单）· 保存 → 提交 → 审核 →
 
     /* ---------------- 4. 保存草稿 ---------------- */
     await page.getByRole('button', { name: '保存草稿' }).click();
-    await expect(page.locator('.el-message--success').first(), '保存应有成功提示').toContainText('保存成功', { timeout: 20_000 });
+    // ⚠ 提示文案必须**按内容定位**：Element UI 会把多条 message 同时留在 DOM 里（旧的还没淡出），
+    //   用 `.first()` 可能一直取到上一条（run9 实测：提交成功后 `.first()` 仍是「保存成功」）
+    await expect(
+      page.locator('.el-message--success', { hasText: '保存成功' }).first(),
+      '保存应有成功提示'
+    ).toBeVisible({ timeout: 20_000 });
     await page.waitForURL(/id=[A-Za-z0-9]+/, { timeout: 20_000 });
     const docId = new URL(page.url()).searchParams.get('id');
     expect(docId, '保存后地址栏应带单据 id').toBeTruthy();
@@ -170,16 +189,34 @@ test.describe('B4 UI 写路径（入库单）· 保存 → 提交 → 审核 →
 
     /* ---------------- 5. 保存并提交 → 表单进入锁定态 ---------------- */
     await page.getByRole('button', { name: '保存并提交' }).click();
-    await expect(page.locator('.el-message--success').first(), '提交应有成功提示').toContainText('已提交', { timeout: 20_000 });
+    await expect(
+      page.locator('.el-message--success', { hasText: '已提交' }).first(),
+      '提交应有成功提示'
+    ).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('.form-lock'), '提交后表单应锁定并提示当前状态').toContainText('不可编辑', { timeout: 15_000 });
     await expect(page.locator('.form-lock')).toContainText('待审核');
     expect((await fx.detail('stock_in', docId)).status, '后端状态已提交').toBe('submitted');
 
     /* ---------------- 6. 列表页：审核（审核即过账） ---------------- */
+    // 分三步断言（可见 → **启用** → 点击）：这样失败信息能直接区分"按钮没渲染"与"按钮被禁用"，
+    // 而不是笼统地 `locator.click timeout`。注意：`toBeEnabled` 是**硬断言**——按钮被禁用时照样红。
     const rowApprove = await filterRow(page, '/erp/stock-in', afterSave.docNo);
-    await rowApprove.getByRole('button', { name: '审核', exact: true }).click();
+    // ⚠ 操作列 `fixed="right"`：同一行的按钮会被渲染**两份**（主表 + `.el-table__fixed-right` 覆盖层），
+    //   两份都可能"可见" ⇒ `:visible` 过滤或 `.or()` 都会撞上 strict mode（run12 实测：or() 解析到 2 个元素）。
+    //   因此**按存在性确定性地二选一**（优先固定列那份——它在上层、可点），仍然要求"可见 + 未禁用"。
+    const docNoApproving = afterSave.docNo;
+    const approveFixed = page
+      .locator('.el-table__fixed-right:visible .el-table__row', { hasText: docNoApproving })
+      .locator('button', { hasText: /^审\s*核$/ })
+      .first();
+    const approveBtn = (await approveFixed.count())
+      ? approveFixed
+      : page.locator('.el-table__row', { hasText: docNoApproving }).locator('button', { hasText: /^审\s*核$/ }).first();
+    await expect(approveBtn, '列表中应有「审核」按钮（且可见）').toBeVisible({ timeout: 20_000 });
+    await expect(approveBtn, '「审核」按钮不应被禁用').toBeEnabled();
+    await approveBtn.click();
     await confirmDialog(page, { expectTip: '审核即过账' });
-    await expect(page.locator('.el-message--success').first(), '审核应成功').toContainText('审核', { timeout: 20_000 });
+    await expect(page.locator('.el-message--success', { hasText: '审核' }).first(), '审核应成功').toBeVisible({ timeout: 20_000 });
     await settle(page, 1500);
 
     const approved = await fx.detail('stock_in', docId);
@@ -201,7 +238,17 @@ test.describe('B4 UI 写路径（入库单）· 保存 → 提交 → 审核 →
 
     /* ---------------- 7. 列表页：反审核（红冲，原因必填） ---------------- */
     const rowUnapprove = await filterRow(page, '/erp/stock-in', approved.docNo);
-    await rowUnapprove.getByRole('button', { name: '反审核', exact: true }).click();
+    const docNoReversing = approved.docNo;
+    const unapproveFixed = page
+      .locator('.el-table__fixed-right:visible .el-table__row', { hasText: docNoReversing })
+      .locator('button', { hasText: /^反\s*审\s*核$/ })
+      .first();
+    const unapproveBtn = (await unapproveFixed.count())
+      ? unapproveFixed
+      : page.locator('.el-table__row', { hasText: docNoReversing }).locator('button', { hasText: /^反\s*审\s*核$/ }).first();
+    await expect(unapproveBtn, '列表中应有「反审核」按钮（且可见）').toBeVisible({ timeout: 20_000 });
+    await expect(unapproveBtn, '「反审核」按钮不应被禁用').toBeEnabled();
+    await unapproveBtn.click();
     await confirmDialog(page, { reason: `E2E4U UI 红冲 ${fx.tag}` });
     await settle(page, 1500);
 

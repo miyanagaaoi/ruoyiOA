@@ -26,6 +26,7 @@ var TAKE = require('../src/views/erp/stock-take/stocktake-rules.js')
 var KINDS = require('../src/views/erp/doc/doc-kinds.js')
 var RESP = require('../src/views/erp/doc/erp-response.js')
 var SHAPE = require('../src/views/erp/doc/doc-select-shape.js')
+var NEED = require('../src/views/erp/doc/doc-options-need.js')
 
 var ERP_DIR = path.join(__dirname, '..', 'src', 'views', 'erp')
 var API_DIR = path.join(__dirname, '..', 'src', 'api', 'erp')
@@ -318,6 +319,52 @@ test('t51：库存两页的仓库筛选必须用 rowsOf（列表接口），且�
       page + ' 必须复用已就位的 erp-response.js（不要另写一份取数口径）'
     )
   })
+})
+
+test('P-⑤ 门禁：声明了 products 的 kind 必须产生 uoms 装载（8 类单据一个不落）', function () {
+  // 真实缺陷（2026-10-06，P-⑤）：`neededOptions()` 把"需要物料 ⇒ 需要单位"的联动写在
+  // filters 扫描之后、itemColumns 扫描之前，而 8 类单据的 products 来自**行项列** ⇒ `need.uoms` 恒 false
+  // ⇒ 单位列表**从未请求** ⇒ 行项「单位」空白、`uomDecimals=null` ⇒ 数量精度静默退回默认 3 位。
+  var checked = 0
+  KINDS.KINDS.forEach(function (kind) {
+    var need = NEED.neededOptions(kind)
+    if (need.products) {
+      checked++
+      assert.strictEqual(
+        need.uoms,
+        true,
+        'src/views/erp/doc/doc-options-need.js：' + kind.code
+          + ' 需要物料 ⇒ 必须同时装载单位（否则行项单位空白、uomDecimals 为 null）'
+      )
+    }
+    // 反向：不涉及物料时不该白拉单位表（避免为了"保险"一律加载）
+    if (!need.products) {
+      assert.strictEqual(need.uoms, false, kind.code + ' 不需要物料时不该装载单位')
+    }
+  })
+  assert.ok(checked >= 8, '8 类单据都应声明物料（实际 ' + checked + ' 类）')
+})
+
+test('P-⑤ 门禁（结构）：联动推导必须写在三个 scan 之后', function () {
+  // 行为用例已能抓住回归；这条再钉住"位置"这一读代码时最容易看漏的点：
+  // `if (need.products) need.uoms = true` 必须出现在最后一个扫描（itemColumns 段）之后。
+  var text = fs.readFileSync(path.join(ERP_DIR, 'doc', 'doc-options-need.js'), 'utf8')
+  var code = text
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+  var coupling = code.indexOf('if (need.products) need.uoms = true')
+  var lastScan = Math.max(
+    code.indexOf('kind.filters'),
+    code.indexOf('kind.headerFields'),
+    code.indexOf('kind.itemColumns')
+  )
+  assert.ok(coupling > 0, 'src/views/erp/doc/doc-options-need.js：找不到联动推导语句（是否被改名/删除？）')
+  assert.ok(lastScan > 0, 'src/views/erp/doc/doc-options-need.js：找不到三个 scan')
+  assert.ok(
+    coupling > lastScan,
+    'src/views/erp/doc/doc-options-need.js：联动推导必须在三个 scan 之后'
+      + '（P-⑤：写在中间会让 8 类单据的 uoms 恒 false）'
+  )
 })
 
 /* ============================================================================
