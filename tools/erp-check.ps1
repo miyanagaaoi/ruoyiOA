@@ -1071,12 +1071,24 @@ try {
     Case 'L-03' '明细行字段：displayName / goodsQuota / belowSafetyStock 齐备' '三字段都存在' `
         ("字段=" + (@($r.rows[0].PSObject.Properties.Name) -join ',')) `
         ((@($r.rows[0].PSObject.Properties.Name) -contains 'displayName') -and (@($r.rows[0].PSObject.Properties.Name) -contains 'goodsQuota') -and (@($r.rows[0].PSObject.Properties.Name) -contains 'belowSafetyStock'))
+
     # notes/07-ledger.md §7.1 与 §7 断言表第 6 行冻结口径：`productTypeId` **按子树（选父带子）**
-    $rRoot = Api 'GET' "/stk/stock/list?pageNum=1&pageSize=10&productTypeId=$TypeRootId" $null
-    $rLeaf = Api 'GET' "/stk/stock/list?pageNum=1&pageSize=10&productTypeId=$TypeLeafId" $null
-    Case 'L-06' '按父类型筛选（含子树，07-ledger §7.1/断言表#6）' 'code=200 且命中该类型子树下的物料行' `
-        ("code=$(CodeOf $rRoot) totalRoot=$($rRoot.total) ｜ totalLeaf=$($rLeaf.total)（叶子命中说明行存在，父类型应为 ≥1）") `
-        ((IsOk $rRoot) -and ([int]$rRoot.total -ge 1))
+    # ⚠ F-02（t54）纪律：**门禁判据不得依赖库规模/夹具位置**。旧写法只跑一次 pageSize=10，
+    #   而"读全表类型清单"的辅助查询一旦被 PageHelper 截断就会漏子树 ⇒ 门禁结果取决于
+    #   "根/叶类型是否恰好落在前 pageSize 行"，库一大就翻转（F-01 正是这么被漏掉的）。
+    #   现在改为**双页大小对拍**：total(父) 两次必须一致，且 total(父) ≥ total(子) > 0；
+    #   失败时把两个 total、类型表行数、父/子类型 code 全打印出来便于定位。
+    $rRoot10 = Api 'GET' "/stk/stock/list?pageNum=1&pageSize=10&productTypeId=$TypeRootId" $null
+    $rRoot500 = Api 'GET' "/stk/stock/list?pageNum=1&pageSize=500&productTypeId=$TypeRootId" $null
+    $rLeaf10 = Api 'GET' "/stk/stock/list?pageNum=1&pageSize=10&productTypeId=$TypeLeafId" $null
+    $typeRows = Sql "SELECT COUNT(*) FROM t_ctms_product_type"
+    $rootCode = Sql "SELECT code FROM t_ctms_product_type WHERE id='$TypeRootId'"
+    $leafCode = Sql "SELECT code FROM t_ctms_product_type WHERE id='$TypeLeafId'"
+    $tR10 = [int]$rRoot10.total; $tR500 = [int]$rRoot500.total; $tL10 = [int]$rLeaf10.total
+    Case 'L-06' '按父类型筛选（含子树）—— 与页大小/库规模无关（07-ledger §7.1/断言表#6，F-02）' `
+        'code=200 且 total(父,10) == total(父,500) ≥ total(子,10) > 0' `
+        ("code=$(CodeOf $rRoot10)/$(CodeOf $rRoot500) ｜ total(父,10)=$tR10 total(父,500)=$tR500 total(子,10)=$tL10 ｜ 类型表行数=$typeRows ｜ 父=$rootCode 子=$leafCode") `
+        ((IsOk $rRoot10) -and (IsOk $rRoot500) -and (IsOk $rLeaf10) -and ($tR10 -eq $tR500) -and ($tR10 -ge $tL10) -and ($tL10 -gt 0))
     $r = Api 'GET' "/stk/ledger/list?pageNum=1&pageSize=10&productId=$ProdId&warehouseId=$WhA" $null
     Case 'L-10' '流水列表按 key 过滤、含 qtyAfter、倒序' 'code=200 且行含 qtyAfter 字段' `
         ("code=$(CodeOf $r) total=$($r.total) 有qtyAfter=" + (@($r.rows[0].PSObject.Properties.Name) -contains 'qtyAfter')) `
@@ -1135,7 +1147,7 @@ try {
     if ($r.data -and $r.data.order) { $e2eOrd = [string]$r.data.order.id }
     if ($e2eOrd -ne '') { TrackDoc 'purchase_order' $e2eOrd '/erp/pur/order' }
     Case 'E2E-PUR-1' '申请单审核后下推采购单（草稿 + 来源单号回填）' 'code=200 + 采购单为 draft' `
-        ("code=$(CodeOf $r) orderId=$e2eOrd msg=$(MsgOf $r) ｜ " + (ApiDiag))
+        ("code=$(CodeOf $r) orderId=$e2eOrd msg=$(MsgOf $r) ｜ " + (ApiDiag)) `
         ((IsOk $r) -and ($e2eOrd -ne ''))
     if ($e2eOrd -ne '') {
         $null = Api 'PUT' "/erp/pur/order/$e2eOrd/submit" $null

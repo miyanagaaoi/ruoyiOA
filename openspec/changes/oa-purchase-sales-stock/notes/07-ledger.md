@@ -163,3 +163,27 @@ SQL 与 Java 的关键字一致性由 `ErpLedgerAppendOnlyTest.额度口径的SQ
 2. **导出面 xlsx 判定**：清单第 12 条按 R1 教训要求"按 xlsx 判定 + 导出行数 == 列表 total"双证。
 3. **recalc 的真库并发/回滚**：本组单测用内存桩（无事务），真库行为归 T10/T13。
 4. **孤儿流水**（有流水无结存行）：不在本组修复范围（见 §5 已知边界）。
+
+
+---
+
+## 11. F-01 修复记录（t54）：按商品类型（含子树）筛选被 PageHelper 分页污染
+
+**根因**：`ErpStockLedgerQueryServiceImpl.expandProductTypes` 读"全表类型清单"的那条查询落在 `startPage()` **之后** ⇒ PageHelper 把 ThreadLocal 里的 Page 交给**下一条** MyBatis 查询（正是这条辅助查询）⇒ 类型清单被截成前 `pageSize` 行 ⇒ 根类型不在前 N 行时 `subtreeIds` 算不出子树（现象：`?productTypeId=父` 查不到子类型物料，且**随页大小翻转**）。
+
+**修复**：把子树展开**移到 `startPage()` 之前** —— 新增 `IErpStockLedgerQueryService.prepareQuery(query)`（javadoc 写明"必须在 `startPage()` 之前调用"及违反后果，即本次 F-01），**两处调用点**：`ErpStockBalanceController.list`（`prepareQuery(query); startPage(); …selectBalanceList(query)`）与 `exportRows`（先 prepare 再取数）；`selectBalanceList` 仅在未被 prepare 时才兜底展开。
+**为什么不选另两条**：① `PageHelper.clearPage()` 会把**明细查询自己的分页一起清掉**（静默改页大小）；② `setLocalPage` 在 pagehelper 5.3.3 里**不在 `PageHelper` 上**（实测字节码：`PageHelper` 只有 `getLocalPage/clearPage`，`setLocalPage` 在 `PageMethod`）⇒ 迁移方案脆弱；③"让调用方传大 pageSize"是藏 bug。**另：专用不分页 mapper 也不解决** —— PageHelper 拦的是线程里**下一条**查询，与用哪个 mapper 无关。
+
+**真实 HTTP 复现／验证（独立于 erp-check；夹具前缀 `T54*`，自建自清）**：类型表 **59 行**、`ROOT←LEAF` + 物料挂 LEAF + 审核过账：
+
+| 阶段 | `pageSize=10` | `pageSize=500` |
+| --- | --- | --- |
+| 修复前（旧 jar） | 父类型 **total=0**（漏子树） | total=1（未被截断 ⇒ 看似正常） |
+| 修复后（新 jar） | 父类型 **total=1 命中** | total=1 ⇒ **页大小无关** |
+
+子类型两次均命中 1。修复后已清夹具：残留 product/type/stock **全 0**。
+
+**回归网（服务层，全模块 547 → 550 条）**：`ErpStockBalancePagingTest` 3 条 —— ① 类型 47 行 > pageSize 10 时按父类型筛选**必须**命中子类型物料；② `pageSize=10` 与 `500` 结果一致；③ **反向对照**：把"读全表类型清单"放回分页上下文（旧写法）⇒ 桩按 PageHelper 语义截断前 10 行、`ROOT/LEAF` 不在其中 ⇒ 子树只剩自己（用例变红）—— 证明桩真能复现污染、①② 不是假绿。桩 `StubProductTypeMapper` 新增 `simulatePageHelper`（用真实 `PageHelper.getLocalPage()/clearPage()` 模拟拦截）。
+> 测试侧一个坑：单测无登录上下文时 `ErpDocScope` 会返回 `1=0`（"不可见任何行"），桩忠实模拟该片段语义会把夹具行全挡掉、掩盖分页变量 ⇒ 用测试子类 `ScopeFreeService` 覆写 `currentScopeSql()` 返回 null 来隔离变量。
+
+**门禁加固（F-02；经 captain 授权，只动 `erp-check.ps1` 的 L-06 一个 Case）**：判据由"单次命中"改为**双页大小对拍** `total(父,10) == total(父,500) ≥ total(子,10) > 0`，失败时打印两个 total、类型表行数、父/子类型 code；Case 注释写明纪律「**门禁判据不得依赖库规模/夹具位置**」（旧写法等于"根/叶恰好落在前 10 行才绿"）。实测：`tools\erp-check.ps1` 全段 **88 通过 / 0 失败 / 25 跳过**，`L-06` PASS、`CLEAN-01`/`CLEAN-02` PASS。

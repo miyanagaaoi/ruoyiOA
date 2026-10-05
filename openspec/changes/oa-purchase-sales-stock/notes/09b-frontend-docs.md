@@ -686,3 +686,102 @@ npm.cmd run build:prod         → DONE Build complete（无 ERROR / Failed to c
 
 `t51：库存两页的仓库筛选必须用 rowsOf（列表接口），且两页都要有该断言` —— 正面钉住两页的 `rowsOf(res)` 与
 "必须复用 `erp-response.js`"（防止有人图省事各写一份取数口径）。
+
+---
+
+## 13. t52 repair：P-⑤「8 类单据单位列表从未加载」（2026-10-06 01:0x）
+
+### 13.1 根因与改动
+
+`doc-options.js#neededOptions()` 里"需要物料 ⇒ 需要单位"的联动判定被夹在 **filters 扫描之后、headerFields/itemColumns 扫描之前**：
+
+```js
+// ❌ 修复前（顺序陷阱）
+;(kind.filters || []).forEach(scan)
+if (need.products) need.uoms = true        // ← 此刻 products 还没被置位
+;(kind.headerFields || []).forEach(scan)
+if (kind.itemColumns) {                     // ← 8 类单据的 products 正是在这里置位的
+  itemColumns.forEach((col) => { if (col.kind === 'product') need.products = true })
+}
+```
+8 类单据的物料选择器来自**行项列**，因此 `need.uoms` **恒 false** ⇒ **单位列表从未发请求**。
+
+修复：把该联动**移到三个 scan 全部跑完之后**（并把函数抽成可单测的 CJS 模块 `views/erp/doc/doc-options-need.js`，
+`doc-options.js` 原样转出口，契约不变）：
+
+```js
+// ✅ 修复后（三个 scan 之后；末尾一行，有用例钉住位置）
+;(kind.filters || []).forEach(scan)
+;(kind.headerFields || []).forEach(scan)
+if (kind.itemColumns) { /* …products / showWarehouse… */ }
+if (need.products) need.uoms = true        // ← 现在一定在 products 置位之后
+```
+> 为什么抽模块：`neededOptions()` 是"要不要发请求"的唯一判据，必须能被**单测直接调用**（历史教训：只靠读源码
+> 文本的门禁挡不住这种顺序错误）。模块头注释把 P-⑤ 的前因后果与"联动必须写在三个 scan 之后"的纪律写在最显眼处。
+
+### 13.2 网络证据（before / after，同一页面）
+
+复现工具：`tests/erp-p5-mutation-tool.js`（把联动判定**移动**回扫描中间，语法仍合法 ⇒ 精确复现 P-⑤；用完还原）。
+
+| 状态 | 打开 `/erp/stock-in/form?mode=add` 后，本次页面加载的取数（后端日志归类） |
+| --- | --- |
+| **P-⑤ 复现**（联动移回中间） | `selectProductList` 12 行、`selectWarehouseList` 12 行、`selectSupplierList` 6 行、`selectContractList` 6 行、**`selectUomList` 0 行** ⇒ 单位表**根本没请求** |
+| **修复后** | `selectUomList` **12 行**，参数 `(1(String), 500(Integer))` = `enableFlag=1&pageSize=500`，**`<== Total: 14`** ⇒ 真的取到 14 个单位 |
+
+### 13.3 浏览器证据（真实页面，入库单表单；**未保存 ⇒ 零写入**）
+
+- 行 1：选物料 `E2E4BMUVHNZ4S-P0 · E2E4BMUVHNZ4S螺栓` ⇒ 行内 DOM 文本出现
+  **`E2E4BMUVHNZ4S计量单位0位`**（单位快照有值，不再空白）；数量输入框由默认 `1.000` 变为 **`1`**，
+  输入 `1.6` 后立即变成 **`2`** ⇒ 精度 0 生效（0 位小数的单位）。
+- 行 2：选物料 `E2E4BMUVHNZ4S-P3 · E2E4BMUVHNZ4S球阀` ⇒ 行内出现 **`E2E4BMUVHNZ4S计量单位3位`**；
+  输入 `1.23456` 后变成 **`1.235`** ⇒ 精度 3 生效。
+- ⇒ **`uomDecimals` 非 null 且按单位生效**：0 位单位把 `1.6` 压成 `2`，3 位单位把 `1.23456` 压成 `1.235`；
+  修复前 `uomDecimals === null` 会走 `DocItemsTable.vue:197-202` 的兜底 `return 3`（**两行都会是 3 位**）
+  —— 这正是"用户可感知的精度错误"，不只是单元格空白。
+
+### 13.4 门禁 + 反向对照
+
+| 门禁 | 内容 |
+| --- | --- |
+| 行为门禁 | `P-⑤ 门禁：声明了 products 的 kind 必须产生 uoms 装载（8 类单据一个不落）`（直接调用 `neededOptions`；并反向断言"不需要物料时不该白拉单位表"） |
+| 结构门禁 | `P-⑤ 门禁（结构）：联动推导必须写在三个 scan 之后`（剥注释后比较位置） |
+
+**反向对照（真实输出，用 §13.2 的移动工具）**
+```
+$ node tests/erp-p5-mutation-tool.js src/views/erp/doc/doc-options-need.js mutate
+MUTATED：已把 "if (need.products) need.uoms = true" 移到 filters 与 headerFields 之间
+$ node tests/run.js
+共 205 条；通过 203 条；失败 2 条
+  ✗ P-⑤ 门禁：声明了 products 的 kind 必须产生 uoms 装载（8 类单据一个不落）
+    AssertionError: src/views/erp/doc/doc-options-need.js：purchase_request 需要物料 ⇒ 必须同时装载单位…
+  ✗ P-⑤ 门禁（结构）：联动推导必须写在三个 scan 之后
+    AssertionError: src/views/erp/doc/doc-options-need.js：联动推导必须在三个 scan 之后（P-⑤…）
+还原后：共 205 条；通过 205 条；失败 0 条
+```
+⇒ 两条门禁都会变红并**点名文件** `src/views/erp/doc/doc-options-need.js`。
+
+### 13.5 同源普查（`neededOptions()` 里其它"A 需要 ⇒ B 需要"的联动）
+
+逐条核对，结论：**除 uoms 外没有第二处顺序陷阱**。
+
+| 联动 | 形态 | 结论 |
+| --- | --- | --- |
+| `products ⇒ uoms` | 依赖 `need.products`（**派生位**） | ❌ 曾错位（本次修复）；现已放到三个 scan 之后，并有用例钉住 |
+| `itemColumns[kind=warehouse] 且 kind.showWarehouse ⇒ warehouses` | 依赖 `kind.showWarehouse`（**静态配置**，不是派生位） | ✅ 无顺序依赖（`kind` 入参即完整） |
+| `suppliers/customers/products/warehouses/uoms` 由 `field.options` 置位 | 依赖字段自身声明 | ✅ 无联动 |
+| `contract ⇒ purchaseContracts/saleContracts` | 依赖 `field.contractDirection`（静态） | ✅ 无联动 |
+| 状态筛选 `docStatuses` | 根本不在 `neededOptions`（前端自带真源、不发请求） | ✅ 无联动 |
+
+> 纪律（已写进模块头）：**任何"派生位 ⇒ 派生位"的联动，必须写在三个 scan 之后**；新增联动时同步加一条行为用例。
+
+### 13.6 门禁（真实输出）与新增用例
+
+```
+cd F:\dsh\ruoyiOA\ruoyi-vue-oa-ui-master
+node tests\run.js              → 共 205 条；通过 205 条；失败 0 条    （基线 203 → +2，只增不减）
+cd F:\dsh\ruoyiOA
+node tools\audit\run-all.js    → 共 10 个审计；失败 0 个；未自证 0 个
+cd F:\dsh\ruoyiOA\ruoyi-vue-oa-ui-master
+npm.cmd run build:prod         → DONE Build complete（无 ERROR / Failed to compile）；dist\index.html 2026-10-06 01:07:07
+```
+新增用例 2 条（行为 + 结构，见 §13.4）；另新增可复现工具 `tests/erp-p5-mutation-tool.js`（仅供反向对照，不被 `run.js` 加载）。
