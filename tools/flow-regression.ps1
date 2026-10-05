@@ -36,6 +36,17 @@
  @author 二开
 ================================================================================
 #>
+# ⚠ 2026-10-05 加固（t15：并行会审 ALL 合流"卡死"根因修复）：
+#   本脚本原先对 /workflow/handle/startFlow 与 /biz/flow/submit 的返回**只判字段不判 code**
+#   （多处写成 `$null = Post ...`），而 RuoYi 的"认证失败"是 **HTTP 200 + body {"code":401}**
+#   （AuthenticationEntryPointImpl 不回 401 状态码），Invoke-RestMethod 既不抛异常、脚本也看不见。
+#   后果：某个审批人凭据过期 → 他的提交被静默拒绝 → 多实例只剩部分活动任务 → 实例不办结
+#   → 脚本报成"多实例 ALL 合流未触发、流程卡死"（HANDOFF §3.2 的现场就是这么来的，不是引擎缺陷）。
+#   加固内容（**只增加断言，不删用例、不放宽任何既有断言**）：
+#     1) 跑前校验 5 个账号的 token（/system/user/profile），失效直接中止并提示先跑 tools\oa-login.ps1；
+#     2) 每次 startFlow / submit 断言 code == 200，不等即红并打印原始 body；
+#     3) 用例失败时打印现场：实例 id / 活动任务数 / 活动执行数 / ACT_RE_PROCDEF 版本。
+#   通用坑已登记 DEV-ENV §6.56。
 [CmdletBinding()]
 param(
     [string]$BaseUrl = 'http://localhost:8080',
@@ -82,6 +93,68 @@ function Post([string]$url, $body, [string]$user) {
     return Invoke-RestMethod "$BaseUrl$url" -Method Post `
         -Headers @{ Authorization = "Bearer $(TokenOf $user)" } `
         -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec 60
+}
+
+# ------------------------------------------------------------------ 提交/发起的 code 断言
+
+# 记录现场（用例失败时打印用）
+$script:LastProcInsId = $null
+$script:LastProcDefId = $null
+
+# 2026-10-05 加固：POST 必须判 code。
+#   RuoYi 认证失败 = HTTP 200 + body code=401（AuthenticationEntryPointImpl），
+#   Invoke-RestMethod 不抛异常 ⇒ 只看"有没有字段"的写法会把"审批被 401 拒掉"当成"审批成功"。
+#   注意：这里**只加断言**，不改变任何请求体。
+function Post-Ok([string]$url, $body, [string]$user, [string]$what) {
+    $r = Post $url $body $user
+    $code = $null
+    if ($null -ne $r) { $code = $r.code }
+    if ($code -ne 200) {
+        $raw = ''
+        try { $raw = ($r | ConvertTo-Json -Depth 20 -Compress) } catch { $raw = "$r" }
+        $msg = ''
+        if ($null -ne $r) { $msg = $r.msg }
+        throw "$what（账号 $user）被拒：code=$code msg=$msg；原始 body=$raw"
+    }
+    if ($url -like '*startFlow*' -and $r.data) {
+        $script:LastProcInsId = $r.data.procInsId
+        $script:LastProcDefId = $r.data.defId
+        if (-not $script:LastProcDefId) { $script:LastProcDefId = $r.data.procDefId }
+    }
+    return $r
+}
+
+# 跑前凭据校验：token 失效会让审批被静默拒绝，必须在跑用例之前就红。
+function Assert-Tokens() {
+    $bad = @()
+    foreach ($u in @('superAdmin', 'zhangwei', 'lina', 'wangqiang', 'zhaomin')) {
+        try {
+            $r = Invoke-RestMethod "$BaseUrl/system/user/profile" `
+                -Headers @{ Authorization = "Bearer $(TokenOf $u)" } -TimeoutSec 15
+            if ($r.code -ne 200) { $bad += ("{0}(code={1})" -f $u, $r.code) }
+        } catch {
+            $bad += ("{0}({1})" -f $u, $_.Exception.Message)
+        }
+    }
+    if ($bad.Count -gt 0) {
+        $hint = 'RuoYi 的认证失败是 HTTP 200 + body code=401，不判 code 会把「审批被拒」误报成「流程卡死」（HANDOFF §3.2 就是这么来的，见 DEV-ENV §6.56）。先跑：powershell -NoProfile -ExecutionPolicy Bypass -File F:\dsh\ruoyiOA\tools\oa-login.ps1'
+        throw ('账号凭据无效：' + ($bad -join '; ') + '。' + $hint)
+    }
+}
+
+# 失败现场：实例 id / 活动任务数 / 活动执行数 / 流程定义版本（task 要求逐次留档的就是这四项）
+function Show-Diag() {
+    $pi = $script:LastProcInsId
+    if (-not $pi) { return }
+    $pd = $script:LastProcDefId
+    Say ("    [diag] 实例 procInsId={0}  procDefId={1}" -f $pi, $pd)
+    Say ("    [diag] ACT_HI_PROCINST.END_TIME_ = {0}" -f (Sql "SELECT IFNULL(END_TIME_,'(未办结)') FROM ACT_HI_PROCINST WHERE PROC_INST_ID_='$pi'"))
+    Say ("    [diag] 活动任务数 = {0}（ACT_RU_TASK）" -f (ActiveCount $pi))
+    foreach ($t in (ActiveTasks $pi)) { Say ("    [diag]    任务 {0}" -f $t) }
+    $act = Sql "SELECT IFNULL(SUM(IS_ACTIVE_),0) FROM ACT_RU_EXECUTION WHERE PROC_INST_ID_='$pi'"
+    $all = Sql "SELECT COUNT(*) FROM ACT_RU_EXECUTION WHERE PROC_INST_ID_='$pi'"
+    Say ("    [diag] ACT_RU_EXECUTION 活动/全部 = {0}/{1}" -f $act, $all)
+    Say ("    [diag] ACT_RE_PROCDEF = {0}" -f (Sql "SELECT CONCAT(KEY_,' v',VERSION_,' deployment=',DEPLOYMENT_ID_) FROM ACT_RE_PROCDEF WHERE ID_='$pd'"))
 }
 
 # assignee(user_id) → 登录名（用于挑对 token 去提交任务）
@@ -132,8 +205,7 @@ function Run-Flow {
     $tpl = TemplateId $DefKey
     if (-not $tpl) { throw "库里找不到 $DefKey 的模板（t_template）" }
 
-    $start = Post '/workflow/handle/startFlow' @{ templateId = $tpl; variables = $Variables } $Starter
-    if ($start.code -ne 200) { throw "发起失败：$($start.msg)" }
+    $start = Post-Ok '/workflow/handle/startFlow' @{ templateId = $tpl; variables = $Variables } $Starter '发起流程'
     $pi = $start.data.procInsId
     $defId = $start.data.procDefId
     Say "    实例 procInsId=$pi  procDefId=$defId"
@@ -148,7 +220,7 @@ function Run-Flow {
         $tid = $p[0]; $assignee = $p[1]; $key = $p[2]
         $seen[$key] = 1 + ($seen[$key] | ForEach-Object { $_ })   # 记录访问过的节点
         $owner = OwnerOf $assignee
-        $null = Post '/biz/flow/submit' @{
+        $null = Post-Ok '/biz/flow/submit' @{
             operateType = '200'
             flowTask = @{
                 taskId = $tid; procInsId = $pi; taskDefKey = $key; defId = $defId
@@ -156,7 +228,7 @@ function Run-Flow {
                 templateType = (Sql "SELECT type FROM t_template WHERE id='$tpl'")
                 type = 'TODO'; handleType = 'AUDIT'; variables = @{}
             }
-        } $owner
+        } $owner "提交任务($owner/$key)"
         Start-Sleep -Seconds 3     # 给异步消费留时间
     }
 
@@ -181,11 +253,13 @@ function Assert-Ended($r, [string]$name) {
 
 $cases = [ordered]@{
 
-    # 条件分支：两条条件同时为真时只能走一条（分支顺序即优先级），且必须走排他网关
+    # 条件分支：两条互斥条件里只能命中一条（分支顺序即优先级），且必须走排他网关。
+    # 2026-10-05 起 testCondition 的条件字段随「关联表单」改为合同类审批单，
+    # 两条条件分别是 field101 = 经营 / field101 = 经济（见 doc/缺陷-流程条件字段与关联表单错位.md）。
     'testCondition' = {
-        $r = Run-Flow -DefKey 'testCondition' -Variables @{ contractType = '经营'; amount = 5000 }
+        $r = Run-Flow -DefKey 'testCondition' -Variables @{ field101 = '经营' }
         Assert-That ($r.Nodes.ContainsKey('n2')) 'testCondition · 命中「经营」分支 → 经发部审批'
-        Assert-That (-not $r.Nodes.ContainsKey('n3')) 'testCondition · 未命中「金额>10000」分支 → 未走财务部'
+        Assert-That (-not $r.Nodes.ContainsKey('n3')) 'testCondition · 未命中「经济」分支 → 未走财务部'
         Assert-Ended $r 'testCondition'
     }
 
@@ -194,13 +268,13 @@ $cases = [ordered]@{
         $depts = @('58FE8668233B422FB69EE575F5F402A5','192F606172CB4405AFD3FA1976CE4098',
                    '85122F49DC8A4626A1B870FAD25C8CF8','29D5380BCE6A41AD935D4275DCF40DEF')
         $tpl = TemplateId 'testParallel'
-        $start = Post '/workflow/handle/startFlow' @{ templateId = $tpl; variables = @{ jointDepts = $depts } } 'superAdmin'
+        $start = Post-Ok '/workflow/handle/startFlow' @{ templateId = $tpl; variables = @{ jointDepts = $depts } } 'superAdmin' '发起流程(testParallel)'
         $pi = $start.data.procInsId; $defId = $start.data.procDefId
         # 先完成「责任部门审批」，才会进入并行节点
         $first = (ActiveTasks $pi | Select-Object -First 1) -split '\|'
-        $null = Post '/biz/flow/submit' @{ operateType='200'; flowTask=@{
+        $null = Post-Ok '/biz/flow/submit' @{ operateType='200'; flowTask=@{
             taskId=$first[0]; procInsId=$pi; taskDefKey=$first[2]; defId=$defId
-            comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } 'superAdmin'
+            comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } 'superAdmin' '提交责任部门审批'
         Start-Sleep -Seconds 5
         $n = ActiveCount $pi
         Assert-That ($n -eq 4) "testParallel · 勾选 4 个部门 → 同时生成 4 个并行任务（实际 $n）"
@@ -213,9 +287,9 @@ $cases = [ordered]@{
             $rows = ActiveTasks $pi
             if ($rows.Count -eq 0) { Start-Sleep -Seconds 2; continue }
             $p = ($rows | Select-Object -First 1) -split '\|'
-            $null = Post '/biz/flow/submit' @{ operateType='200'; flowTask=@{
+            $null = Post-Ok '/biz/flow/submit' @{ operateType='200'; flowTask=@{
                 taskId=$p[0]; procInsId=$pi; taskDefKey=$p[2]; defId=$defId
-                comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1])
+                comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1]) "提交会审任务($($p[1])/$($p[2]))"
             Start-Sleep -Seconds 3
         }
         $ended = Wait-Ended $pi $PollSeconds
@@ -227,19 +301,19 @@ $cases = [ordered]@{
         $depts = @('58FE8668233B422FB69EE575F5F402A5','192F606172CB4405AFD3FA1976CE4098',
                    '85122F49DC8A4626A1B870FAD25C8CF8')
         $tpl = TemplateId 'testParallelAny'
-        $start = Post '/workflow/handle/startFlow' @{ templateId = $tpl; variables = @{ jointDepts = $depts } } 'superAdmin'
+        $start = Post-Ok '/workflow/handle/startFlow' @{ templateId = $tpl; variables = @{ jointDepts = $depts } } 'superAdmin' '发起流程(testParallelAny)'
         $pi = $start.data.procInsId; $defId = $start.data.procDefId
         $first = (ActiveTasks $pi | Select-Object -First 1) -split '\|'
-        $null = Post '/biz/flow/submit' @{ operateType='200'; flowTask=@{
+        $null = Post-Ok '/biz/flow/submit' @{ operateType='200'; flowTask=@{
             taskId=$first[0]; procInsId=$pi; taskDefKey=$first[2]; defId=$defId
-            comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } 'superAdmin'
+            comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } 'superAdmin' '提交责任部门审批'
         Start-Sleep -Seconds 5
         Assert-That ((ActiveCount $pi) -eq 3) "testParallelAny · 3 个部门 → 3 个并行任务"
         # 只完成 1 个
         $p = (ActiveTasks $pi | Select-Object -First 1) -split '\|'
-        $null = Post '/biz/flow/submit' @{ operateType='200'; flowTask=@{
+        $null = Post-Ok '/biz/flow/submit' @{ operateType='200'; flowTask=@{
             taskId=$p[0]; procInsId=$pi; taskDefKey=$p[2]; defId=$defId
-            comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1])
+            comment='回归测试'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1]) "提交会审任务($($p[1])/$($p[2]))"
         $ended = Wait-Ended $pi $PollSeconds
         Assert-That ($ended) "testParallelAny · **只完成 1 个即合流办结**（ANY 语义）"
     }
@@ -251,6 +325,7 @@ $cases = [ordered]@{
         Assert-That ($start.code -eq 200) "testSerial · **首节点为会签也能发起**（修复前：流程启动失败）"
         if ($start.code -ne 200) { return }
         $pi = $start.data.procInsId; $defId = $start.data.procDefId
+        $script:LastProcInsId = $pi; $script:LastProcDefId = $defId   # 失败时 Show-Diag 用
         Start-Sleep -Seconds 5
         $n = ActiveCount $pi
         Assert-That ($n -eq 2) "testSerial · 会签 2 人 → 2 个任务（实际 $n）"
@@ -261,18 +336,18 @@ $cases = [ordered]@{
         for ($i = 0; $i -lt 2; $i++) {
             $p = (ActiveTasks $pi | Select-Object -First 1) -split '\|'
             if (-not $p[0]) { break }
-            $null = Post '/biz/flow/submit' @{ operateType='200'; flowTask=@{
+            $null = Post-Ok '/biz/flow/submit' @{ operateType='200'; flowTask=@{
                 taskId=$p[0]; procInsId=$pi; taskDefKey=$p[2]; defId=$defId
-                comment='会签同意'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1])
+                comment='会签同意'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1]) "提交会签任务($($p[1])/$($p[2]))"
             Start-Sleep -Seconds 4
         }
         # 或签：只批 1 个
         $p = (ActiveTasks $pi | Select-Object -First 1) -split '\|'
         Assert-That ($p[2] -eq 'n2') "testSerial · 会签完成后推进到「分管领导或签」（实际节点 $($p[2])）"
         if ($p[0]) {
-            $null = Post '/biz/flow/submit' @{ operateType='200'; flowTask=@{
+            $null = Post-Ok '/biz/flow/submit' @{ operateType='200'; flowTask=@{
                 taskId=$p[0]; procInsId=$pi; taskDefKey=$p[2]; defId=$defId
-                comment='或签同意'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1])
+                comment='或签同意'; templateId=$tpl; type='TODO'; handleType='AUDIT'; variables=@{} } } (OwnerOf $p[1]) "提交或签任务($($p[1])/$($p[2]))"
         }
         Assert-That (Wait-Ended $pi $PollSeconds) "testSerial · **或签 1 人同意即放行并办结**"
     }
@@ -298,11 +373,30 @@ foreach ($p in @(3306, 6379, 5672, 8080)) {
 Ok 'MySQL 3306 / Redis 6379 / RabbitMQ 5672 / 后端 8080 均在线'
 if (-not (Test-Path $MySqlCli)) { throw "找不到 mysql 客户端：$MySqlCli" }
 
+# 凭据前置校验（2026-10-05 加固）：token 过期会让审批被静默拒绝（HTTP 200 + code=401），
+# 必须在跑用例之前就红，否则会误报成"多实例不合流、流程卡死"。
+try {
+    Assert-Tokens
+    Ok '5 个账号 token 有效（/system/user/profile 全部 code=200）'
+} catch {
+    Bad $_.Exception.Message
+    $script:Fail++
+    $script:Failures += '账号凭据无效（本次未执行任何用例）'
+    Say ''
+    Say '=================================================='
+    Say ("通过 {0} 项，失败 {1} 项" -f $script:Pass, $script:Fail)
+    Say '失败明细：'
+    $script:Failures | ForEach-Object { Say "  - $_" }
+    exit 1
+}
+
 $names = if ($Only.Count -gt 0) { $Only } else { @($cases.Keys) }
 foreach ($name in $names) {
     if (-not $cases.Contains($name)) { Bad "未知用例：$name"; $script:Fail++; continue }
     Step "用例 $name"
+    $failBefore = $script:Fail
     try { & $cases[$name] } catch { Bad "$name · 异常：$($_.Exception.Message)"; $script:Fail++; $script:Failures += "$name 异常" }
+    if ($script:Fail -gt $failBefore) { Show-Diag }
 }
 
 Say ''

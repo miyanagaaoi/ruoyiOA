@@ -116,7 +116,7 @@ Info "菜单 SQL 声明权限点：$($sqlPerms.Count) 个；声明 menu_id：$($
 
 $dbRows = @(SqlRows "SELECT perms FROM sys_menu WHERE perms LIKE 'ctms:%' ORDER BY perms;" | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ -ne '' })
 $dbPerms = @($dbRows | Sort-Object -Unique)
-Info "真库 ctms 权限点行数：$($dbRows.Count) 行 / 去重 $($dbPerms.Count) 个"
+Info "真库 ctms 权限点行数：$($dbRows.Count) 行 / 去重 $($dbPerms.Count) 个（下面的断言按**去重点数**判定：一个权限点可以挂多行 —— 例如 B4 主数据的 4 个 C 菜单复用 ctms:partner:list）"
 
 $idList = ($sqlMenuIds | ForEach-Object { "'$_'" }) -join ','
 $dbBatchRows = @(SqlRows "SELECT COUNT(*) FROM sys_menu WHERE menu_id IN ($idList);" | ForEach-Object { ([string]$_).Trim() })
@@ -124,7 +124,7 @@ $dbBatchPerms = @(SqlRows "SELECT DISTINCT perms FROM sys_menu WHERE menu_id IN 
 
 Assert-That ($sqlPerms.Count -eq 26) "菜单 SQL 声明的权限点数 = 26（实际 $($sqlPerms.Count)）"
 Assert-That ($sqlMenuIds.Count -eq 27) "菜单 SQL 声明的菜单行数 = 27（1 目录 + 4 菜单 + 22 按钮，实际 $($sqlMenuIds.Count)）"
-Assert-That ($dbRows.Count -eq 26) "带 ctms 权限点的菜单行数 = 26（=权限点数；目录行 perms 为 NULL 不计数，实际 $($dbRows.Count)）"
+Assert-That ($dbPerms.Count -eq 26) "带 ctms 权限点的菜单**点数** = 26（COUNT(DISTINCT perms)；菜单行数 30 属预期 —— B4 主数据 4 个 C 菜单复用 ctms:partner:list，实际去重 $($dbPerms.Count)）"
 Assert-That ($dbPerms.Count -eq $sqlPerms.Count -and (($dbPerms -join ',') -eq ($sqlPerms -join ','))) `
     "真库 perms 集合 == 菜单 SQL 声明集合（证明真库执行的就是本文件）"
 Assert-That ($dbBatchRows.Count -eq 1 -and $dbBatchRows[0] -eq '27') `

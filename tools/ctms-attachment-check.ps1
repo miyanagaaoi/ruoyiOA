@@ -11,7 +11,8 @@
 
  覆盖（对应 tasks.md §6.1~6.3 的「验证：」）：
    6.1 合法对象上传成功并落库（元数据 + 磁盘文件双断言）、未注册对象类型被拒、
-       对象不存在被拒、`(object_type, object_id)` 复合索引存在（SHOW INDEX 核对）
+       对象不存在被拒、`(object_type, object_id)` 复合索引存在（SHOW INDEX 核对）、
+       **两个申请单（purchase_request / sales_request）端到端上传/列表/下载/删除（t19 补登记）**
    6.2 白名单外后缀被拒（zip/mp4 两种"平台允许但我们更窄"的判别用例）、
        20MB 边界（等于通过 / 超出 1 字节被拒且**半成品文件不存在**）、
        随机文件名（同名两次不覆盖）、中文名不退化成只有后缀、
@@ -24,7 +25,8 @@
  前置：后端 8080 在线；`.cache\token-{superAdmin,lina}.txt` 有效；
        rad_oa 已执行 `sql\二开-合同台账.sql`、字典参数 SQL、**菜单 SQL**（含 ctms:attachment:list）。
 
- 副作用：夹具用 ASCII 前缀 ATTC/ATCUS/ATCTMP*，收尾物理删除（幂等，连跑两次残留 0 行）；
+ 副作用：夹具用 ASCII 前缀 ATTC/ATCUS/ATTD*（t19 的两个申请单）/ATCTMP*，收尾物理删除
+         （幂等，连跑两次残留 0 行）；
          会临时把「合同台账」菜单子树授权给 common 角色并在收尾撤销；
          会写入 uploadPath\upload\<日期>\，收尾删除本轮产生的所有文件。
 
@@ -185,6 +187,14 @@ $ContractId = "ATTC$S"
 $ContractNo = "ATTC$S"
 $ContractName = "附件验收合同$S"
 $DummyObject = "ATTC00000000000000000000000000FF"
+<#
+  t19：两个申请单对象类型（purchase_request / sales_request）的夹具。
+  它们在 B4 首轮交付时漏登记（参考仓库 OBJECT_PERMS 是"合同 + 7 类单据"，含这两个），
+  补登记后必须端到端可挂附件；夹具前缀用 ATTD（区别于合同的 ATTC），便于清理与残留断言。
+#>
+$PurReqId   = "ATTD$S"
+$SalReqId   = "ATTDX$S"
+$DummyDoc   = "ATTD00000000000000000000000000FF"
 
 $uploadDir = Join-Path $UploadRoot 'upload'
 
@@ -193,13 +203,18 @@ function Clear-Fixtures {
     $out = SqlFile @"
 DELETE FROM t_ctms_attachment WHERE object_id LIKE 'ATTC%' OR contract_id LIKE 'ATTC%'
     OR file_name LIKE 'ATC%' OR stored_path LIKE '%ATTC%' OR stored_path LIKE '%ATC-%';
+-- t19：两个申请单对象类型的附件夹具（object_id = ATTD...）
+DELETE FROM t_ctms_attachment WHERE object_id LIKE 'ATTD%';
 -- 兜底：受限账号上传那条的 file_name/路径可能不带 ATC 前缀（上一轮残留），按 uploader 再清一次
 DELETE FROM t_ctms_attachment WHERE create_by='$LimitedUser';
-DELETE FROM t_ctms_change_log WHERE object_id LIKE 'ATTC%' OR contract_id LIKE 'ATTC%';
+DELETE FROM t_ctms_change_log WHERE object_id LIKE 'ATTC%' OR object_id LIKE 'ATTD%' OR contract_id LIKE 'ATTC%';
 DELETE FROM t_ctms_contract_tag WHERE contract_id IN (SELECT id FROM t_ctms_contract WHERE id LIKE 'ATTC%' OR name LIKE '附件验收合同%');
 DELETE FROM t_ctms_contract_item WHERE contract_id IN (SELECT id FROM t_ctms_contract WHERE id LIKE 'ATTC%' OR name LIKE '附件验收合同%');
 DELETE FROM t_ctms_contract WHERE id LIKE 'ATTC%' OR name LIKE '附件验收合同%';
 DELETE FROM t_ctms_customer WHERE id LIKE 'ATCUS%';
+-- t19：申请单夹具（先删附件与变更历史，再删单据行）
+DELETE FROM t_ctms_purchase_request WHERE id LIKE 'ATTD%' OR doc_no LIKE 'ATTD%';
+DELETE FROM t_ctms_sales_request WHERE id LIKE 'ATTD%' OR doc_no LIKE 'ATTD%';
 "@
     if ($out -match 'ERROR') { Bad "夹具清理出现 SQL 错误：$out" }
 }
@@ -301,6 +316,18 @@ INSERT INTO t_ctms_contract (id,contract_no,name,type,status,arrival_status,curr
 VALUES ('$ContractId','$ContractNo','$ContractName','PUR','内部审批中','未到货','CNY',0.00,0.00,'','0','$adminId','$adminDept',NOW(),NOW());
 "@
     Assert-That ((Sql "SELECT COUNT(*) FROM t_ctms_contract WHERE id='$ContractId'") -eq '1') '夹具合同已就位'
+
+    # t19：两个申请单对象类型的夹具（真实单据行；采购/销售申请单的核心 NOT NULL 列：
+    #      id / doc_no / doc_date / status / dept_id / create_id）
+    Step '准备夹具：采购申请单 + 销售申请单各一张（t19：两个新登记的对象类型）'
+    $null = SqlFile @"
+INSERT INTO t_ctms_purchase_request (id,doc_no,doc_date,status,dept_id,create_id,create_time,update_time)
+VALUES ('$PurReqId','$PurReqId',CURDATE(),'draft','$adminDept','$adminId',NOW(),NOW());
+INSERT INTO t_ctms_sales_request (id,doc_no,doc_date,status,dept_id,create_id,create_time,update_time)
+VALUES ('$SalReqId','$SalReqId',CURDATE(),'draft','$adminDept','$adminId',NOW(),NOW());
+"@
+    Assert-That ((Sql "SELECT COUNT(*) FROM t_ctms_purchase_request WHERE id='$PurReqId'") -eq '1') '夹具采购申请单已就位'
+    Assert-That ((Sql "SELECT COUNT(*) FROM t_ctms_sales_request WHERE id='$SalReqId'") -eq '1') '夹具销售申请单已就位'
 
     $tmpDir = Join-Path $env:TEMP "ctms-att-fixtures"
     New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
@@ -485,13 +512,66 @@ VALUES ('$ContractId','$ContractNo','$ContractName','PUR','内部审批中','未
     $scopeBack = Api 'GET' "/ctms/attachment/list?objectType=contract&objectId=$ContractId" $null $LimitedUser
     Assert-That (IsOk $scopeBack) "数据范围还原为全部后同一账号又能看到（code=$($scopeBack.code)）"
 
-    Step '6.1 附件清单接口：已注册 / B4 待补 / 限制口径'
+    Step '6.1 附件清单接口：已注册 / B4 已接入 / 限制口径'
     $meta = Api 'GET' '/ctms/attachment/object-types' $null
     Assert-That (IsOk $meta) '对象类型清单接口可用'
     Assert-That (@($meta.registered) -contains 'contract') '已注册对象类型含 contract'
-    Assert-That (@($meta.plannedB4).Count -ge 1) "B4 待补对象类型已登记（$(@($meta.plannedB4).Count) 项）"
+    # ⚠ 2026-10-05 口径变更（B4 交付，captain 已许可）：
+    #   旧断言是 `(@($meta.plannedB4).Count -ge 1) 'B4 待补对象类型已登记'` ——
+    #   它表达的是"B4 尚未交付、5 个单据对象刻意不放行"。B4 交付后这 5 个（+ stock_transfer）
+    #   必须**已注册**，否则单据附件会被判"未注册的对象类型"而全部拒绝。
+    # ⚠ 2026-10-05 t19 再变更（captain 已许可）：
+    #   首轮交付漏了参考仓库 OBJECT_PERMS（app/routers/attachments.py:35-44）里的两个**申请单**，
+    #   补登记后清单恰为 9 项 = 合同 + 8 类单据（比参考侧多 stock_transfer，见任务 6.6 / Q-B10）。
+    #   断言只强化不放宽：新增"恰 9 项 / 恰 8 类 / 恒等式 / 两个申请单在册"，
+    #   并把逐个断言从 6 类扩到 8 类（未改动本脚本其它任何断言的期望值）。
+    foreach ($docType in @('purchase_request', 'purchase_order', 'sales_request', 'sales_order',
+                           'stock_in', 'stock_out', 'stock_take', 'stock_transfer')) {
+        Assert-That (@($meta.registered) -contains $docType) "已注册对象类型含 ${docType}（B4 接入）"
+    }
+    Assert-That (@($meta.plannedB4).Count -eq 0) "B4 交付后 plannedB4 已清空（实测 $(@($meta.plannedB4).Count) 项）"
+    Assert-That (@($meta.registered).Count -eq 9) "已注册对象类型恰为 9 项 = 合同 + 8 类单据（实测 $(@($meta.registered).Count) 项）"
+    Assert-That (@($meta.docObjectTypes).Count -eq 8) "接口公布 8 类单据对象类型（实测 $(@($meta.docObjectTypes).Count) 项）"
+    Assert-That (@($meta.registered).Count -eq (@($meta.docObjectTypes).Count + 1)) "恒等式 registered = [contract] + docObjectTypes（$(@($meta.registered).Count) vs $(@($meta.docObjectTypes).Count) + 1）"
+    Assert-That (@($meta.registered) -contains 'purchase_request') '参考仓库 OBJECT_PERMS 含采购申请单（t19 补登记）'
+    Assert-That (@($meta.registered) -contains 'sales_request') '参考仓库 OBJECT_PERMS 含销售申请单（t19 补登记）'
     Assert-That ($meta.maxSizeMb -eq 20) "接口公布的单元大小上限 = 20MB（实测 $($meta.maxSizeMb)）"
     Assert-That (@($meta.extensions).Count -eq 10) "接口公布的白名单后缀 = 10 种（实测 $(@($meta.extensions).Count)）"
+
+    # ============================================================ 6.1b 两个申请单端到端（t19）
+    Step '6.1b 两个申请单（t19 补登记）：上传 / 列表 / 下载 / 删除 端到端'
+    foreach ($pair in @(@('purchase_request', $PurReqId), @('sales_request', $SalReqId))) {
+        $docType = $pair[0]
+        $docId   = $pair[1]
+        $upDoc = Upload $docType $docId $okFile
+        Assert-That ($upDoc.Http -eq '200' -and $upDoc.Json.code -eq 200) "${docType} 上传 200（HTTP=$($upDoc.Http) code=$($upDoc.Json.code) msg=$($upDoc.Body -replace '\s+',' ')）"
+        $docAttId = ''
+        if ($upDoc.Json -and $upDoc.Json.data) { $docAttId = [string]$upDoc.Json.data.id }
+        Assert-That ($docAttId -ne '') "${docType} 上传返回附件主键（$docAttId）"
+        $docRow = Sql "SELECT CONCAT(object_type,'|',object_id,'|',IFNULL(contract_id,'NULL'),'|',del_flag) FROM t_ctms_attachment WHERE id='$docAttId'"
+        Assert-That ($docRow -eq "$docType|$docId|NULL|0") "${docType} 元数据逐列正确且不写 contract_id（实测 $docRow）"
+
+        $docList = Api 'GET' "/ctms/attachment/list?objectType=$docType&objectId=$docId" $null
+        Assert-That (IsOk $docList) "${docType} 附件列表 200（code=$($docList.code)）"
+        Assert-That (@($docList.data).Count -eq 1) "${docType} 列表恰含刚上传的 1 条（实测 $(@($docList.data).Count) 条）"
+
+        $docDown = Download $docAttId
+        Assert-That ($docDown.Http -eq '200' -and $docDown.Body -notmatch '"code":') "${docType} 下载返回文件字节（HTTP=$($docDown.Http) 字节=$($docDown.Body.Length)）"
+
+        $docDel = Api 'DELETE' "/ctms/attachment/$docAttId" $null
+        Assert-That (IsOk $docDel) "${docType} 删除返回成功（code=$($docDel.code)）"
+        Assert-That ((Sql "SELECT del_flag FROM t_ctms_attachment WHERE id='$docAttId'") -eq '1') "${docType} 删除为软删除（del_flag=1）"
+        $docAfter = Api 'GET' "/ctms/attachment/list?objectType=$docType&objectId=$docId" $null
+        Assert-That (@($docAfter.data).Count -eq 0) "${docType} 删除后列表不再出现（实测 $(@($docAfter.data).Count) 条）"
+    }
+
+    Step '6.1b 申请单对象不存在被拒（存在性校验已接到 t_ctms_purchase_request / t_ctms_sales_request）'
+    $ghostDoc = Upload 'purchase_request' $DummyDoc $okFile
+    Assert-That ($ghostDoc.Body -match '采购申请单不存在') "不存在的采购申请单被拒（HTTP=$($ghostDoc.Http) msg=$($ghostDoc.Body -replace '\s+',' ')）"
+    Assert-That ((Sql "SELECT COUNT(*) FROM t_ctms_attachment WHERE object_id='$DummyDoc'") -eq '0') '被拒时不得落库'
+    $ghostDoc2 = Upload 'sales_request' $DummyDoc $okFile
+    Assert-That ($ghostDoc2.Body -match '销售申请单不存在') "不存在的销售申请单被拒（HTTP=$($ghostDoc2.Http) msg=$($ghostDoc2.Body -replace '\s+',' ')）"
+    Assert-That ((Sql "SELECT COUNT(*) FROM t_ctms_attachment WHERE object_id='$DummyDoc'") -eq '0') '被拒时不得落库（销售申请单）'
 
     Step '6.2 超限文件的落库与数据库列宽一致性（size_bytes int）'
     $colType = Sql "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='t_ctms_attachment' AND COLUMN_NAME='size_bytes'"
@@ -510,13 +590,15 @@ VALUES ('$ContractId','$ContractNo','$ContractName','PUR','内部审批中','未
     Remove-Item (Join-Path $env:TEMP 'ctms-att-down.bin') -Force -ErrorAction SilentlyContinue
     Remove-Item $script:LockFile -Force -ErrorAction SilentlyContinue
 
-    $leftAtt = Sql "SELECT COUNT(*) FROM t_ctms_attachment WHERE object_id LIKE 'ATTC%' OR contract_id LIKE 'ATTC%'"
+    $leftAtt = Sql "SELECT COUNT(*) FROM t_ctms_attachment WHERE object_id LIKE 'ATTC%' OR contract_id LIKE 'ATTC%' OR object_id LIKE 'ATTD%'"
     $leftCon = Sql "SELECT COUNT(*) FROM t_ctms_contract WHERE id LIKE 'ATTC%' OR name LIKE '附件验收合同%'"
     $leftCus = Sql "SELECT COUNT(*) FROM t_ctms_customer WHERE id LIKE 'ATCUS%'"
+    $leftDoc = Sql "SELECT (SELECT COUNT(*) FROM t_ctms_purchase_request WHERE id LIKE 'ATTD%' OR doc_no LIKE 'ATTD%') + (SELECT COUNT(*) FROM t_ctms_sales_request WHERE id LIKE 'ATTD%' OR doc_no LIKE 'ATTD%')"
     $leftRole = Sql "SELECT COUNT(*) FROM sys_role_menu WHERE role_id='$LimitedRole' AND menu_id IN ('$ContractMenuId','9F2C0000000000000000000000000023','9F2C000000000000000000000000002A')"
     Assert-That ($leftCon -eq '0') "合同夹具已清（残留 $leftCon）"
     Assert-That ($leftAtt -eq '0') "附件夹具已清（残留 $leftAtt）"
     Assert-That ($leftCus -eq '0') "客户夹具已清（残留 $leftCus）"
+    Assert-That ($leftDoc -eq '0') "申请单夹具已清（残留 $leftDoc）"
     Assert-That ($leftRole -eq '0') "临时授权已撤销（残留 $leftRole）"
     $leftFiles = @(Get-ChildItem $uploadDir -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $script:FilesBefore -notcontains $_.FullName }).Count
     Assert-That ($leftFiles -eq 0) "本轮上传的文件已清（残留 $leftFiles）"

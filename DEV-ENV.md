@@ -865,6 +865,183 @@ git config user.name "你的名字" ; git config user.email "you@example.com"
        所以"列表筛中文能过、导出却 400/返回 HTML"通常是**工具假象**而非后端缺陷 ——
        与 §6.22 / §6.41 的 PowerShell/URL 编码坑同族，遇到就先手工编码再断言（§6.41 的"中文先算好存变量"同样适用）。
 
+53. **浏览器自动化"能点中什么"是确定的：`<el-button>` / 原生控件 / 带 ARIA role 的元素能点，`<div @click>`、`el-tree` 节点、`el-select` 的 `<li>` 选项点不中**（2026-10-05，流程设计器"参与人选人"改造实测）。
+    现象（同一次会话里逐条实测）：
+    - **能点**：`el-button`（含 `type="text"` 的小按钮、`<el-tag>` 之外的按钮）、`<input>`、`<el-radio>`、带 `role=menuitem` 的侧边菜单项；
+    - **点不中**：① `el-tree` 的节点 —— 它是 `.el-tree-node`（`role="treeitem"`、`tabindex="-1"`），
+      `initTabIndex()` 会给第一个节点 `tabindex=0`，但本桥的 `browser_click` **只认快照索引**（该元素不进快照），
+      而 `browser_press Tab` **不会让页面元素获得焦点**（实测 `browser_get_text` 查 `:focus` 恒不匹配）⇒ 键盘也走不通；
+      ② `el-select` 的选项 —— `.el-select-dropdown__item` 是**无 role 的 `<li>`**，下拉能展开、选项文字可见，但点不到；
+      ③ 自绘 `<div @click>` 触发区（同族，见流程设计器旧版「选人」入口）。
+    规则：
+    1. 凡是要"可自动化验证"的交互，**触发区必须是 `<el-button>` 或原生控件**，不要用 `<div @click>`；
+    2. 动手前先**把改造拆成步骤并逐条分类**（哪些能自动点、哪些只能人工），据此**先与用户约定人工验证那一步**
+       （HANDOFF §3.3 的选人改造就是这么交付的），不要盲试；
+    3. 需要证明"写路径"时，可用**受控组件里可点的按钮**绕开点不中的元素：
+       例如共享选人弹窗的「清空 → 确定」，若节点上的人被清掉，即证明"弹窗里确认的列表就是写回父组件的值"
+       （父组件状态是唯一真源，不需要真的在组织树里点一个人）。
+    4. **弹窗里"取消"和"确定"在快照里长得很像**：`UserAllSelect` 的页脚是「确 定」`[N]` 与「取 消」`[N+1]`，
+       页面顶部还有一个 `button "Close"`（`el-dialog` 的关闭叉），而且**索引会随快照重排**。
+       实测有一次按"上一次的 N+1"点到了「确 定」⇒ 弹窗把**空列表**写回父组件、把节点上的人清空了。
+       稳妥做法：**取消 / 关闭一律优先点 `button "Close"`**（不触发 `confimUser`）。
+    5. `el-checkbox` 与它所在的 `.user-card` **同样不进快照**（用户列表里的勾选框点不中），
+       因此"在共享弹窗里勾第 2 个人"这类断言**只能人工做** —— 见
+       `doc\缺陷-单人节点指定人员可多选.md` §5 的人工确认步骤。
+    6. 超管账号打开该弹窗时**用户列表是空的**：`user.dept.parentId === "0"` ⇒ 共享组件算出的初始
+       `deptId="0"` ⇒ 按根部门查不到人；**必须先点组织树里的一个部门**才列人，
+       而组织树恰恰是点不中的（第 1 条）⇒ 这条路径天然需要人工。
+
+54. **`edit` 工具偶发 `ReplaceFileW EIO (Win32 32)`：同一文件连续多次编辑时，大块改写会被拒**（2026-10-05 实测）。
+    现象：对 `FlowDesigner.vue`（约 80KB）连续做多处修改时，**较长的整块替换**报
+    `ReplaceFileW EIO (Win32 32)`，而**拆成"先改一行 + 再插入整块"就成功**；
+    文件本身没有被破坏（先读回确认内容不变）。触发环境：前端 `npm run dev`（webpack 监听）开着。
+    规则：
+    1. 报 EIO **不要**判断成"文件系统坏了"，也不要立刻改用整文件 `write` 覆盖（会丢掉未复核的改动）；
+    2. 先 `read` 回确认目标文件仍然完好 → **把这次编辑拆成更小的两次**（先改标识性的一行，再插入整块）→ 重试；
+    3. 同一文件要连续改多处时，**按"小块多次"推进**比"一次大块"稳（本轮 7 处改动就是这样完成的）；
+    4. 用 `pwsh` 兜底改写时**必须显式保住编码与行尾**：本仓库 `.md/.js` 是 **UTF-8 无 BOM + LF**、
+       `.vue` 是 **UTF-8 无 BOM + CRLF**、`.ps1` 是 **UTF-8 有 BOM**（见 §6.33）；
+       注意 **`Set-Content -Encoding utf8NoBOM` 在 PowerShell 5.1 里不存在**（5.1 会报"无法绑定参数 Encoding"），
+       5.1 下用 `[System.IO.File]::WriteAllText($p, $text, (New-Object System.Text.UTF8Encoding($false)))`，
+       并把行尾显式拼成 `"`n"`（LF）或 `"`r`n"`（CRLF），写完**回读首字节与 `CRLF/LF` 计数自证**。
+
+55. **前端 `npm run dev` 的 watcher 会"假装在跑"：改了源码但页面还是旧行为**（2026-10-05 实测，代价：用户看到两个已修好的 bug 仍在）。
+    症状：同一份源码，`npm run build:prod` 编译进去的是**新**代码，而开发服务器送出的 chunk 是**旧**代码；
+    页面表现成"新功能点不开 + 旧 bug 原样出现"（实例：新建流程弹窗的「高级选项」点不开、
+    创建时报 `流程基本信息有误：流程 key 不能为空` —— 而新代码里这两种情况都已消除）。
+    成因（本机）：**前端 watcher 在多次"大文件连续编辑"后停止拾取变更**，
+    与同批出现的 `edit` 工具 `ReplaceFileW EIO`（见第 54 条）很可能是同一批文件句柄/锁问题的两面。
+    **判定法（30 秒，不要靠"我觉得应该生效了"）**：
+    ```powershell
+    # 1) 生产构建里有没有新代码（权威：webpack 重新读盘）
+    cd ruoyi-vue-oa-ui-master ; npm run build:prod
+    node -e "const fs=require('fs'),d='dist/static/js';const hit=fs.readdirSync(d).filter(f=>f.endsWith('.js')).find(f=>fs.readFileSync(d+'/'+f,'utf8').includes('高级选项（流程标识 / 分类）'));console.log('dist 命中: '+(hit||'(无)'))"
+    # 2) 开发服务器送出的 bundle 里有没有（注意它是 chunk，不是 app.js）
+    #    直接在页面里看行为；或比对"改一行文案 → 刷新是否变化"
+    ```
+    **处置**：**重启前端**（`npm run dev`），然后**硬刷新**页面（Ctrl+F5）。
+    重启前 `npm run build:prod` 通过 ⇒ 代码本身没问题，别再改代码去"修"一个已经修好的 bug。
+    规则：**交付前端改动后，必须"改一行可见文案 → 硬刷新看到变化"来确认 watcher 活着**；
+    只看到"编译成功"不算 —— 编译成功说的是**上一次**的源码。
+
+56. **RuoYi 的「认证失败」是 HTTP **200** + body `{"code":401}` —— 脚本"只看字段不判 code"就会把「被拒」当成「成功」**
+    （2026-10-05 实测；代价：把"审批人被 401 拒掉"误诊成"多实例不合流、流程卡死"，连续误诊两轮）。
+    同秒可复现的证据（`t15` 留档）：
+    ```powershell
+    # 用"已过期/已登出"的 token 调任意需认证接口
+    Invoke-WebRequest 'http://localhost:8080/biz/flow/submit' -Method Post `
+      -Headers @{ Authorization = "Bearer $staleToken" } -ContentType 'application/json; charset=utf-8' -Body $bytes
+    # → HTTP status = 200
+    # → body = {"msg":"请求访问：/biz/flow/submit，认证失败，无法访问系统资源","code":401}
+    ```
+    成因：`ruoyi-framework/.../security/handle/AuthenticationEntryPointImpl.java:26-33` 只做
+    `ServletUtils.renderString(...)`，**不设置 HTTP 状态码**；而 `Invoke-RestMethod` 只对 4xx/5xx 抛异常
+    ⇒ 它对这种 401 **一点反应都没有**，`try/catch` 也不会进。
+    危害（每一个用 `Invoke-RestMethod` 写验收脚本的人都会中）：
+    1. `$null = Post ...` 这类"不判 code"的写法把**审批被拒**记成**审批成功** → 最后只看到
+       "还剩活动任务 / 实例不办结 / 流程没往前走"，根因却在完全另一处（`flow-regression.ps1` 的老写法就是这么坑的）；
+    2. 请求**根本没进业务代码**（被安全过滤器拦掉）⇒ 业务日志里什么都没有，排查时"日志空白"就是这个原因。
+    对策（写脚本照抄 —— 跑前校验 + 每次调用判 code）：
+    ```powershell
+    # 1) 跑前：逐账号验一次凭据，失效就中止
+    $r = Invoke-RestMethod "$BaseUrl/system/user/profile" -Headers @{ Authorization = "Bearer $t" } -TimeoutSec 15
+    if ($r.code -ne 200) { throw "凭据失效：$user code=$($r.code)" }
+    # 2) 每次提交：code 必须 200，否则把**原始 body** 带进异常
+    $r = Invoke-RestMethod $url -Method Post -Headers @{ Authorization = "Bearer $t" } -Body $bytes -ContentType 'application/json; charset=utf-8'
+    if ($r.code -ne 200) { throw "被拒：code=$($r.code) msg=$($r.msg) body=$(($r | ConvertTo-Json -Depth 10 -Compress))" }
+    ```
+    3. **凭据会静默过期**：`token.expireTime: 120`（分钟，`ruoyi-admin/src/main/resources/env/dev/application.yml`），
+       而且只有"被用到"的 token 才会被 RuoYi 滑动续期 —— 长期不用的演示账号
+       （`zhangwei`/`lina`/`wangqiang`/`zhaomin`）必然先过期，而 `superAdmin` 因为被反复使用一直活着。
+       跑任何多账号接口脚本前先跑 `tools\oa-login.ps1`。
+       参考实现：`tools\flow-regression.ps1` 的 `Assert-Tokens`（跑前校验）与 `Post-Ok`（判 code + 打印原始 body）。
+    4. **反向别踩**：不要顺手把 `AuthenticationEntryPointImpl` 改成回真正的 HTTP 401 —— 前端 `request.js`
+       的登录过期分支与所有既有脚本都建立在这个约定上，属共享面改动（要动先问用户）。
+
+57. **"单模块打 fat jar"会让子模块的测试阶段烂掉很久都没人发现**（2026-10-05 实测，`ruoyi-template` 中招）。
+    现象：`mvn -B -pl ruoyi-template test` 在 **test-compile** 阶段就失败
+    （`StubTemplateMapper 未实现 countByFormKey(String)` —— B1 §7.10 给 `TemplateMapper` 加了方法，
+    `src/test` 里的内存桩没跟着补）。
+    为什么长期绿：日常打包用的是 `mvn -B -DskipTests -pl ruoyi-admin clean package`（**不带 `-am`**），
+    子模块依赖一律取**本地仓库里已 install 的 jar**，从来不编译子模块的 `src/test`
+    （`-DskipTests` 只跳过"跑"，真正跳过"编译"的是 `-Dmaven.test.skip=true`，两者别混）。
+    规则：
+    1. **改了哪个模块，就对那个模块跑一次 `mvn -B -pl <模块> test`**（不是只看 `-pl ruoyi-admin package` 成功）；
+    2. 往子模块 `src/test` 加用例前先确认该模块 pom 里有测试框架（`ruoyi-template` 原先没有 junit，
+       加一块 `junit` test 依赖即可，版本由 spring-boot-dependencies 管）；
+    3. 反过来：如果你**只**改了某个子模块的 `src/test`，别忘了它还可能在别的模块被当依赖用到 ——
+       `install` 一次再打 fat jar（§6.13）。
+    同族提醒：`ruoyi-template` 里 `*Check.java` 是 **main() 形式的自检程序**（surefire 不跑它），
+    要进 `mvn test` 必须命名 `*Test.java` 并用 JUnit 断言。
+
+58. **MyBatis 的"歧义 getter"是惰性抛的，而且测试类路径与打包件的 mybatis 版本不一致时会整体漏判**（2026-10-05，t31 修 C-1，B4 写路径整体 500）。
+    现象：8 类单据的列表/新增/审核等**含 `posted` 条件的语句在真机整体 HTTP 500**，而 `mvn -B -pl ruoyi-ctms test` **535 条全绿**：
+    ```text
+    org.mybatis.spring.MyBatisSystemException: nested exception is
+    org.apache.ibatis.reflection.ReflectionException: Illegal overloaded getter method with ambiguous type
+    for property 'posted' in class 'com.ruoyi.ctms.erp.base.domain.ErpDocHeader'.
+      at org.apache.ibatis.reflection.invoker.AmbiguousMethodInvoker.invoke(AmbiguousMethodInvoker.java:34)
+      at org.apache.ibatis.reflection.wrapper.BeanWrapper.getBeanProperty(BeanWrapper.java:164)
+      at org.apache.ibatis.scripting.xmltags.DynamicContext$ContextAccessor.getProperty(DynamicContext.java:113)
+    ```
+    根因（两层，缺一层都复现不出来）：
+    1. **JavaBeans 口径**：`ErpDocHeader` 同时有 `getPosted()`（`String`，落库列）与 `isPosted()`（`boolean`，便捷判定）
+       ⇒ 同一属性 `posted` 的两个 getter 且类型互不兼容。**关键：建 `Reflector` 时不抛**，
+       MyBatis 只把该属性包成 **`AmbiguousMethodInvoker`（惰性）**，**真读这个属性**才抛 ——
+       触发点是 mapper XML 的 OGNL 动态 SQL（`resources/mapper/erp/ErpPurRequestMapper.xml:116` 的
+       `<if test="posted != null and posted != ''">`），调用链 `Controller → Service → 动态 SQL`。
+    2. **版本偏斜**：模块测试类路径解析到 mybatis **3.5.13**（**容忍**这对歧义，把 `posted` 解析成 `String`），
+       而**打包运行件里是 3.5.7**（**不容忍**，直接包 `AmbiguousMethodInvoker`）——
+       该版本取自 `ruoyi-admin.jar` 的 `BOOT-INF/lib/mybatis-3.5.7.jar`（全仓仅此一份）。
+       ⚠ **`.cache\t1-cp.txt` 是 t1 当天生成、已过期，别再用它代表当前测试类路径**（它里面写的 3.5.13 会把你带到错误结论）；
+       要判定实际版本，从 `ruoyi-admin.jar` 里抽 `BOOT-INF/lib/mybatis-*.jar` 看。
+    判据（怎么自检）：
+    1. 「守卫测试」**不能只 `new Reflector(clazz)` 断言不抛**（那是装饰性的，修不修都绿）——
+       必须**逐个读取全部可读属性**（`reflector.getGetInvoker(prop)` 不能是 `AmbiguousMethodInvoker`，且真读一次），
+       并加**与 mybatis 版本无关的静态口径**（同属性名出现两个不同类型的 `getX()`/`isX()` 即失败）；
+       参考实现 `ruoyi-ctms/src/test/java/com/ruoyi/ctms/erp/base/ErpDomainReflectorTest.java`
+       （扫 `target/classes/com/ruoyi/ctms/erp` 下全部 .class：160 类 / **1306 个属性**；`SCAN_FLOOR=40` 防"扫不到也绿"）。
+    2. **判别力必须用反向对照证明**：修复前 `Tests run: 4, Failures: 3`（逐类列出 7 个 `posted` 歧义）→
+       修复后 `4/4` 绿。只给"修复后绿"不算证据。
+    3. 全仓同族扫描（`.cache\t31\SiblingScan.java`，25 模块 924 个类）：修复前 **7 个歧义属性（全是 `posted`）→ 修复后 0**。
+    出处：`erp/base/domain/ErpDocHeader.java:174`（`isPostedFlag`，javadoc 写明"不能叫 isPosted"）、
+    `resources/mapper/erp/ErpPurRequestMapper.xml:116`、`notes/01-base.md §8`、
+    `.cache/t31/{prefix-test-red,prefix-trigger-3.5.7,postfix-trigger-3.5.7,postfix-full,sibling-scan-postfix}.log`。
+    同族（"判据装饰性"/"绿≠对"）：**§6.52**（判据自己错了会双双报绿）与 **§6.56**（认证失败是 HTTP 200 + body code=401，
+    只看"抛不抛异常"会把"被拒"当"成功"）——三者是同一个教训的不同侧面：**判据必须能因回归而变红**。
+
+59. **编辑 `.ps1` 时不带 BOM 的写法会**静默剥掉**原文件的 BOM ⇒ PS 5.1 按 ANSI 读 ⇒ 中文乱码并破坏字符串引号**（2026-10-05，t1/t2 踩过，`Missing ] ...`）。
+    现象（三种，按隐蔽程度递增）：
+    1. 解析期直接炸：`Missing ] at line:NN char:NN`、`& 运算符保留给将来使用`、"字符串缺少终止符" —— 看上去像语法写错了，其实是编码读错；
+    2. 中文变 `锟斤拷`/`????`，日志与断言描述读不出来；
+    3. **最隐蔽**：脚本能跑，但断言里用中文关键字比对**永远不匹配**（假红/假绿）。
+    根因：PS 5.1 对**无 BOM** 的 `.ps1` 按**系统 ANSI（本机 GBK）**解码，而文件其实是 UTF-8；
+    而"带不带 BOM"取决于写文件的方式：`write` 工具/`Out-File`/`Set-Content` 默认可能写出无 BOM；
+    `-Encoding UTF8` 在 **PS 5.1 是"UTF-8 with BOM"、在 PS 7+ 是"无 BOM"** —— 同一条命令在两个版本下结果相反（§6.33 同族）。
+    判据（改完 `.ps1` 必做，两条）：
+    1. 复读前 3 字节：`([System.IO.File]::ReadAllBytes($f)[0..2] -join ',') -eq '239,187,191'`；
+       需要补 BOM 时用 `[System.IO.File]::WriteAllText($f, $txt, (New-Object System.Text.UTF8Encoding($true)))`；
+    2. **解析检查（不执行）**：`[System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$null, [ref]$errs)`，
+       `$errs.Count -eq 0` 才算过 —— 这一步能把第 1 种现象在运行前抓住。
+    反面（别把规矩搞混）：`.md` **不带** BOM（本文件即无 BOM）、`.vue` 是 UTF-8 无 BOM + CRLF、`.ps1` 是 UTF-8 **有** BOM。
+    出处：`§6.33`（同族编码坑）、`tools\erp-check.ps1` 头部 ⚠ 第 1 条、`tools\flow-form-consistency-check.ps1` 头部（同类提醒）、
+    t1/t2 实测记录（`.cache\t2-masterdata-drill.ps1` 补 BOM 后解析通过）。
+
+60. **编译红会污染其它组的断言：`erp` 包的"类枚举/源码级"守卫测试在主代码没产出 `.class` 时必然 `ClassNotFoundException`**（2026-10-05，t1/t2/t23/t29 反复踩）。
+    现象：你只动了 A 组，B 组的测试却红，报错是
+    `ClassNotFoundException: com.ruoyi.ctms.erp.<某类>`（或"找不到 B4 源码目录"），
+    看起来像 B 组的代码坏了；实际是**别人的编译错误**让 `target/classes` 缺类/陈旧。
+    根因：B4 有两条**跨全包扫描**的守卫测试，它们不依赖业务断言，只依赖"类能被加载"：
+    1. `erp/base/ErpPrecisionTest`：扫 `src/main/java/com/ruoyi/ctms/erp` 源码树，把每个 `.java` 映射成类再 `Class.forName`（源码里出现浮点类型即失败）；
+    2. `erp/base/ErpDomainReflectorTest`：扫 `target/classes/com/ruoyi/ctms/erp` 下的 `.class` 建 `Reflector` 并读属性。
+    ⇒ 主代码**编译失败**时没有新 `.class`，这两条必然在"环境层"红，与它们要守的规则无关。
+    判据（排查顺序，先编译后业务）：
+    1. 见到一大片 `ClassNotFoundException` / `NoClassDefFoundError`（且伴随 `[ERROR] ... .java:[NN]`），
+       **先跑 `cd ruoyi-vue-oa-master ; mvn -B -pl ruoyi-ctms test-compile`**（约 10s）确认编译绿，再去读业务断言失败；
+    2. 编译错误行号指到**别人的在途文件**时，按团队纪律"只报文不代改"（简报 §3.1），别顺手改别人文件；
+    3. 干净基线：`test-compile` 为 0 时，全模块 `mvn -B -pl ruoyi-ctms test` 的计数才是可信的（见 §7 第 14 条）。
+    出处：`.cache\t31\prefix-test-red.log`（修复前红）、`ErpPrecisionTest.java:39,48-64,159-176`（源码→类映射与 `Class.forName`）、
+    `ErpDomainReflectorTest.java` 的 `scanErpClasses()`、t1/t2/t23/t29 的过程记录（多次"编译红 → 非本组文件"）。
 ## 7. 2.0 交付门禁（每次交付前必跑，失败即阻断）
 
 > 来源：`doc/2.0/2.0-PRD-OA升级开发.md` 第 10 章（`REQ-NFR-010`/`REQ-NFR-011`）与第 11.6 节（`AC-83`）；
@@ -896,8 +1073,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1
 | 11 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-masterdata-check.ps1` | **B3 主数据档案接口验收（79 条断言）**：客户/供应商 CRUD 与唯一性、简称必填与账期非负、物料域类型树 5 级/叶子约束/单位小数位/引用保护、启停用与引用保护、不做数据范围隔离 | 需要已登录；夹具 ASCII 前缀 `C…/S…`，收尾全清；**幂等**（连跑两次残留 0 行） |
 | 12 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-contract-check.ps1` | **B3 合同主体接口验收（261 条断言）**：登记/编辑、状态自由流转、多维筛选与标签交集、软删除 30 天边界、框架四条守卫、自动标签、变更历史、详情只读、数据范围 403、编号由服务端生成；**4.8b 数据范围矩阵**（AC-79：7 档 × 4 夹具 × 列表/详情/导出三面 + 范围外编辑/删除/恢复三个旁路，逐格与基线比对、整集逐 id 相等） | 需要已登录；夹具 ASCII 前缀 `CTM*`；**有运行锁**，不可并发（见 §6.42）；**幂等**（连跑两次残留 0）；清理顺序纪律见 §6.45；会临时借用 `common`/`bm` 角色改授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.48）；断言数 **113 → 253**（9.2 矩阵段）**→ 261**（10.2 的 R1 修复：导出面改按 xlsx 判定 + 补"行数 == 列表 total"双证 + 反向越权断言，见 §6.50 与 notes/integration-check.md §7.4-R1）。另：B3 菜单在真库是 **27 行 = 1 个 M 类目录 + 4 个 C 类菜单 + 22 个 F 类按钮**（其中 26 行带 `ctms:*` 权限点），别把 27 与"权限点数 26"混为一谈 |
 | 13 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-commercials-check.ps1` | **B3 商务要素/质保/编号接口验收（116 条断言）**：C-1 金额先舍入再汇总、行项校验与物料快照、标的物摘要落库、质保到期算法与金额↔比例互换、关闭质保清空 7 字段、质保提醒窗口边界与释放闭环、付款比例（不扣质保金/金额 0 空值）、编号格式与按「类型码+主体码+年份」分桶/跨年重置/预览不占号/停用占号不复用/类型主体校验 | 需要已登录；夹具 ASCII 前缀 `CTMSAL/CCOM`；**有运行锁**，不可并发；**幂等**（连跑两次残留 0 行）；编号断言全部用"同轮前后对照"，不假设 Redis 计数器起点（见文件头 ⚠） |
-| 14 | `cd ruoyi-vue-oa-master ; mvn -B -pl ruoyi-ctms test` | 后端单测（**174 条**：主数据规则/物料域/合同规则/合同编号规则/合同服务/数据范围/附件规则与附件服务） | 需要直连 settings（仓库根 `.mvn/maven.config` 已配） |
+| 14 | `cd ruoyi-vue-oa-master ; mvn -B -pl ruoyi-ctms test` | 后端单测（**535 条**：B3 的 174 条 + B4 进销存全量 —— 状态机/精度唯一实现点/取号/过账与红冲/并发不丢更新/采购与销售下推/调拨盘点/库存账与一致性/附件对象对账/元数据守卫 `ErpDomainReflectorTest`；**只增不减**：174 → 531（t29）→ 535（t31）） | 需要直连 settings（仓库根 `.mvn/maven.config` 已配） |
 | 15 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-attachment-check.ps1` | **B3 附件接入接口验收（69 条断言）**：对象挂载层与对象存在性、未注册对象类型被拒、`(object_type,object_id)` 复合索引、**白名单比平台窄**（zip/mp4 判别用例）、20MB 双向边界、**HTTP 413** 与半成品清理、随机命名与中文名、按对象查看权（403）与数据范围 403、删除留痕（字段名`附件`）与删除后不可下载 | 需要已登录；夹具 ASCII 前缀 `ATTC*/ATCUS*`；**有运行锁**，不可并发；**幂等**（连跑两次残留 0 行）；会临时借用 `common` 角色授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.47/§6.48） |
+| 16 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-scope-check.ps1` | **B4 库存域数据范围四档矩阵（§8.2 / AC-79 库存域部分）**：单据（入库单列表/详情）＋结存（`/stk/stock`）＋流水（`/stk/ledger`）× 四档（`1` 全部 / `3` 本部门 / `4` 本部门及下级 / `5` 本人）逐格实测 **+ 多角色取并集 + 导出与列表同范围同筛选（xlsx 解包数行数）+ 范围外详情/结存/流水越权 403** | 需要已登录；夹具 ASCII 前缀 `T10S*`（单位/仓库/类型/物料/4 张入库单）；**四档必须彼此可判别**：观察者 zhangwei 临时调根部门（区分 `'4'` 与 `'3'`）、zhaomin 临时调入财务部（区分 `'3'` 与 `'5'`，同时验证"归属部门创建时快照"）；借 `common` 角色授权与 `data_scope`，**入口自愈 + 收尾还原 + `sys_role.remark` 哨兵**（§6.48），收尾断言 `data_scope` 不留库且夹具零残留；⚠ **脚本内没有锁实现**（2026-10-05 复核：`grep -i "lock|locked-run"` **0 命中**，而 `ctms-contract-check.ps1:320` / `ctms-attachment-check.ps1:223` / `ctms-commercials-check.ps1:184` / `ctms-e2e-check.ps1` / `ctms-migration-check.ps1` 都有 `.cache\<脚本>.lock` 锁文件）⇒ **必须经 `tools\locked-run.ps1 -LockName env` 串行执行**：它会借 `common` 角色改授权与 `data_scope`，并发跑会互相覆盖并留下残留 |
+| 17 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-smoke.ps1` | **B4 只读冒烟（27 条探针）**：8 类单据列表、`/stk/stock`（list/detail/recalc 默认不修复）、`/stk/ledger`（list/detail）、3 个主数据 `/options`、附件的 `object-types`（逐项核对 `registered` = 9）、8 类单据的动作路由形态；输出「端点 × HTTP code × body code × 关键字段」清单，404/405/参数名/权限点不一致在这里低成本暴露 | 需要已登录（`tools\oa-login.ps1`）；**只读、不建任何业务数据**（不污染 E2E 基线）；默认有 FAIL 也退出码 0，`-Strict` 时有 FAIL 退出码 1；**不做断言调优**（未打包/404 照样逐条列出）；判 HTTP 与 body.code 双证（§6.56） |
+| 18 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\erp-check.ps1` | **B4 接口验收 + 判别力自证 + 夹具自建自清**：P-*（03-posting §8，23 条）A-*（04a §5.1，30 条）B-*（04b，16 条）S-*（05a §5，24 条）T-*（06-stockops §8，23 条）L-*（07-ledger §7，16 条）E2E-*（采购线/调拨/盘点/并发过账） | 需要后端在跑 + token + MySQL；`-Selftest` 自证判别力、`-Only <前缀>` 只跑某段；退出码 0=全绿 / 1=有 FAIL / 2=前置不满足；**未实现的条目一律 SKIP 且单独计数（SKIP 不是 PASS）**；夹具按 ASCII 前缀走业务接口 + SQL 收尾并断言**零残留**；⚠ 脚本内**无锁**（同第 16 条）⇒ 经 `locked-run -LockName env` 串行 |
+| 19 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\flow-form-consistency-check.ps1` | **模板 `form_id` ↔ 流程 `content.formId` 一致性巡检 + PRD V-8 反向校验**（t16/HANDOFF §11-8/9）：只读打 `GET /workflow/simple-flow/form-consistency` 并体检 8 类问题（MISMATCH / FLOW_FORM_MISSING·DELETED·DISABLED …）；再用 `T16PROBE-` 探针验证"构造错位→检出""字段失效→阻断且不留半成品""字段仍有效→放行但告警""改指新版→巡检转干净" | 需要已登录 + MySQL(3306)/Redis/RabbitMQ 与后端在线（token 见 `tools\oa-login.ps1`）；`-OnlyReadOnly` 只跑只读巡检、`-KeepProbeFixtures` 留夹具复核；探针**从不发布流程**（不产生 `ACT_*` 行），收尾删夹具并复核巡检回基线；每次调用判 body 的 `code`（§6.56：认证失败 200+401、业务异常 200+500）；⚠ 脚本内**无锁** ⇒ 经 `locked-run -LockName env` 串行 |
 
 **2.0 批次新增回归脚本清单**（AC-83 要求的 3 个，落到对应变更集的 `tasks.md`）：
 

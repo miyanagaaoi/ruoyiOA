@@ -25,11 +25,22 @@ B3 只新建**业务语义层** `t_ctms_attachment`（第 2 组已建表）+ `Ct
 | 对象类型 | 常量 | 目标表 | 状态 | 对象存在性校验落点 |
 | --- | --- | --- | --- | --- |
 | `contract` | `CONTRACT` | `t_ctms_contract` | **已注册（B3）** | `ICtmsContractService.checkContractAccess` |
-| `purchase_order` | — | B4 采购单 | ⏳ B4 待补 | — |
-| `sales_order` | — | B4 销售单 | ⏳ B4 待补 | — |
-| `stock_in` | — | B4 入库单 | ⏳ B4 待补 | — |
-| `stock_out` | — | B4 出库单 | ⏳ B4 待补 | — |
-| `stock_take` | — | B4 盘点单 | ⏳ B4 待补 | — |
+| `purchase_request` | `PURCHASE_REQUEST` | `t_ctms_purchase_request` | **已注册（B4）** | `ErpDocObjectAccessServiceImpl`（按类型分派 `ErpDocLookupMapper`） |
+| `purchase_order` | `PURCHASE_ORDER` | `t_ctms_purchase_order` | **已注册（B4）** | 同上 |
+| `sales_request` | `SALES_REQUEST` | `t_ctms_sales_request` | **已注册（B4）** | 同上 |
+| `sales_order` | `SALES_ORDER` | `t_ctms_sales_order` | **已注册（B4）** | 同上 |
+| `stock_in` | `STOCK_IN` | `t_ctms_stock_in` | **已注册（B4）** | 同上 |
+| `stock_out` | `STOCK_OUT` | `t_ctms_stock_out` | **已注册（B4）** | 同上 |
+| `stock_take` | `STOCK_TAKE` | `t_ctms_stocktake` | **已注册（B4）** | 同上 |
+| `stock_transfer` | `STOCK_TRANSFER` | `t_ctms_transfer` | **已注册（B4）** | 同上 |
+
+> **本表已对齐：登记清单 = `contract` + 8 类单据 = 9 项，`plannedB4` 为空。**
+> （B3 交付时只有 `contract` 一项、另有 5 个"B4 待补"；B4 首轮补到 7 项，t19 按参考仓库
+> `app/routers/attachments.py:35-44` 的 `OBJECT_PERMS` 口径补齐两个申请单到 9 项。
+> **参考侧 `OBJECT_PERMS` 缺 `stock_transfer` 是它的已知缺陷，我们按 Q-B10 补上。**）
+> 计数、逐项清单与取证以 `openspec/changes/oa-purchase-sales-stock/notes/12-attachment-parity.md`
+> 为准（该文件含 `attachments.py:35-44` 与移植清单/PRD 的行号证据链；接口的原始返回形态见其 §5，
+> 其中还包含 `docObjectTypes` 键）。
 
 - 清单只有**一个来源**：`CtmsAttachmentObjectTypes.registered()` /
   `plannedB4()`，`CtmsAttachmentRules` 的注册表直接从它构建（避免两处清单漂移）。
@@ -41,6 +52,8 @@ B3 只新建**业务语义层** `t_ctms_attachment`（第 2 组已建表）+ `Ct
   ② 服务层 `requireObjectAccess` 补该对象的存在性校验分支；
   ③ 本表补"目标表"与"校验落点"。三处漏一处就会被 `CtmsAttachmentRulesTest` /
   验收脚本的"未注册即拒绝"用例抓出来。
+  **（状态：B4 已交付，三处均已全部完成，登记 9 项 —— 对账见
+  `openspec/changes/oa-purchase-sales-stock/notes/12-attachment-parity.md` §3，以该文件为准。）**
 
 ---
 
@@ -174,6 +187,6 @@ B3 只新建**业务语义层** `t_ctms_attachment`（第 2 组已建表）+ `Ct
 | **第 2 组（DDL）** | `t_ctms_attachment`（15 列）+ `idx_object(object_type, object_id)` + 17 个外键里的 `fk_attachment_contract` 均已由第 2 组交付；本组只做业务挂载层 |
 | **第 4 组（合同主体）** | 本组新增 `ICtmsContractService.checkContractAccess(id)`：只做"对象存在 + 数据范围"，**不返回合同数据**（避免下游顺手外泄）。合同侧逻辑一行未改 |
 | **第 7 组（迁移）** | 迁移草案对象类型（`party_draft`）**尚未注册**——第 7 组交付时按 §2 的"三处必改"接入 |
-| **B4（单据/库存）** | 五个单据对象类型已在 `plannedB4` 登记但**刻意不放行**；B4 接入方式见 §2 |
+| **B4（单据/库存）** | **已接入：8 类单据对象类型全部注册，登记清单 9 项，`plannedB4` 为空**（B3 阶段这 5 个曾在 `plannedB4` 里"登记但不放行"，B4 补齐后已全部放行）；接入方式见 §2，计数与取证以 `openspec/changes/oa-purchase-sales-stock/notes/12-attachment-parity.md` 为准 |
 | **任务 9.1** | 权限点集合由 **25 → 26**；`ctms:attachment:list` 在菜单 SQL 与后端注解里各一处，双向核对通过 |
 | **任务 9.3** | "无查看权下载附件 403"的断言本组已落在自己的脚本里（69 条内），第 9 组只在 `authz-check.ps1` 里做补充 |
