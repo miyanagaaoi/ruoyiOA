@@ -103,4 +103,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{id}
         </foreach>
     </delete>
+
+    <!-- 2.0（B1 §1.1）：原地更新语义下"一个模板只有一套配置"的清扫语句 -->
+    <delete id="deleteMainTextByTemplateId" parameterType="String">
+        delete from t_template_main_text where template_id = #{templateId}
+    </delete>
 </mapper>

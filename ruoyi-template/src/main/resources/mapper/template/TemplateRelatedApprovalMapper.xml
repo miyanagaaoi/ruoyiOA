@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  关联审批控件候选模板（2.0 B1 §7）。唯一键 uk_host_field_allow 保证同一控件的同一候选只落一行。
+  @author 二开
+-->
+<mapper namespace="com.ruoyi.template.mapper.TemplateRelatedApprovalMapper">
+
+    <resultMap id="TemplateRelatedApprovalResult" type="com.ruoyi.template.domain.TemplateRelatedApproval">
+        <id     property="id"              column="id"                />
+        <result property="templateId"      column="template_id"       />
+        <result property="fieldVmodel"     column="field_vmodel"      />
+        <result property="allowTemplateId" column="allow_template_id" />
+        <result property="createTime"      column="create_time"       />
+    </resultMap>
+
+    <select id="selectByTemplateId" parameterType="String" resultMap="TemplateRelatedApprovalResult">
+        select id, template_id, field_vmodel, allow_template_id, create_time
+          from t_template_related_approval
+         where template_id = #{templateId}
+         order by field_vmodel, allow_template_id
+    </select>
+
+    <select id="selectAllowTemplateIds" resultType="String">
+        select allow_template_id
+          from t_template_related_approval
+         where template_id = #{templateId}
+           and field_vmodel = #{fieldVmodel}
+    </select>
+
+    <select id="selectByAllowTemplateId" parameterType="String" resultMap="TemplateRelatedApprovalResult">
+        select id, template_id, field_vmodel, allow_template_id, create_time
+          from t_template_related_approval
+         where allow_template_id = #{allowTemplateId}
+    </select>
+
+    <delete id="deleteByTemplateId" parameterType="String">
+        delete from t_template_related_approval where template_id = #{templateId}
+    </delete>
+
+    <insert id="batchInsert">
+        insert into t_template_related_approval (id, template_id, field_vmodel, allow_template_id, create_time)
+        values
+        <foreach collection="rows" item="row" separator=",">
+            (#{row.id}, #{row.templateId}, #{row.fieldVmodel}, #{row.allowTemplateId}, #{row.createTime})
+        </foreach>
+    </insert>
+
+</mapper>

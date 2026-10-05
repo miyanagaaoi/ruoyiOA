@@ -64,4 +64,15 @@ public interface TemplateMessageNoticeMapper {
      * @return 结果
      */
     TemplateMessageNotice selectByTemplateId(String templateId);
+
+    /**
+     * 根据模板ID删除该模板的全部消息通知配置
+     *
+     * <p> 2.0（B1 §1.1）：模板改为原地更新后，同一 templateId 上只允许存在一套配置；
+     * 保存前用它清掉旧行。 </p>
+     *
+     * @param templateId 模板ID
+     * @return 结果
+     */
+    int deleteMessageNoticeByTemplateId(String templateId);
 }

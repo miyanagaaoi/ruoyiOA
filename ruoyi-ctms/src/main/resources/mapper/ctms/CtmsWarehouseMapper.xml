@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsWarehouseMapper">
+
+	<!-- 仓库档案（2.0 B3 §3.3）：update 不改 code，其余业务列全量覆盖（含置 null） -->
+	<resultMap type="CtmsWarehouse" id="CtmsWarehouseResult">
+		<id     property="id"           column="id"             />
+		<result property="code"         column="code"           />
+		<result property="name"         column="name"           />
+		<result property="address"      column="address"        />
+		<result property="keeperUserId" column="keeper_user_id" />
+		<result property="enableFlag"   column="enable_flag"    />
+		<result property="remark"       column="remark"         />
+		<result property="createId"     column="create_id"      />
+		<result property="createBy"     column="create_by"      />
+		<result property="createTime"   column="create_time"    />
+		<result property="updateId"     column="update_id"      />
+		<result property="updateBy"     column="update_by"      />
+		<result property="updateTime"   column="update_time"    />
+	</resultMap>
+
+	<sql id="selectWarehouseVo">
+		select id, code, name, address, keeper_user_id, enable_flag, remark,
+		       create_id, create_by, create_time, update_id, update_by, update_time
+		from t_ctms_warehouse
+	</sql>
+
+	<select id="selectWarehouseList" parameterType="CtmsWarehouse" resultMap="CtmsWarehouseResult">
+		<include refid="selectWarehouseVo"/>
+		<where>
+			<if test="code != null and code != ''">
+				AND code like concat('%', #{code}, '%')
+			</if>
+			<if test="name != null and name != ''">
+				AND name like concat('%', #{name}, '%')
+			</if>
+			<if test="enableFlag != null and enableFlag != ''">
+				AND enable_flag = #{enableFlag}
+			</if>
+		</where>
+		order by code asc
+	</select>
+
+	<select id="selectWarehouseById" parameterType="String" resultMap="CtmsWarehouseResult">
+		<include refid="selectWarehouseVo"/>
+		where id = #{id}
+	</select>
+
+	<!-- 编码全局唯一：停用项也占号，所以这里不带 enable_flag 过滤 -->
+	<select id="selectWarehouseByCode" parameterType="String" resultMap="CtmsWarehouseResult">
+		<include refid="selectWarehouseVo"/>
+		where code = #{code}
+		limit 1
+	</select>
+
+	<insert id="insertWarehouse" parameterType="CtmsWarehouse">
+		insert into t_ctms_warehouse(
+			id, code, name, address, keeper_user_id, enable_flag, remark,
+			create_time, create_id, create_by, update_time, update_id, update_by
+		)values(
+			#{id},
+			#{code},
+			#{name},
+			#{address},
+			#{keeperUserId},
+			<choose>
+				<when test="enableFlag != null and enableFlag != ''">#{enableFlag},</when>
+				<otherwise>'1',</otherwise>
+			</choose>
+			#{remark},
+			sysdate(),
+			#{createId},
+			#{createBy},
+			sysdate(),
+			#{updateId},
+			#{updateBy}
+		)
+	</insert>
+
+	<update id="updateWarehouse" parameterType="CtmsWarehouse">
+		update t_ctms_warehouse
+		set name = #{name},
+			address = #{address},
+			keeper_user_id = #{keeperUserId},
+			enable_flag = #{enableFlag},
+			remark = #{remark},
+			update_id = #{updateId},
+			update_by = #{updateBy},
+			update_time = sysdate()
+		where id = #{id}
+	</update>
+
+	<delete id="deleteWarehouseById" parameterType="String">
+		delete from t_ctms_warehouse where id = #{id}
+	</delete>
+
+</mapper>

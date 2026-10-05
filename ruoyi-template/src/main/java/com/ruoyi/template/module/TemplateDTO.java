@@ -3,7 +3,11 @@ package com.ruoyi.template.module;
 import com.ruoyi.template.domain.Template;
 import com.ruoyi.template.domain.TemplateAttachment;
 import com.ruoyi.template.domain.TemplateDynamicForm;
+import com.ruoyi.template.domain.TemplateFlowAdmin;
+import com.ruoyi.template.domain.TemplateSubmitScope;
 import lombok.Data;
+
+import java.util.List;
 
 
 /**
@@ -31,4 +35,14 @@ public class TemplateDTO extends Template {
      * 消息通知
      */
     private TemplateMessageNoticeDTO messageNotice;
+
+    /**
+     * 谁可以提交该审批的明细（2.0 B1 §3.1；全量替换语义）
+     */
+    private List<TemplateSubmitScope> submitScope;
+
+    /**
+     * 流程管理员（2.0 B1 §3.1；全量替换语义）
+     */
+    private List<TemplateFlowAdmin> flowAdmins;
 }

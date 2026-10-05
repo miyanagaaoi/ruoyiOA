@@ -99,6 +99,75 @@ public class Template extends BaseEntity {
      */
     private Integer sort;
 
+    // ==================== 2.0（B1 §2.1）新增 13 列 ====================
+    // ⚠️ 加列必须五处同步：本实体 / TemplateMapper.xml 的 resultMap、selectTemplateVo、
+    //    insertTemplate、updateTemplate。漏一处就"保存成功但字段静默丢失"。
+
+    /**
+     * 发起页卡片图标（预设图标集，默认第一个）
+     */
+    private String icon;
+
+    /**
+     * 谁可以提交该审批：0-全员 1-指定人员 2-指定角色 3-指定部门
+     */
+    private String submitScopeType;
+
+    /**
+     * 部门范围是否包含下级部门：0-否 1-是（默认含）
+     */
+    private String includeChildDept;
+
+    /**
+     * 绑定的简化流程草稿ID（t_flow_simple.id）
+     */
+    private String simpleFlowId;
+
+    /**
+     * 流程模式：0-简化流程 1-BPMN高级
+     */
+    private String flowMode;
+
+    /**
+     * 内置打印模板键：contract/fund/matter/payment
+     */
+    private String builtinPrintKey;
+
+    /**
+     * 提交后多少分钟内可撤销，0-不限制
+     */
+    private Integer revokeLimitMinutes;
+
+    /**
+     * 允许提交人修改已提交单据：0-否 1-是
+     */
+    private String allowEditAfterSubmit;
+
+    /**
+     * 允许代他人提交：0-否 1-是
+     */
+    private String allowSubmitForOther;
+
+    /**
+     * 允许审批人撤回：0-否 1-是
+     */
+    private String allowApproverRevoke;
+
+    /**
+     * 允许批量审批：0-否 1-是
+     */
+    private String allowBatchApprove;
+
+    /**
+     * 审批人去重策略：1-自动同意 2-自动跳过 3-不自动同意
+     */
+    private String approverDedup;
+
+    /**
+     * 审批转发范围（复用可发起范围枚举），NULL-不限制
+     */
+    private String forwardScope;
+
     /**
      * 创建人
      */
@@ -122,6 +191,13 @@ public class Template extends BaseEntity {
                 .append("formId", getFormId())
                 .append("formType", getFormType())
                 .append("formCode", getFormCode())
+                .append("icon", getIcon())
+                .append("submitScopeType", getSubmitScopeType())
+                .append("includeChildDept", getIncludeChildDept())
+                .append("simpleFlowId", getSimpleFlowId())
+                .append("flowMode", getFlowMode())
+                .append("builtinPrintKey", getBuiltinPrintKey())
+                .append("approverDedup", getApproverDedup())
                 .append("delFlag", getDelFlag())
                 .append("createId", getCreateId())
                 .append("createBy", getCreateBy())

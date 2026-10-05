@@ -12,6 +12,7 @@ import com.ruoyi.biz.factory.BizFormDataFactory;
 import com.ruoyi.biz.service.IBizFormDataService;
 import com.ruoyi.biz.service.IBizFormService;
 import com.ruoyi.biz.service.INodeFieldWriteGuard;
+import com.ruoyi.biz.service.IRelatedApprovalGuard;
 import com.ruoyi.biz.utils.FormClassUtil;
 import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.exception.base.BaseException;
@@ -64,6 +65,15 @@ public class BizFormServiceImpl implements IBizFormService {
     @Transactional(rollbackFor = Exception.class)
     public String save(CommonForm commonForm) {
         IBizFormDataService bizFormDataImpl = getBizFormDataImpl(commonForm);
+        // 2.0（B1 §3.3，REQ-PERM-001）发起前的兜底校验：无权发起该模板 → 403 且**不落任何库**。
+        // ⚠ 必须放在下面 try **之前** —— 那个 catch 会把一切异常包成
+        //   「业务表单数据保存失败:…」，会把 403 的业务码与提示淹没掉
+        //   （同 validateNodeFieldWrite 的教训）。
+        templateService.checkStartPermission(commonForm.getTemplateId());
+        // 2.0（B1 §7.9，AC-55）「关联审批」选择范围的服务端复核：
+        //   绕过前端直接提交一个不属于候选范围的单据 → 提交被拒、不建立关联关系。
+        //   同样放在 try 之前，避免明确提示被包成"业务表单数据保存失败"。
+        validateRelatedApproval(commonForm);
         try {
             Object transform = getTransform(bizFormDataImpl, commonForm);
             //保存表单数据
@@ -74,6 +84,8 @@ public class BizFormServiceImpl implements IBizFormService {
             createMyDraft(commonForm, businessId);
             //新增待办
             createOrUpdateTodoBySync(commonForm, businessId);
+            // 2.0（B1 §7.9）：关联关系落库（含被关联单据号快照），与单据同事务
+            persistRelatedApproval(commonForm, businessId);
             return businessId;
         } catch (Exception e) {
             log.error("业务表单数据保存失败:", e);
@@ -88,6 +100,8 @@ public class BizFormServiceImpl implements IBizFormService {
         // ⚠ 必须放在下面 try **之前** —— 那个 catch 会把一切异常包成
         //   「业务表单数据更新失败:…」，会把「字段 X 在本节点为只读」这种明确提示淹没掉。
         validateNodeFieldWrite(commonForm);
+        // 改单时同样要复核关联范围：否则"先存一个合法值、再改成任意单据"就绕过了
+        validateRelatedApproval(commonForm);
 
         IBizFormDataService bizFormDataImpl = getBizFormDataImpl(commonForm);
         try {
@@ -98,6 +112,8 @@ public class BizFormServiceImpl implements IBizFormService {
             setFormDataVariable(commonForm);
             //更新待办
             createOrUpdateTodoBySync(commonForm, null);
+            // 关联关系全量替换（含单据号快照）
+            persistRelatedApproval(commonForm, commonForm.getBizId());
         } catch (Exception e) {
             log.error("业务表单数据更新失败:", e);
             throw new BaseException("业务表单数据更新失败:" + e.getMessage());
@@ -121,6 +137,39 @@ public class BizFormServiceImpl implements IBizFormService {
         }
         // 业务校验异常必须原样抛出，不能被下面的兜底吞掉
         guard.check(commonForm);
+    }
+
+    /**
+     * 「关联审批」选择范围的服务端复核（2.0 B1 §7.9，AC-55）。
+     *
+     * <p> 实现在 {@code ruoyi-workflow}（候选口径要查模板分组与"我发起的"单据）；
+     * 取不到实现（裁剪部署）时静默跳过，与 {@link #validateNodeFieldWrite} 同一套做法。 </p>
+     */
+    private void validateRelatedApproval(CommonForm commonForm) {
+        IRelatedApprovalGuard guard = relatedApprovalGuard();
+        if (guard == null) {
+            return;
+        }
+        guard.validate(commonForm);
+    }
+
+    /**
+     * 关联关系落库（2.0 B1 §7.9）：与单据写入同事务，失败则一起回滚。
+     */
+    private void persistRelatedApproval(CommonForm commonForm, String businessId) {
+        IRelatedApprovalGuard guard = relatedApprovalGuard();
+        if (guard == null || StringUtils.isBlank(businessId)) {
+            return;
+        }
+        guard.persist(commonForm, businessId);
+    }
+
+    private IRelatedApprovalGuard relatedApprovalGuard() {
+        try {
+            return ApplicationContextHelper.getApplicationContext().getBean(IRelatedApprovalGuard.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override
@@ -178,7 +227,9 @@ public class BizFormServiceImpl implements IBizFormService {
             throw new BaseException("未找到模板");
         }
         if (StringUtils.isBlank(template.getType())) {
-            throw new BaseException("模板类型为空");
+            // 2.0（B1 §3.5，REQ-FORM-003）：模板分类为空不再是硬错误 —— 发起页把这类模板
+            // 归入「未分类」组并允许发起；真正决定业务实现的是 formCode（下面那处校验）。
+            log.warn("模板未设置分类（type 为空），按流程继续：templateId={}", template.getId());
         }
         if (StringUtils.isBlank(template.getFormCode())) {
             throw new BaseException("表单编码为空");
@@ -291,6 +342,10 @@ public class BizFormServiceImpl implements IBizFormService {
                     case AMOUNT:
                     case CALC:
                     case SIGNATURE:
+                    // 关联审批（2.0 B1 §7）：值是**被关联单据的业务ID数组**，
+                    // 单据号在展示层按 t_workflow_related_approval 的快照翻译，
+                    // 后端不在这里改值（避免"改一次值、快照对不上"）。
+                    case RELATED_APPROVAL:
                         valData.put(vModel, value);
                         break;
                     default:

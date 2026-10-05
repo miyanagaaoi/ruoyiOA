@@ -1,8 +1,6 @@
 package com.ruoyi.workflow.print.service.impl;
 
 import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.ruoyi.biz.domain.CommonForm;
 import com.ruoyi.biz.service.IBizFormService;
 import com.ruoyi.common.exception.ServiceException;
@@ -15,9 +13,14 @@ import com.ruoyi.flowable.service.IFlowTaskService;
 import com.ruoyi.workflow.domain.PrintLog;
 import com.ruoyi.workflow.domain.PrintTemplate;
 import com.ruoyi.workflow.mapper.PrintLogMapper;
+import com.ruoyi.workflow.mapper.PrintRefMapper;
 import com.ruoyi.workflow.mapper.PrintTemplateMapper;
+import com.ruoyi.workflow.print.model.BuiltinTemplateOption;
+import com.ruoyi.workflow.print.model.PrintCcNode;
 import com.ruoyi.workflow.print.model.PrintData;
+import com.ruoyi.workflow.print.model.SubmitterOrg;
 import com.ruoyi.workflow.print.service.IPrintService;
+import com.ruoyi.workflow.print.support.BuiltinPrintTemplates;
 import com.ruoyi.workflow.sign.service.ISignService;
 import com.ruoyi.workfile.module.BizAttachmentDTO;
 import com.ruoyi.workfile.service.IWorkflowAttachmentService;
@@ -73,6 +76,9 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
     private PrintLogMapper printLogMapper;
 
     @Autowired
+    private PrintRefMapper printRefMapper;
+
+    @Autowired
     private IFlowTaskService flowTaskService;
 
     @Autowired
@@ -120,11 +126,17 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         data.setTemplateId(templateId);
         PrintTemplate tpl = getEffectiveTemplate(templateId, printTplId);
         data.setPrintTemplate(tpl);
-        data.setTitle(StringUtils.isNotBlank(tpl.getTitle()) ? tpl.getTitle() : DEFAULT_TITLE);
+        data.setTitle(StringUtils.isNotBlank(tpl.getTitle())
+                ? tpl.getTitle() : BuiltinPrintTemplates.titleOf(tpl.getBuiltinKey()));
 
-        // 3) 发起人 / 发起单位：取自流程记录的 startUser* 字段，避免再依赖用户服务
+        // 3) 发起人 / 发起单位：
+        //    流程记录的 startUser* 在 ruoyi-flowable 里**从不赋值**（实测恒为 null），
+        //    所以真正的发起人取单据自身（t_workflow_form.create_id）→ sys_user → sys_dept。
+        //    这三个值支撑内置版式的「报送人/报送单位/审批单位」栏目（PRD 附录 A）。
+        //    取不到就留空（打印件该栏为空，不影响其余部分），**不抛异常**。
         data.setSubmitter(firstNonBlank(records, FlowTaskDto::getStartUserName));
         data.setSubmitterDept(firstNonBlank(records, FlowTaskDto::getStartDeptName));
+        applySubmitterOrg(data, businessId);
         data.setBusinessNo(businessId);
 
         // 4) 签批栏：签名图片按"每个节点当前有效的签名"取（已被撤销的节点取不到）
@@ -133,6 +145,9 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
 
         // 5) 附件清单
         data.setAttachments(loadAttachments(businessId));
+
+        // 5.1) 抄送栏数据（2.0 B2 §4.5）：出栏与否由模板的 showCcNode 决定，这里只给数据
+        data.setCcNodes(loadCcNodes(businessId));
 
         // 6) 表单数据：形状由 IBizFormService 决定，这里不二次加工。
         //    表单服务**要求模板ID**，取不到时直接跳过，不打无意义的告警。
@@ -288,6 +303,20 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         return out;
     }
 
+    /**
+     * 抄送记录（2.0 B2 §4.5）。是否出栏由模板的 {@code showCcNode} 决定，这里只负责取全 ——
+     * 取不到不该影响其余栏目，所以失败只记告警并返回空表。
+     */
+    private List<PrintCcNode> loadCcNodes(String businessId) {
+        try {
+            List<PrintCcNode> list = printRefMapper.selectCcNodesByBusinessId(businessId);
+            return list == null ? new ArrayList<>() : list;
+        } catch (Exception e) {
+            log.warn("打印聚合：取抄送记录失败 businessId={}，抄送栏将为空", businessId, e);
+            return new ArrayList<>();
+        }
+    }
+
     private String firstNonBlank(List<FlowTaskDto> list, java.util.function.Function<FlowTaskDto, String> getter) {
         if (list == null) {
             return null;
@@ -304,8 +333,72 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         return null;
     }
 
+    /**
+     * 用**单据发起人**补全 发起人 / 发起单位 / 发起公司 三个内置变量。
+     *
+     * <p> 为什么不能只靠流程记录：{@code FlowTaskDto.startUserName} / {@code startDeptName}
+     * 在 ruoyi-flowable 里**没有任何地方赋值**（全仓 {@code setStartUserName} 零命中，
+     * 实测接口恒返回 null），于是打印件上的「提报单位/报送人/审批单位」一直是空的。
+     * 真正可靠的发起人是单据自身：{@code t_workflow_form.create_id}。 </p>
+     *
+     * <p> 只在流程记录**取不到**时才覆盖：这样"本来有值"的情形行为完全不变。 </p>
+     */
+    private void applySubmitterOrg(PrintData data, String businessId) {
+        if (StringUtils.isBlank(businessId)) {
+            return;
+        }
+        try {
+            SubmitterOrg org = printRefMapper.selectSubmitterOrgByBusinessId(businessId);
+            if (org == null) {
+                return;
+            }
+            if (StringUtils.isBlank(data.getSubmitter())) {
+                data.setSubmitter(org.getUserName());
+            }
+            if (StringUtils.isBlank(data.getSubmitterDept())) {
+                data.setSubmitterDept(org.getDeptName());
+            }
+            data.setSubmitterCompany(companyNameOf(org));
+        } catch (Exception e) {
+            // 发起人组织取不到不该让整张打印件失败：该三栏留空即可（其余栏目仍有价值）
+            log.warn("打印聚合：解析发起人组织失败 businessId={}，相关栏目将留空", businessId, e);
+        }
+    }
+
+    /**
+     * 发起人所属**公司级**部门名称。
+     *
+     * <p> {@code sys_dept.ancestors} 是"根到父"的 id 串（如 {@code 0,公司ID}），
+     * 第 2 段即公司级；本部门本身就是公司级时（ancestors 只有 {@code 0}）取它自己。 </p>
+     */
+    private String companyNameOf(SubmitterOrg org) {
+        String ancestors = org.getAncestors();
+        if (StringUtils.isNotBlank(ancestors)) {
+            String[] parts = ancestors.split(",");
+            if (parts.length >= 2) {
+                String companyId = StringUtils.trimToNull(parts[1]);
+                if (companyId != null && !"0".equals(companyId)) {
+                    String name = printRefMapper.selectDeptNameById(companyId);
+                    if (StringUtils.isNotBlank(name)) {
+                        return name;
+                    }
+                }
+            }
+        }
+        return org.getDeptName();
+    }
+
     /* ==================== 打印模板 ==================== */
 
+    /**
+     * 取生效的打印模板。**优先级链与升级前完全一致**（design：本次不动）：
+     * <pre>
+     *   显式 printTplId  >  该单据模板下的启用行  >  内置版式
+     * </pre>
+     *
+     * <p> 唯一的变化在最后一段：内置版式不再"全局唯一一套"，而是按单据模板的
+     * {@code t_template.builtin_print_key} 选用（2.0 B2 / REQ-PRINT-011）。 </p>
+     */
     @Override
     public PrintTemplate getEffectiveTemplate(String templateId, String printTplId) {
         if (StringUtils.isNotBlank(printTplId)) {
@@ -320,7 +413,26 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
                 return list.get(0);
             }
         }
-        return builtinTemplate(templateId);
+        return builtinTemplate(templateId, lookupBuiltinKey(templateId));
+    }
+
+    /**
+     * 读单据模板绑定的内置版式键。
+     *
+     * <p> 读不到（模板不存在 / 列还是空值 / 查库异常）一律返回 null，
+     * 由 {@link BuiltinPrintTemplates#resolve} 回退 {@code contract} ——
+     * 这样"打印"这件事不会因为一个新列没准备好而整张打不出来。 </p>
+     */
+    private String lookupBuiltinKey(String templateId) {
+        if (StringUtils.isBlank(templateId)) {
+            return null;
+        }
+        try {
+            return printTemplateMapper.selectBuiltinPrintKeyByTemplateId(templateId);
+        } catch (Exception e) {
+            log.warn("打印模板：读取内置版式键失败 templateId={}，回退内置默认版式", templateId, e);
+            return null;
+        }
     }
 
     @Override
@@ -383,20 +495,32 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
     }
 
     /**
-     * 没有配置打印模板时使用的<b>系统模板</b>（PRD 7.7 的"本期=系统模板 + 字段映射"）。
+     * 没有配置打印模板时使用的<b>系统内置版式</b>（PRD 7.7 / 2.0 B2）。
      *
-     * <p> 这里给出的是一个**保守的默认版式**：只声明"哪些字段进基本信息区、占几列"，
-     * 具体渲染由前端按 field_map 执行。缺省的 {@code printable} 字段一律打印。 </p>
+     * <p> 版式由 {@code builtinKey} 索引 {@link BuiltinPrintTemplates} 给出（标题 + 字段映射），
+     * 未知/空 key 回退 {@code contract} 并记一条 warning（design D2：
+     * 为一个历史脏值让整张单据打不出来，比版式降级更糟）。 </p>
+     *
+     * <p> ⚠ {@code builtinKey} 会带回客户端：前端据此决定排版路径 ——
+     * {@code contract} 保持升级前的"按表单 schema 自动排版"（存量单据零回归），
+     * 另外三套以这份版式常量为准。 </p>
      */
-    private PrintTemplate builtinTemplate(String templateId) {
+    private PrintTemplate builtinTemplate(String templateId, String builtinKey) {
+        BuiltinPrintTemplates.Resolution r = BuiltinPrintTemplates.resolve(builtinKey, log::warn);
         PrintTemplate t = new PrintTemplate();
         t.setId(null);
         t.setTemplateId(templateId);
         t.setName("系统默认打印模板");
         t.setPaper("A4");
         t.setOrientation("portrait");
-        t.setTitle(DEFAULT_TITLE);
-        t.setFieldMap(DEFAULT_FIELD_MAP);
+        t.setTitle(r.getTitle());
+        t.setFieldMap(r.getFieldMap());
+        t.setBuiltinKey(r.getKey());
+        // ⚠ 顺序要紧：先把**版式自带的推荐取值**填上，再让 fillDefaults 补其余空值。
+        //   否则 fillDefaults 的"签批栏默认关闭"会把 fund 的签批栏关掉 ——
+        //   那正是本次变更要修掉的"看着配好了、打出来没有签名区"（AC-62）。
+        t.setShowSignature(r.getShowSignature());
+        t.setShowAttachment(r.getShowAttachment());
         fillDefaults(t);
         return t;
     }
@@ -457,64 +581,60 @@ public class PrintServiceImpl extends FlowServiceFactory implements IPrintServic
         return printLogMapper.selectByBusinessId(businessId);
     }
 
+    /* ==================== 内置版式（2.0 B2） ==================== */
+
+    /**
+     * 内置版式清单（4 个 key + 展示名称）。
+     *
+     * <p> 给配置页渲染"选择内置模板"的下拉用。刻意做成接口而不是让前端再抄一份常量：
+     * 那就又变成"前后端各一份"的重复（REQ-PRINT-013 要消除的正是这个）。 </p>
+     */
+    @Override
+    public List<BuiltinTemplateOption> listBuiltinTemplates() {
+        List<BuiltinTemplateOption> list = new ArrayList<>();
+        for (String key : BuiltinPrintTemplates.keys()) {
+            list.add(new BuiltinTemplateOption(key, BuiltinPrintTemplates.titleOf(key),
+                    BuiltinPrintTemplates.showSignatureOf(key), BuiltinPrintTemplates.showAttachmentOf(key)));
+        }
+        return list;
+    }
+
+    /**
+     * 某个内置版式的字段映射（版式常量本身，非第二份副本）。
+     *
+     * <p> 未登记的 key 回退 {@code contract}（与打印时的口径一致），并记 warning。 </p>
+     */
+    @Override
+    public Object getBuiltinFieldMap(String builtinKey) {
+        BuiltinPrintTemplates.Resolution r = BuiltinPrintTemplates.resolve(builtinKey, log::warn);
+        return JSON.parse(r.getFieldMap());
+    }
+
+    /**
+     * 保存单据模板绑定的内置版式键。
+     *
+     * <p> 只改 {@code t_template.builtin_print_key} 一列 —— 不走"全量 DTO 回写"，
+     * 因为那条路会把未提交的字段一起置空（MapStruct 的默认空值策略），
+     * 且要求的是另一个权限点（见 {@code PrintTemplateMapper.updateBuiltinPrintKey} 的注释）。 </p>
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int saveBuiltinPrintKey(String templateId, String builtinKey) {
+        if (StringUtils.isBlank(templateId)) {
+            throw new ServiceException("缺少单据模板ID");
+        }
+        // 非法 key 一律拒绝：静默纠正成 contract 会让用户以为配好了（PRD 风险 R-3 那类问题）
+        if (!BuiltinPrintTemplates.isValidKey(builtinKey)) {
+            throw new ServiceException("内置打印版式键不合法："
+                    + (StringUtils.isBlank(builtinKey) ? "(空)" : builtinKey)
+                    + "（可用值：" + String.join(" / ", BuiltinPrintTemplates.keys()) + "）");
+        }
+        return printTemplateMapper.updateBuiltinPrintKey(templateId, builtinKey.trim());
+    }
+
     /* ==================== 工具 ==================== */
 
     private static String uuid() {
         return UUID.randomUUID().toString().replace("-", "");
-    }
-
-    private static final String DEFAULT_TITLE = "集团合同类文件流转审批单";
-
-    /** 内置字段映射（占位版式：两列布局）。真实版式由"打印模板配置"页编辑后覆盖。 */
-    private static final String DEFAULT_FIELD_MAP = buildDefaultFieldMap();
-
-    private static String buildDefaultFieldMap() {
-        JSONObject base = new JSONObject();
-        base.put("id", "base");
-        JSONArray rows = new JSONArray();
-
-        rows.add(row(cell("提报单位", "$submitterDept", 1), cell("报送人", "$submitter", 1), cell("报送时间", "$submitTime", 1)));
-        rows.add(row(cell("合同编号", "contractNo", 3)));
-        rows.add(row(cell("合同全称", "contractName", 3)));
-        rows.add(row(cell("合同签订主体-甲方", "ourCompany", 1), cell("合同签订主体-乙方", "counterpartyName", 1), cell("合同金额", "amount", 1)));
-        rows.add(row(cell("履约开始", "startDate", 1), cell("履约结束", "endDate", 1), cell("合同签订时间", "signDate", 1)));
-        rows.add(row(cell("其他会审部门", "jointDepts", 3)));
-        rows.add(row(cell("相关说明", "description", 3)));
-        base.put("rows", rows);
-
-        JSONArray sections = new JSONArray();
-        sections.add(base);
-        JSONObject sign = new JSONObject();
-        sign.put("id", "sign");
-        sign.put("type", "dynamic");
-        sign.put("source", "flowNodes");
-        sections.add(sign);
-
-        JSONObject attach = new JSONObject();
-        attach.put("id", "attach");
-        attach.put("type", "attachmentList");
-        sections.add(attach);
-
-        JSONObject root = new JSONObject();
-        root.put("sections", sections);
-        return root.toJSONString();
-    }
-
-    private static JSONObject cell(String label, String field, int span) {
-        JSONObject c = new JSONObject();
-        c.put("label", label);
-        c.put("field", field);
-        c.put("span", span);
-        return c;
-    }
-
-    private static JSONObject row(JSONObject... cells) {
-        JSONObject r = new JSONObject();
-        JSONArray arr = new JSONArray();
-        for (JSONObject c : cells) {
-            arr.add(c);
-        }
-        r.put("cells", arr);
-        return r;
     }
 }

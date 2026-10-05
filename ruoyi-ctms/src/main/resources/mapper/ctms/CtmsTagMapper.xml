@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  合同标签字典（t_ctms_tag，10 列）与「合同 与 标签」关联（t_ctms_contract_tag）的 Mapper（B3 第 4 组）。
+
+  口径说明：
+    · t_ctms_tag 没有 del_flag，也没有 remark 列，所以本文件的 resultMap 与列清单里都没有 remark；
+    · 关联表是复合主键 (contract_id, tag_id)，没有 id 列，且只插入/删除、没有更新语义；
+    · 自动标签同步 = 先 deleteAutoContractTags（只清 auto = '1' 的关联）再按需 insertContractTag，
+      手工关联（auto = '0'）不受影响，这是规格「手动添加的标签不得被自动同步移除」的落点；
+    · insertContractTag 用 insert ignore：同一对再插一次静默忽略，不报主键冲突；
+    · selectTagsByContractId 把关联表的 auto 一并带出到 CtmsTag 的非持久化字段 auto。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsTagMapper">
+
+    <resultMap type="CtmsTag" id="CtmsTagResult">
+        <id     property="id"         column="id"          />
+        <result property="name"       column="name"        />
+        <result property="color"      column="color"       />
+        <result property="builtin"    column="builtin"     />
+        <result property="createId"   column="create_id"   />
+        <result property="createBy"   column="create_by"   />
+        <result property="createTime" column="create_time" />
+        <result property="updateId"   column="update_id"   />
+        <result property="updateBy"   column="update_by"   />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <!-- 连表查询专用：在标签结果映射上追加关联表的 auto（非持久化字段） -->
+    <resultMap type="CtmsTag" id="CtmsTagByContractResult" extends="CtmsTagResult">
+        <result property="auto" column="auto" />
+    </resultMap>
+
+    <sql id="selectTagVo">
+        select id, name, color, builtin, create_id, create_by, create_time,
+               update_id, update_by, update_time
+          from t_ctms_tag
+    </sql>
+
+    <select id="selectTagList" parameterType="CtmsTag" resultMap="CtmsTagResult">
+        <include refid="selectTagVo"/>
+        <where>
+            <if test="id != null and id != ''">
+                and id = #{id}
+            </if>
+            <if test="name != null and name != ''">
+                and name like concat('%', #{name}, '%')
+            </if>
+            <if test="builtin != null and builtin != ''">
+                and builtin = #{builtin}
+            </if>
+        </where>
+        order by create_time asc, id asc
+    </select>
+
+    <select id="selectTagById" parameterType="String" resultMap="CtmsTagResult">
+        <include refid="selectTagVo"/>
+        where id = #{id}
+    </select>
+
+    <!-- 名称全局唯一：自动附加标签前先按名称找，找到就复用，找不到才新建 -->
+    <select id="selectTagByName" parameterType="String" resultMap="CtmsTagResult">
+        <include refid="selectTagVo"/>
+        where name = #{name} limit 1
+    </select>
+
+    <!-- 新建标签选色：颜色 = 色板[ 已有标签总数 % 色板长度 ] -->
+    <select id="countTag" resultType="int">
+        select count(1) from t_ctms_tag
+    </select>
+
+    <!-- id 由服务层生成（库表无默认值），创建时间走 sysdate() -->
+    <insert id="insertTag" parameterType="CtmsTag">
+        insert into t_ctms_tag(
+            id, name, color, builtin, create_id, create_by, create_time, update_time
+        )values(
+            #{id}, #{name}, #{color}, #{builtin}, #{createId}, #{createBy}, sysdate(), sysdate()
+        )
+    </insert>
+
+    <update id="updateTag" parameterType="CtmsTag">
+        update t_ctms_tag
+           set name        = #{name},
+               color       = #{color},
+               builtin     = #{builtin},
+               update_id   = #{updateId},
+               update_by   = #{updateBy},
+               update_time = sysdate()
+         where id = #{id}
+    </update>
+
+    <delete id="deleteTagById" parameterType="String">
+        delete from t_ctms_tag where id = #{id}
+    </delete>
+
+    <!-- 连表带出 auto，供「只清自动项」的判断与前端展示 -->
+    <select id="selectTagsByContractId" parameterType="String" resultMap="CtmsTagByContractResult">
+        select t.id, t.name, t.color, t.builtin, t.create_id, t.create_by, t.create_time,
+               t.update_id, t.update_by, t.update_time, ct.auto
+          from t_ctms_contract_tag ct
+          join t_ctms_tag t on t.id = ct.tag_id
+         where ct.contract_id = #{contractId}
+         order by ct.create_time asc, t.id asc
+    </select>
+
+    <!-- insert ignore：同一对 (contract_id, tag_id) 重复写入时静默忽略，不抛主键冲突 -->
+    <insert id="insertContractTag">
+        insert ignore into t_ctms_contract_tag(
+            contract_id, tag_id, auto, create_id, create_by, create_time
+        )values(
+            #{contractId}, #{tagId}, #{auto}, #{createId}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <delete id="deleteContractTag">
+        delete from t_ctms_contract_tag
+         where contract_id = #{contractId} and tag_id = #{tagId}
+    </delete>
+
+    <!-- 只清理自动项：手工添加的标签必须保留 -->
+    <delete id="deleteAutoContractTags" parameterType="String">
+        delete from t_ctms_contract_tag where contract_id = #{contractId} and auto = '1'
+    </delete>
+
+</mapper>

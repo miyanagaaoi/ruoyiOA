@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  合同台账主体（t_ctms_contract，41 列）的 Mapper（B3 第 4 组）。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，且 namespace 与接口全限定名一致，
+  否则扫描不到（mapperLocations 为 classpath*:mapper 下的任意层 Mapper.xml）。
+
+  口径说明：
+    · 列表默认只返回未停用合同（del_flag = '0'），只有显式传 includeDeleted = "1" 才放开。
+    · 标签筛选取【交集】：选定 N 个标签时只返回同时具备全部 N 个标签的合同。
+    · 关键字同时匹配合同自身四列与行项的名称/规格，行项部分用 EXISTS 子查询，
+      刻意不 JOIN，避免一个合同命中多行时列表出现重复行（分页数会跟着错）。
+    · contract_no 全局唯一且停用占号不复用，所以按编号查重时不排除已停用行。
+    · updateContract 刻意不写 contract_no / del_flag / deleted_at / deleted_reason：
+      编号不可改，停用三列各有专用方法（updateContractDelFlag / restoreContract）。
+    · deleteContractById 是物理删除，仅供回滚演练与夹具清理，业务侧一律走软删除。
+
+  ⚠ 两个刻意偏离「直觉写法」的地方，都不是笔误，改动前请先看理由：
+
+  1) includeDeleted 的判断写成 includeDeleted != "1"（XML 属性用单引号包住，内层是双引号）。
+     原因：OGNL 把单引号 '1' 当【字符字面量 Character】，与 String "1" 比较恒不相等，
+     于是 `includeDeleted != '1'` 恒为 true，包含停用的列表永远拿不到已停用合同。
+     已用 MyBatis 自带的 ExpressionEvaluator 实测确认（mybatis 3.5.16 + ognl 3.3.4）：
+     传 "1" 时 `!= '1'` 判定为 true（错误）、`!= "1"` 判定为 false（正确）。
+
+  2) 标签交集的人数不写 #{tagIds.size}，而是在 if 里 bind 一个 tagCount。
+     原因：MyBatis 参数绑定走 MetaObject 反射，List 的 size 不是 bean 属性，
+     #{tagIds.size} 会在绑定参数时抛 UnsupportedOperationException
+     （List 属性的嵌套解析走 CollectionWrapper，它只支持下标）。
+     用 bind 先在动态上下文里算出整数，再按普通参数引用即可。
+-->
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsContractMapper">
+
+    <resultMap type="CtmsContract" id="CtmsContractResult">
+        <id     property="id"                  column="id"                    />
+        <result property="contractNo"          column="contract_no"           />
+        <result property="name"                column="name"                  />
+        <result property="type"                column="type"                  />
+        <result property="partyA"              column="party_a"               />
+        <result property="partyB"              column="party_b"               />
+        <result property="signDate"            column="sign_date"             />
+        <result property="effectiveDate"       column="effective_date"        />
+        <result property="subjectMatter"       column="subject_matter"        />
+        <result property="amount"              column="amount"                />
+        <result property="currency"            column="currency"              />
+        <result property="subjectCode"         column="subject_code"          />
+        <result property="customerId"          column="customer_id"           />
+        <result property="supplierId"          column="supplier_id"           />
+        <result property="paidAmount"          column="paid_amount"           />
+        <result property="hasWarranty"         column="has_warranty"          />
+        <result property="warrantyAmount"      column="warranty_amount"       />
+        <result property="warrantyRate"        column="warranty_rate"         />
+        <result property="warrantyStart"       column="warranty_start"        />
+        <result property="warrantyMonths"      column="warranty_months"       />
+        <result property="warrantyEnd"         column="warranty_end"          />
+        <result property="warrantyReleased"    column="warranty_released"     />
+        <result property="warrantyReleaseDate" column="warranty_release_date" />
+        <result property="warrantyNote"        column="warranty_note"         />
+        <result property="isFramework"         column="is_framework"          />
+        <result property="parentId"            column="parent_id"             />
+        <result property="arrivalStatus"       column="arrival_status"        />
+        <result property="expectedArrivalDate" column="expected_arrival_date" />
+        <result property="status"              column="status"                />
+        <result property="ownerName"           column="owner_name"            />
+        <result property="deptId"              column="dept_id"               />
+        <result property="remark"              column="remark"                />
+        <result property="delFlag"             column="del_flag"              />
+        <result property="deletedAt"           column="deleted_at"            />
+        <result property="deletedReason"       column="deleted_reason"        />
+        <result property="createId"            column="create_id"             />
+        <result property="createBy"            column="create_by"             />
+        <result property="createTime"          column="create_time"           />
+        <result property="updateId"            column="update_id"             />
+        <result property="updateBy"            column="update_by"             />
+        <result property="updateTime"          column="update_time"           />
+        <!-- 非持久化字段（tagIds / tags / items / changeLogs / children / childrenCount /
+             childrenAmountSum / keyword / beginSignDate / endSignDate / includeDeleted /
+             dataScopeSql）没有对应列，由服务层另行装配，不在此映射。 -->
+    </resultMap>
+
+    <sql id="selectContractVo">
+        select c.id, c.contract_no, c.name, c.type, c.party_a, c.party_b,
+               c.sign_date, c.effective_date, c.subject_matter, c.amount, c.currency,
+               c.subject_code, c.customer_id, c.supplier_id, c.paid_amount,
+               c.has_warranty, c.warranty_amount, c.warranty_rate, c.warranty_start,
+               c.warranty_months, c.warranty_end, c.warranty_released,
+               c.warranty_release_date, c.warranty_note, c.is_framework, c.parent_id,
+               c.arrival_status, c.expected_arrival_date, c.status, c.owner_name,
+               c.dept_id, c.remark, c.del_flag, c.deleted_at, c.deleted_reason,
+               c.create_id, c.create_by, c.create_time, c.update_id, c.update_by, c.update_time
+          from t_ctms_contract c
+    </sql>
+
+    <select id="selectContractList" parameterType="CtmsContract" resultMap="CtmsContractResult">
+        <include refid="selectContractVo"/>
+        <where>
+            <if test='includeDeleted == null or includeDeleted != "1"'>
+                and c.del_flag = '0'
+            </if>
+            <if test="id != null and id != ''">
+                and c.id = #{id}
+            </if>
+            <if test="contractNo != null and contractNo != ''">
+                and c.contract_no like concat('%', #{contractNo}, '%')
+            </if>
+            <if test="name != null and name != ''">
+                and c.name like concat('%', #{name}, '%')
+            </if>
+            <if test="type != null and type != ''">
+                and c.type = #{type}
+            </if>
+            <if test="status != null and status != ''">
+                and c.status = #{status}
+            </if>
+            <if test="arrivalStatus != null and arrivalStatus != ''">
+                and c.arrival_status = #{arrivalStatus}
+            </if>
+            <if test="isFramework != null and isFramework != ''">
+                and c.is_framework = #{isFramework}
+            </if>
+            <if test="ownerName != null and ownerName != ''">
+                and c.owner_name like concat('%', #{ownerName}, '%')
+            </if>
+            <if test="customerId != null and customerId != ''">
+                and c.customer_id = #{customerId}
+            </if>
+            <if test="supplierId != null and supplierId != ''">
+                and c.supplier_id = #{supplierId}
+            </if>
+            <if test="parentId != null and parentId != ''">
+                and c.parent_id = #{parentId}
+            </if>
+            <if test="beginSignDate != null and beginSignDate != ''">
+                and c.sign_date &gt;= #{beginSignDate}
+            </if>
+            <if test="endSignDate != null and endSignDate != ''">
+                and c.sign_date &lt;= #{endSignDate}
+            </if>
+            <!-- 关键字：自身四列 + 行项名称/规格（EXISTS 子查询，避免 JOIN 出重复行） -->
+            <if test="keyword != null and keyword != ''">
+                and ( c.contract_no like concat('%', #{keyword}, '%')
+                   or c.name like concat('%', #{keyword}, '%')
+                   or c.party_a like concat('%', #{keyword}, '%')
+                   or c.party_b like concat('%', #{keyword}, '%')
+                   or exists (select 1 from t_ctms_contract_item i
+                               where i.contract_id = c.id
+                                 and (i.name like concat('%', #{keyword}, '%')
+                                   or i.spec like concat('%', #{keyword}, '%'))) )
+            </if>
+            <!--
+              标签【交集】：选定 N 个标签时只返回同时具备全部 N 个的合同（HAVING COUNT = N）。
+              人数先 bind 成 tagCount，不能写成 #{tagIds.size}（理由见文件头注释 2）。
+            -->
+            <if test="tagIds != null and tagIds.size() > 0">
+                <bind name="tagCount" value="tagIds.size()"/>
+                and c.id in ( select ct.contract_id from t_ctms_contract_tag ct
+                               where ct.tag_id in
+                               <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">#{tagId}</foreach>
+                               group by ct.contract_id
+                              having count(distinct ct.tag_id) = #{tagCount} )
+            </if>
+            <!--
+              数据范围片段：由服务层按白名单拼好后传入，本层原样拼接执行。
+              ⚠ 这里用的是 ${dataScopeSql}（字符串原样拼接，不是 #{} 预编译参数）：
+                它只允许来自服务端的白名单拼接（SELF / DEPT / ALL 的低层 SQL 片段），
+                绝不允许直接把请求参数、请求头或前端传入的字符串塞进该字段，
+                否则就是一个 SQL 注入点。判定与拼接都在服务层，Mapper 不做二次校验。
+            -->
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and ( ${dataScopeSql} )
+            </if>
+        </where>
+        order by c.create_time desc, c.id desc
+    </select>
+
+    <select id="selectContractById" parameterType="String" resultMap="CtmsContractResult">
+        <include refid="selectContractVo"/>
+        where c.id = #{id}
+    </select>
+
+    <!-- 编号全局唯一、停用占号不复用：查重刻意不排除已停用行 -->
+    <select id="selectContractByNo" parameterType="String" resultMap="CtmsContractResult">
+        <include refid="selectContractVo"/>
+        where c.contract_no = #{contractNo} limit 1
+    </select>
+
+    <!-- id 由服务层生成；del_flag 与停用三列走库默认值（'0' / NULL / NULL），不在此写入 -->
+    <insert id="insertContract" parameterType="CtmsContract">
+        insert into t_ctms_contract(
+            id, contract_no, name, type, party_a, party_b, sign_date, effective_date,
+            subject_matter, amount, currency, subject_code, customer_id, supplier_id,
+            paid_amount, has_warranty, warranty_amount, warranty_rate, warranty_start,
+            warranty_months, warranty_end, warranty_released, warranty_release_date,
+            warranty_note, is_framework, parent_id, arrival_status, expected_arrival_date,
+            status, owner_name, dept_id, remark, create_id, create_by, create_time, update_time
+        )values(
+            #{id}, #{contractNo}, #{name}, #{type}, #{partyA}, #{partyB}, #{signDate}, #{effectiveDate},
+            #{subjectMatter}, #{amount}, #{currency}, #{subjectCode}, #{customerId}, #{supplierId},
+            #{paidAmount}, #{hasWarranty}, #{warrantyAmount}, #{warrantyRate}, #{warrantyStart},
+            #{warrantyMonths}, #{warrantyEnd}, #{warrantyReleased}, #{warrantyReleaseDate},
+            #{warrantyNote}, #{isFramework}, #{parentId}, #{arrivalStatus}, #{expectedArrivalDate},
+            #{status}, #{ownerName}, #{deptId}, #{remark}, #{createId}, #{createBy}, sysdate(), sysdate()
+        )
+    </insert>
+
+    <!--
+      刻意不更新：contract_no（编号不可改）、del_flag / deleted_at / deleted_reason
+      （停用三列由 updateContractDelFlag 与 restoreContract 专用方法负责）。
+      其余业务列全量覆盖（含把可空列置回 null 的场景）。
+    -->
+    <update id="updateContract" parameterType="CtmsContract">
+        update t_ctms_contract
+           set name                  = #{name},
+               type                  = #{type},
+               party_a               = #{partyA},
+               party_b               = #{partyB},
+               sign_date             = #{signDate},
+               effective_date        = #{effectiveDate},
+               subject_matter        = #{subjectMatter},
+               amount                = #{amount},
+               currency              = #{currency},
+               subject_code          = #{subjectCode},
+               customer_id           = #{customerId},
+               supplier_id           = #{supplierId},
+               paid_amount           = #{paidAmount},
+               has_warranty          = #{hasWarranty},
+               warranty_amount       = #{warrantyAmount},
+               warranty_rate         = #{warrantyRate},
+               warranty_start        = #{warrantyStart},
+               warranty_months       = #{warrantyMonths},
+               warranty_end          = #{warrantyEnd},
+               warranty_released     = #{warrantyReleased},
+               warranty_release_date = #{warrantyReleaseDate},
+               warranty_note         = #{warrantyNote},
+               is_framework          = #{isFramework},
+               parent_id             = #{parentId},
+               arrival_status        = #{arrivalStatus},
+               expected_arrival_date = #{expectedArrivalDate},
+               status                = #{status},
+               owner_name            = #{ownerName},
+               dept_id               = #{deptId},
+               remark                = #{remark},
+               update_id             = #{updateId},
+               update_by             = #{updateBy},
+               update_time           = sysdate()
+         where id = #{id}
+    </update>
+
+    <!-- 软删除专用：只写停用三列与审计列，其余业务列不动 -->
+    <update id="updateContractDelFlag" parameterType="CtmsContract">
+        update t_ctms_contract
+           set del_flag       = #{delFlag},
+               deleted_at     = #{deletedAt},
+               deleted_reason = #{deletedReason},
+               update_id      = #{updateId},
+               update_by      = #{updateBy},
+               update_time    = sysdate()
+         where id = #{id}
+    </update>
+
+    <!-- 恢复专用：清空停用三列，写审计列；30 天窗口的判定在服务层 -->
+    <update id="restoreContract">
+        update t_ctms_contract
+           set del_flag       = '0',
+               deleted_at     = null,
+               deleted_reason = null,
+               update_id      = #{updateId},
+               update_by      = #{updateBy},
+               update_time    = sysdate()
+         where id = #{id}
+    </update>
+
+    <!-- 物理删除：仅供回滚演练 / 夹具清理，业务侧一律走软删除 -->
+    <delete id="deleteContractById" parameterType="String">
+        delete from t_ctms_contract where id = #{id}
+    </delete>
+
+    <select id="selectChildren" parameterType="String" resultMap="CtmsContractResult">
+        <include refid="selectContractVo"/>
+        where c.parent_id = #{parentId} and c.del_flag = '0'
+        order by c.create_time desc
+    </select>
+
+    <select id="countActiveChildren" parameterType="String" resultType="int">
+        select count(1) from t_ctms_contract
+         where parent_id = #{parentId} and del_flag = '0'
+    </select>
+
+    <!-- 引用守卫：该标签被多少【未停用】合同引用（已停用的合同不再阻断删标签） -->
+    <select id="countContractReferences" parameterType="String" resultType="int">
+        select count(1) from t_ctms_contract_tag ct
+         where ct.tag_id = #{tagId}
+           and exists (select 1 from t_ctms_contract c
+                        where c.id = ct.contract_id and c.del_flag = '0')
+    </select>
+
+    <!--
+      质保提醒候选集（任务 5.6）。四条硬条件与规格逐条对应：
+        has_warranty='1'（启用质保）、warranty_released='0'（未释放）、
+        warranty_end is not null（到期日非空）、del_flag='0'（未停用）；
+      再加"到期日 ≤ 窗口右端点"（窗口右端点由服务层按 sys_config 的天数算出）。
+      ⚠ 这里刻意不做"即将/已到期"的切分 —— 切分口径只在服务层一处实现
+        （见 CtmsContractMapper.selectWarrantyReminderCandidates 的接口注释）。
+      ⚠ ${dataScopeSql} 只允许来自服务端白名单，绝不接受请求参数（同 selectContractList）。
+    -->
+    <select id="selectWarrantyReminderCandidates" resultMap="CtmsContractResult">
+        <include refid="selectContractVo"/>
+         where c.has_warranty = '1'
+           and c.warranty_released = '0'
+           and c.warranty_end is not null
+           and c.del_flag = '0'
+           and c.warranty_end &lt;= #{windowEnd}
+           <if test="dataScopeSql != null and dataScopeSql != ''">
+               and ${dataScopeSql}
+           </if>
+         order by c.warranty_end asc
+         limit #{limit}
+    </select>
+
+    <!--
+      全部已占用编号（任务 5.8 的"停用占号不复用"扫描）。
+      ⚠ 刻意不过滤 del_flag：停用合同仍然占用编号，唯一索引也不排除停用行。
+    -->
+    <select id="selectAllContractNos" resultType="String">
+        select contract_no from t_ctms_contract where contract_no is not null and contract_no &lt;&gt; ''
+    </select>
+
+    <!--
+      迁移认领的绑定候选：某方向档案引用为空 + 该方向文本等于草案原始名称（任务 7.3）。
+      ⚠ OGNL 的字符串字面量必须用【双引号】（partyType == "customer"）：单引号 'customer' 会被
+        当成 Character、与 String 比较恒不相等（DEV-ENV §6.43，与 includeDeleted 同款坑）。
+      ⚠ 刻意不过滤 del_flag：停用合同同样是待认领的历史数据（与扫描同口径）。
+      ⚠ 文本比较走列的排序规则 utf8mb4_0900_ai_ci，与 uk_party_draft(party_type, raw_name) 一致。
+
+      ⚠⚠ 两侧同口径（t26 / t16 round 1 的 F1，改这里必须同步改 MigrationRules.normalizeRawName）：
+        扫描写入的 raw_name 是**已去首尾 ASCII 空格**的文本（Java 侧），所以候选比较也必须先把
+        库内文本去首尾空格再比，否则「库内 = ' 某某阀门 '」的合同会被扫描聚合成草案（计数 > 0）、
+        却在认领时一条都匹配不上（实绑 0），下一次扫描又发现它仍未绑定 → 草案在 claimed/pending 之间
+        永久往复。两侧都用 trim()：MySQL 的 TRIM() 默认**只去 0x20（ASCII 空格）**，Java 侧
+        MigrationRules.trimSpaces 也只去 0x20，制表/换行/全角空格/NBSP 两侧一律保留 → 逐类同口径。
+        ⚠ 不要把左侧写成 trim(both ' \t\n\r\v\f' from …)：MySQL 的 TRIM(remstr) 是把 remstr 当
+        "整串重复"去掉、不是字符集合，实测 '\tx\t' 会原样返回（探针见 t26 交付记录）。
+    -->
+    <select id="selectUnboundPartyCandidates" resultMap="CtmsContractResult">
+        <include refid="selectContractVo"/>
+        <where>
+            <if test='partyType == "customer"'>
+                and c.customer_id is null and trim(c.party_a) = trim(#{rawName})
+            </if>
+            <if test='partyType == "supplier"'>
+                and c.supplier_id is null and trim(c.party_b) = trim(#{rawName})
+            </if>
+        </where>
+        order by c.create_time asc, c.id asc
+    </select>
+
+    <!--
+      批量回填档案引用：只改引用列 + 审计列，不改 party_a/party_b 文本
+      （文本本来就等于草案 raw_name，认领只是把"文本"升级成"档案引用"）。
+      <choose> 决定写 customer_id 还是 supplier_id：方向只由服务端按草案 party_type 传入，
+      不来自请求参数（与数据范围片段同款纪律）。
+    -->
+    <update id="bindPartyRef">
+        update t_ctms_contract
+        <set>
+            <choose>
+                <when test='partyType == "customer"'>
+                    customer_id = #{partyId},
+                </when>
+                <otherwise>
+                    supplier_id = #{partyId},
+                </otherwise>
+            </choose>
+            update_id = #{updateId},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where id = #{id}
+    </update>
+
+</mapper>

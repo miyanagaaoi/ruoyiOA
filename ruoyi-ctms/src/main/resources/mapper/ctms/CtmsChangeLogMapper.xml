@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  字段级变更历史（t_ctms_change_log，17 列）的 Mapper（B3/B4 共用，B3 第 4 组）。
+
+  口径说明：
+    · 本表只追加不更新：没有 update / delete 语句，update_id / update_by / update_time 保留为空；
+    · 时间线按 create_time 倒序；limit 为 null 表示不限，否则取最近 limit 条；
+    · contract_id 与 (object_type, object_id) 都是「传了才过滤」：B4 单据侧日志不写 contract_id；
+    · create_time 一律用 sysdate()，不信任应用传入的时间。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsChangeLogMapper">
+
+    <resultMap type="CtmsChangeLog" id="CtmsChangeLogResult">
+        <id     property="id"           column="id"            />
+        <result property="contractId"   column="contract_id"   />
+        <result property="fieldName"    column="field_name"    />
+        <result property="oldValue"     column="old_value"     />
+        <result property="newValue"     column="new_value"     />
+        <result property="note"         column="note"          />
+        <result property="source"       column="source"        />
+        <result property="operatorId"   column="operator_id"   />
+        <result property="operatorName" column="operator_name" />
+        <result property="objectType"   column="object_type"   />
+        <result property="objectId"     column="object_id"     />
+        <result property="createId"     column="create_id"     />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateId"     column="update_id"     />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+        <!-- 非持久化字段 limit 是查询条件，没有对应列，不在此映射。 -->
+    </resultMap>
+
+    <sql id="selectChangeLogVo">
+        select id, contract_id, field_name, old_value, new_value, note, source,
+               operator_id, operator_name, object_type, object_id, create_id, create_by,
+               create_time, update_id, update_by, update_time
+          from t_ctms_change_log
+    </sql>
+
+    <select id="selectChangeLogList" parameterType="CtmsChangeLog" resultMap="CtmsChangeLogResult">
+        <include refid="selectChangeLogVo"/>
+        <where>
+            <if test="contractId != null and contractId != ''">
+                and contract_id = #{contractId}
+            </if>
+            <if test="objectType != null and objectType != ''">
+                and object_type = #{objectType}
+            </if>
+            <if test="objectId != null and objectId != ''">
+                and object_id = #{objectId}
+            </if>
+        </where>
+        order by create_time desc
+        <if test="limit != null">
+            limit #{limit}
+        </if>
+    </select>
+
+    <!-- id 由服务层生成，create_time 走 sysdate() -->
+    <insert id="insertChangeLog" parameterType="CtmsChangeLog">
+        insert into t_ctms_change_log(
+            id, contract_id, field_name, old_value, new_value, note, source,
+            operator_id, operator_name, object_type, object_id, create_id, create_by, create_time
+        )values(
+            #{id}, #{contractId}, #{fieldName}, #{oldValue}, #{newValue}, #{note}, #{source},
+            #{operatorId}, #{operatorName}, #{objectType}, #{objectId}, #{createId}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <!-- 批量插入：一次合同编辑可能产生多条留痕，合成一条多值 insert 降低往返 -->
+    <insert id="batchInsertChangeLogs">
+        insert into t_ctms_change_log(
+            id, contract_id, field_name, old_value, new_value, note, source,
+            operator_id, operator_name, object_type, object_id, create_id, create_by, create_time
+        )values
+        <foreach collection="logs" item="log" separator=",">
+            (
+            #{log.id}, #{log.contractId}, #{log.fieldName}, #{log.oldValue}, #{log.newValue},
+            #{log.note}, #{log.source}, #{log.operatorId}, #{log.operatorName},
+            #{log.objectType}, #{log.objectId}, #{log.createId}, #{log.createBy}, sysdate()
+            )
+        </foreach>
+    </insert>
+
+</mapper>

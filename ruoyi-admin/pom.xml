@@ -99,6 +99,12 @@
             <artifactId>ruoyi-schedule</artifactId>
             <version>1.0.1</version>
         </dependency>
+        <!-- 2.0 B3/B4：合同台账（ctms）+ B4 单据/库存域，同一个模块 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-ctms</artifactId>
+            <version>1.0.1</version>
+        </dependency>
     </dependencies>
 
     <build>

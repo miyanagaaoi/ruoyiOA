@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  合同行项（t_ctms_contract_item，19 列）的 Mapper（B3 第 4 组）。
+
+  口径说明：
+    · 行项是合同的从属明细，编辑口径是「先按合同全删、再整批插入」；
+    · total（行总价）由服务层用 ContractRules#lineTotal 先 HALF_UP 舍入到 2 位后写入，
+      本层不做任何金额计算，避免出现两处口径；
+    · product_id / product_code / product_name 是物料档案引用与快照，三者同生同灭；
+    · 批量插入与批量查询都用 foreach，空集合由服务层挡在调用前（这里不额外兜底）。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsContractItemMapper">
+
+    <resultMap type="CtmsContractItem" id="CtmsContractItemResult">
+        <id     property="id"          column="id"           />
+        <result property="contractId"  column="contract_id"  />
+        <result property="seq"         column="seq"          />
+        <result property="itemType"    column="item_type"    />
+        <result property="name"        column="name"         />
+        <result property="spec"        column="spec"         />
+        <result property="qty"         column="qty"          />
+        <result property="unitPrice"   column="unit_price"   />
+        <result property="total"       column="total"        />
+        <result property="remark"      column="remark"       />
+        <result property="productId"   column="product_id"   />
+        <result property="productCode" column="product_code" />
+        <result property="productName" column="product_name" />
+        <result property="createId"    column="create_id"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"  column="update_time"  />
+        <!-- 非持久化字段 contractIds 是查询条件，没有对应列，由服务层传入，不在此映射。 -->
+    </resultMap>
+
+    <sql id="selectItemVo">
+        select id, contract_id, seq, item_type, name, spec, qty, unit_price, total,
+               remark, product_id, product_code, product_name, create_id, create_by,
+               create_time, update_id, update_by, update_time
+          from t_ctms_contract_item
+    </sql>
+
+    <select id="selectItemList" parameterType="CtmsContractItem" resultMap="CtmsContractItemResult">
+        <include refid="selectItemVo"/>
+        <where>
+            <if test="id != null and id != ''">
+                and id = #{id}
+            </if>
+            <if test="contractId != null and contractId != ''">
+                and contract_id = #{contractId}
+            </if>
+            <if test="contractIds != null and contractIds.size() > 0">
+                and contract_id in
+                <foreach collection="contractIds" item="contractIdItem" open="(" separator="," close=")">#{contractIdItem}</foreach>
+            </if>
+            <if test="productId != null and productId != ''">
+                and product_id = #{productId}
+            </if>
+            <if test="itemType != null and itemType != ''">
+                and item_type = #{itemType}
+            </if>
+            <if test="name != null and name != ''">
+                and name like concat('%', #{name}, '%')
+            </if>
+        </where>
+        order by contract_id asc, seq asc
+    </select>
+
+    <select id="selectItemsByContractIds" resultMap="CtmsContractItemResult">
+        <include refid="selectItemVo"/>
+        where contract_id in
+        <foreach collection="contractIds" item="contractId" open="(" separator="," close=")">#{contractId}</foreach>
+        order by contract_id asc, seq asc
+    </select>
+
+    <!-- 行项写端点用：先按 id 反查它属于哪份合同，再走合同侧唯一的数据范围入口 -->
+    <select id="selectItemById" parameterType="String" resultMap="CtmsContractItemResult">
+        <include refid="selectItemVo"/>
+        where id = #{id}
+    </select>
+
+    <delete id="deleteItemsByContractId" parameterType="String">
+        delete from t_ctms_contract_item where contract_id = #{contractId}
+    </delete>
+
+    <!-- id 由服务层生成；序号的连续重排也在服务层完成 -->
+    <insert id="batchInsertItems">
+        insert into t_ctms_contract_item(
+            id, contract_id, seq, item_type, name, spec, qty, unit_price, total,
+            remark, product_id, product_code, product_name, create_id, create_by,
+            create_time, update_id, update_by, update_time
+        )values
+        <foreach collection="items" item="item" separator=",">
+            (
+            #{item.id}, #{item.contractId}, #{item.seq}, #{item.itemType}, #{item.name}, #{item.spec},
+            #{item.qty}, #{item.unitPrice}, #{item.total}, #{item.remark}, #{item.productId},
+            #{item.productCode}, #{item.productName}, #{item.createId}, #{item.createBy},
+            sysdate(), #{item.updateId}, #{item.updateBy}, sysdate()
+            )
+        </foreach>
+    </insert>
+
+    <!-- 引用守卫：删除物料档案前先问这个物料有没有被行项引用 -->
+    <select id="countByProductId" parameterType="String" resultType="int">
+        select count(1) from t_ctms_contract_item where product_id = #{productId}
+    </select>
+
+</mapper>

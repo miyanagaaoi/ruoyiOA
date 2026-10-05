@@ -49,7 +49,7 @@ public class SimpleFlowController extends BaseController {
     }
 
     /** 保存草稿（id 为空 = 新增） */
-    @PreAuthorize("@ss.hasPermi('workflow:simpleFlow:edit')")
+    @PreAuthorize("@flowAuthz.canEdit(#p0.id)")
     @PostMapping("/draft")
     public AjaxResult draft(@RequestBody FlowSimple flowSimple) {
         simpleFlowService.saveDraft(flowSimple);
@@ -83,10 +83,32 @@ public class SimpleFlowController extends BaseController {
     }
 
     /** 发布 */
-    @PreAuthorize("@ss.hasPermi('workflow:simpleFlow:publish')")
+    @PreAuthorize("@flowAuthz.canPublish(#p0.id)")
     @PostMapping("/publish")
     public AjaxResult publish(@RequestBody PublishBody body) {
-        return success(simpleFlowService.publish(body.getId(), body.getRemark()));
+        return success(simpleFlowService.publish(body.getId(), body.getRemark(), body.getTemplateId()));
+    }
+
+    /**
+     * 按模板取用或创建流程草稿（2.0 B1 §4.1）。
+     *
+     * <p> 模板已绑定 → 返回其草稿（不覆盖）；未绑定 → 按 {@code tpl_ + 模板ID前8位}
+     * 生成流程标识、建草稿并回写绑定。连续调用返回同一个流程 id。 </p>
+     *
+     * <p> 这里刻意不加 {@code @PreAuthorize} 权限点：授权是**模板级**的
+     * （{@code TemplateServiceImpl#checkFlowManagePermission}：系统管理员 / 该模板的流程管理员 /
+     * 创建人 / 拥有 {@code workflow:template:edit} 者），由服务层给出明确的 403。
+     * 用声明式权限点会把被指定的流程管理员一并挡掉（那几个权限点默认只有超管有）。 </p>
+     */
+    @GetMapping("/by-template/{templateId}")
+    public AjaxResult getByTemplate(@PathVariable("templateId") String templateId) {
+        return success(simpleFlowService.getOrCreateByTemplate(templateId));
+    }
+
+    /** 同 {@link #getByTemplate(String)}（POST 语义相同，便于前端表单式调用） */
+    @PostMapping("/by-template/{templateId}")
+    public AjaxResult postByTemplate(@PathVariable("templateId") String templateId) {
+        return success(simpleFlowService.getOrCreateByTemplate(templateId));
     }
 
     /** 版本历史 */
@@ -128,5 +150,12 @@ public class SimpleFlowController extends BaseController {
         /** 回滚用 */
         private String defKey;
         private Integer version;
+        /**
+         * 发布成功后要回写绑定的模板ID（2.0 B1 §4.2）。
+         *
+         * <p> 为空时后端按 {@code t_template.simple_flow_id} 反查 —— 两条路都只会回写到
+         * 模板的**当前启用行**。 </p>
+         */
+        private String templateId;
     }
 }

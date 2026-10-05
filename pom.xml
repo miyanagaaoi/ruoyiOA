@@ -300,6 +300,8 @@
         <module>ruoyi-schedule</module>
         <module>ruoyi-kbs</module>
         <module>ruoyi-sms</module>
+        <!--  2.0 B3/B4：合同台账 + 单据/库存域（同一模块，B4 在其上追加）  -->
+        <module>ruoyi-ctms</module>
         <!--   开放业务模块     -->
     </modules>
     <packaging>pom</packaging>

@@ -73,6 +73,53 @@ public class WorkflowPrintController extends BaseController {
         return success(tpl);
     }
 
+    /* ==================== 内置版式（2.0 B2 / REQ-PRINT-011、REQ-PRINT-013） ==================== */
+
+    /**
+     * 内置版式清单（4 个 key + 展示名称）。
+     *
+     * <p> <b>权限点复用已存在的 {@code workflow:print:template}</b>，不新增权限点、不新增菜单
+     * （design D10 / PRD 7.5）：内置版式是代码常量，不是数据行，没有 CRUD 页面。 </p>
+     */
+    @GetMapping("/builtinTemplates")
+    @PreAuthorize("@ss.hasPermi('workflow:print:template')")
+    public AjaxResult builtinTemplates() {
+        return success(printService.listBuiltinTemplates());
+    }
+
+    /**
+     * 某个内置版式的字段映射（"填入内置版式"的起点内容）。
+     *
+     * <p> 这是 REQ-PRINT-013 的落点：内置版式常量以**后端为唯一真源**，
+     * 客户端不再持有副本。未知 key 回退 {@code contract} 并记 warning（与打印时口径一致）。 </p>
+     */
+    @GetMapping("/defaultFieldMap/{builtinKey}")
+    @PreAuthorize("@ss.hasPermi('workflow:print:template')")
+    public AjaxResult defaultFieldMap(@PathVariable("builtinKey") String builtinKey) {
+        return success(printService.getBuiltinFieldMap(builtinKey));
+    }
+
+    /**
+     * 保存单据模板绑定的内置版式键（配置页"选择内置模板"模式，REQ-PRINT-018）。
+     *
+     * <p> <b>为什么单独一个窄接口</b>（PRD §9.3 的接口清单里没有它）：
+     * "保存后该单据模板的 {@code builtin_print_key} 为该键"这条要求必须落到某处，
+     * 而复用 {@code PUT /workflow/template} 有两个硬伤 ——
+     * ① 那条链路是 {@code TemplateDTO} 的**全量** MapStruct 回写，未提交的字段会被置空，
+     * 从打印配置页发一次"只改版式键"的请求会把单据模板的其它字段一起打掉；
+     * ② 它要求 {@code workflow:template:edit}，而本页的按钮权限是
+     * {@code workflow:print:template:edit}，会出现"页面上能点、点下去 403"。
+     * 所以这里给一个只改一列、权限点与本页一致的写口。 </p>
+     */
+    @PostMapping("/builtinKey")
+    @PreAuthorize("@ss.hasPermi('workflow:print:template:edit')")
+    @Log(title = "打印模板", businessType = BusinessType.UPDATE)
+    public AjaxResult saveBuiltinKey(@RequestBody java.util.Map<String, String> body) {
+        String templateId = body == null ? null : body.get("templateId");
+        String builtinKey = body == null ? null : body.get("builtinKey");
+        return toAjax(printService.saveBuiltinPrintKey(templateId, builtinKey));
+    }
+
     /* ==================== 打印模板配置（PRD 7.7） ==================== */
 
     /**

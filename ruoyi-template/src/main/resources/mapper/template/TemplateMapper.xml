@@ -13,6 +13,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="formKey"    column="form_key"    />
         <result property="formType"    column="form_type"    />
         <result property="formCode"    column="form_code"    />
+        <!-- 2.0（B1 §2.1）新增 13 列：resultMap 是"五处同步"的第 2 处 -->
+        <result property="icon"    column="icon"    />
+        <result property="submitScopeType"    column="submit_scope_type"    />
+        <result property="includeChildDept"    column="include_child_dept"    />
+        <result property="simpleFlowId"    column="simple_flow_id"    />
+        <result property="flowMode"    column="flow_mode"    />
+        <result property="builtinPrintKey"    column="builtin_print_key"    />
+        <result property="revokeLimitMinutes"    column="revoke_limit_minutes"    />
+        <result property="allowEditAfterSubmit"    column="allow_edit_after_submit"    />
+        <result property="allowSubmitForOther"    column="allow_submit_for_other"    />
+        <result property="allowApproverRevoke"    column="allow_approver_revoke"    />
+        <result property="allowBatchApprove"    column="allow_batch_approve"    />
+        <result property="approverDedup"    column="approver_dedup"    />
+        <result property="forwardScope"    column="forward_scope"    />
+        <!-- 页面上的「说明」：PRD 以为能复用 remark 列，实测本库没有这一列，故同批补上 -->
+        <result property="remark"    column="remark"    />
         <result property="delFlag"    column="del_flag"    />
         <result property="sort"    column="sort"    />
         <result property="enableFlag"    column="enable_flag"    />
@@ -28,7 +44,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectTemplateVo">
-        select id, name, type, def_key, form_id, form_key, form_type, form_code, del_flag, sort, main_text_flag, attach_flag, message_notice_flag, enable_flag, create_id, create_by, create_time, update_id, update_by, update_time from t_template
+        select id, name, type, def_key, form_id, form_key, form_type, form_code, del_flag, sort, main_text_flag, attach_flag, message_notice_flag, enable_flag, create_id, create_by, create_time, update_id, update_by, update_time,
+               icon, submit_scope_type, include_child_dept, simple_flow_id, flow_mode, builtin_print_key,
+               revoke_limit_minutes, allow_edit_after_submit, allow_submit_for_other, allow_approver_revoke,
+               allow_batch_approve, approver_dedup, forward_scope, remark
+        from t_template
     </sql>
 
     <select id="selectTemplateList" parameterType="Template" resultMap="TemplateResult">
@@ -65,6 +85,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="formKey != null and formKey != ''">form_key,</if>
             <if test="formType != null and formType != ''">form_type,</if>
             <if test="formCode != null and formCode != ''">form_code,</if>
+            <!-- 2.0（B1 §2.1）新增 13 列：insert 是"五处同步"的第 4 处 -->
+            <if test="icon != null and icon != ''">icon,</if>
+            <if test="submitScopeType != null and submitScopeType != ''">submit_scope_type,</if>
+            <if test="includeChildDept != null and includeChildDept != ''">include_child_dept,</if>
+            <if test="simpleFlowId != null and simpleFlowId != ''">simple_flow_id,</if>
+            <if test="flowMode != null and flowMode != ''">flow_mode,</if>
+            <if test="builtinPrintKey != null and builtinPrintKey != ''">builtin_print_key,</if>
+            <if test="revokeLimitMinutes != null">revoke_limit_minutes,</if>
+            <if test="allowEditAfterSubmit != null and allowEditAfterSubmit != ''">allow_edit_after_submit,</if>
+            <if test="allowSubmitForOther != null and allowSubmitForOther != ''">allow_submit_for_other,</if>
+            <if test="allowApproverRevoke != null and allowApproverRevoke != ''">allow_approver_revoke,</if>
+            <if test="allowBatchApprove != null and allowBatchApprove != ''">allow_batch_approve,</if>
+            <if test="approverDedup != null and approverDedup != ''">approver_dedup,</if>
+            <if test="forwardScope != null and forwardScope != ''">forward_scope,</if>
+            <if test="remark != null and remark != ''">remark,</if>
             <if test="delFlag != null">del_flag,</if>
             <if test="sort != null">sort,</if>
             <if test="mainTextFlag != null">main_text_flag,</if>
@@ -87,6 +122,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="formKey != null and formKey != ''">#{formKey},</if>
             <if test="formType != null and formType != ''">#{formType},</if>
             <if test="formCode != null and formCode != ''">#{formCode},</if>
+            <!-- 2.0（B1 §2.1）新增 13 列（值） -->
+            <if test="icon != null and icon != ''">#{icon},</if>
+            <if test="submitScopeType != null and submitScopeType != ''">#{submitScopeType},</if>
+            <if test="includeChildDept != null and includeChildDept != ''">#{includeChildDept},</if>
+            <if test="simpleFlowId != null and simpleFlowId != ''">#{simpleFlowId},</if>
+            <if test="flowMode != null and flowMode != ''">#{flowMode},</if>
+            <if test="builtinPrintKey != null and builtinPrintKey != ''">#{builtinPrintKey},</if>
+            <if test="revokeLimitMinutes != null">#{revokeLimitMinutes},</if>
+            <if test="allowEditAfterSubmit != null and allowEditAfterSubmit != ''">#{allowEditAfterSubmit},</if>
+            <if test="allowSubmitForOther != null and allowSubmitForOther != ''">#{allowSubmitForOther},</if>
+            <if test="allowApproverRevoke != null and allowApproverRevoke != ''">#{allowApproverRevoke},</if>
+            <if test="allowBatchApprove != null and allowBatchApprove != ''">#{allowBatchApprove},</if>
+            <if test="approverDedup != null and approverDedup != ''">#{approverDedup},</if>
+            <if test="forwardScope != null and forwardScope != ''">#{forwardScope},</if>
+            <if test="remark != null and remark != ''">#{remark},</if>
             <if test="delFlag != null">#{delFlag},</if>
             <if test="sort != null">#{sort},</if>
             <if test="mainTextFlag != null">#{mainTextFlag},</if>
@@ -112,6 +162,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="formKey != null and formKey != ''">form_key = #{formKey},</if>
             <if test="formType != null and formType != ''">form_type = #{formType},</if>
             <if test="formCode != null and formCode != ''">form_code = #{formCode},</if>
+            <!-- 2.0（B1 §2.1）新增 13 列：update 是"五处同步"的第 5 处 -->
+            <if test="icon != null and icon != ''">icon = #{icon},</if>
+            <if test="submitScopeType != null and submitScopeType != ''">submit_scope_type = #{submitScopeType},</if>
+            <if test="includeChildDept != null and includeChildDept != ''">include_child_dept = #{includeChildDept},</if>
+            <if test="simpleFlowId != null and simpleFlowId != ''">simple_flow_id = #{simpleFlowId},</if>
+            <if test="flowMode != null and flowMode != ''">flow_mode = #{flowMode},</if>
+            <if test="builtinPrintKey != null and builtinPrintKey != ''">builtin_print_key = #{builtinPrintKey},</if>
+            <if test="revokeLimitMinutes != null">revoke_limit_minutes = #{revokeLimitMinutes},</if>
+            <if test="allowEditAfterSubmit != null and allowEditAfterSubmit != ''">allow_edit_after_submit = #{allowEditAfterSubmit},</if>
+            <if test="allowSubmitForOther != null and allowSubmitForOther != ''">allow_submit_for_other = #{allowSubmitForOther},</if>
+            <if test="allowApproverRevoke != null and allowApproverRevoke != ''">allow_approver_revoke = #{allowApproverRevoke},</if>
+            <if test="allowBatchApprove != null and allowBatchApprove != ''">allow_batch_approve = #{allowBatchApprove},</if>
+            <if test="approverDedup != null and approverDedup != ''">approver_dedup = #{approverDedup},</if>
+            <if test="forwardScope != null and forwardScope != ''">forward_scope = #{forwardScope},</if>
+            <if test="remark != null and remark != ''">remark = #{remark},</if>
             <if test="delFlag != null">del_flag = #{delFlag},</if>
             <if test="sort != null">sort = #{sort},</if>
             <if test="mainTextFlag != null">main_text_flag = #{mainTextFlag},</if>
@@ -155,4 +220,36 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </where>
         order by sort asc, create_time desc
     </select>
+
+    <!-- 2.0（B1 §3.2）：部门范围"含下级"判定用平台既有的物化路径 -->
+    <select id="selectDeptAncestors" parameterType="String" resultType="java.lang.String">
+        select ancestors from sys_dept where dept_id = #{deptId}
+    </select>
+
+    <!-- 2.0（B1 §3.4）：按绑定流程反查模板ID（发布接口只拿到流程 id，要做模板级授权） -->
+    <select id="selectTemplateIdBySimpleFlowId" parameterType="String" resultType="java.lang.String">
+        select id from t_template
+        where simple_flow_id = #{simpleFlowId} and del_flag = '0'
+        order by update_time desc, create_time desc
+        limit 1
+    </select>
+    <!-- 2.0 B1 §7.10：动态表单换版本后，把模板显式改指到新版本 -->
+    <update id="repointFormId">
+        update t_template
+           set form_id = #{newFormId},
+               update_time = now()
+         where form_id = #{oldFormId}
+    </update>
+
+    <select id="countByFormId" resultType="int">
+        select count(*) from t_template where form_id = #{formId}
+    </select>
+
+    <select id="countByFormKey" resultType="int">
+        select count(*)
+          from t_template t
+          join t_template_dynamic_form f on f.id = t.form_id
+         where f.form_key = #{formKey}
+    </select>
+
 </mapper>

@@ -2,6 +2,7 @@ package com.ruoyi.workflow.print.service;
 
 import com.ruoyi.workflow.domain.PrintLog;
 import com.ruoyi.workflow.domain.PrintTemplate;
+import com.ruoyi.workflow.print.model.BuiltinTemplateOption;
 import com.ruoyi.workflow.print.model.PrintData;
 
 import java.util.List;
@@ -46,4 +47,31 @@ public interface IPrintService {
 
     /** 某单据的打印记录 */
     List<PrintLog> listLogs(String businessId);
+
+    /* ==================== 内置版式（2.0 B2 / REQ-PRINT-011、REQ-PRINT-013） ==================== */
+
+    /**
+     * 内置版式清单（4 个 key + 展示名称）。
+     *
+     * <p> 客户端拿它渲染"选择内置模板"的下拉 —— 不让前端再抄一份名称常量。 </p>
+     */
+    List<BuiltinTemplateOption> listBuiltinTemplates();
+
+    /**
+     * 某个内置版式的字段映射（版式常量本身）。
+     *
+     * <p> 客户端拿它做配置页的"填入内置版式" —— 内置版式常量以后端为**唯一真源**。 </p>
+     *
+     * @param builtinKey 版式键；未登记的值回退 {@code contract}（不抛异常，记 warning）
+     */
+    Object getBuiltinFieldMap(String builtinKey);
+
+    /**
+     * 保存单据模板绑定的内置版式键（配置页"选择内置模板"模式）。
+     *
+     * <p> 只改这一列。非法 key **拒绝**并抛业务异常（与模板保存链路同一口径）。 </p>
+     *
+     * @return 影响行数（模板不存在或已删除时为 0）
+     */
+    int saveBuiltinPrintKey(String templateId, String builtinKey);
 }

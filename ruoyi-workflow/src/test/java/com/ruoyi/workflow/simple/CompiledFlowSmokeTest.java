@@ -35,7 +35,7 @@ public class CompiledFlowSmokeTest {
             + "&allowPublicKeyRetrieval=true&useSSL=false&nullCatalogMeansCurrent=true";
 
     public static void main(String[] args) throws Exception {
-        String bpmn = args.length > 0 ? args[0] : "H:/dsh/ruoyiOA/.cache/contractApproval.bpmn";
+        String bpmn = args.length > 0 ? args[0] : "F:/dsh/ruoyiOA/.cache/contractApproval.bpmn";
 
         ProcessEngine engine = ProcessEngineConfiguration
                 .createStandaloneProcessEngineConfiguration()

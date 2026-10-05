@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  往来单位档案（客户 / 供应商）的 Mapper（B3 主数据域）。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，且 namespace 与接口全限定名一致，
+  否则扫描不到（mapperLocations: classpath*:mapper/**/*Mapper.xml）。
+
+  口径说明：
+    · 列表方法只按传入条件筛选，enable_flag 为 null 表示"不限"；
+      "只看启用"由服务层的 selectXxxOptions() 显式置 '1' 后复用同一段 SQL。
+    · 查重方法不排除停用行 —— 编码与名称全局唯一，停用项也占号。
+    · update 不改 code，其余业务列全量覆盖（含把可空列置 null 的场景）。
+    · 引用统计依赖 t_ctms_contract，该表可能尚未创建（B3 第 4 组），
+      所以服务层先问 existsContractTable()，为 0 时不执行统计。
+-->
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsPartnerMapper">
+
+    <!-- ==================== 客户档案 ==================== -->
+
+    <resultMap type="CtmsCustomer" id="CtmsCustomerResult">
+        <id     property="id"           column="id"            />
+        <result property="code"         column="code"          />
+        <result property="name"         column="name"          />
+        <result property="shortName"    column="short_name"    />
+        <result property="taxNo"        column="tax_no"        />
+        <result property="contactName"  column="contact_name"  />
+        <result property="contactPhone" column="contact_phone" />
+        <result property="address"      column="address"       />
+        <result property="bankName"     column="bank_name"     />
+        <result property="bankAccount"  column="bank_account"  />
+        <result property="creditLimit"  column="credit_limit"  />
+        <result property="level"        column="level"         />
+        <result property="enableFlag"   column="enable_flag"   />
+        <result property="remark"       column="remark"        />
+        <result property="createId"     column="create_id"     />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateId"     column="update_id"     />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+    </resultMap>
+
+    <sql id="selectCustomerVo">
+        select id, code, name, short_name, tax_no, contact_name, contact_phone,
+               address, bank_name, bank_account, credit_limit, level, enable_flag,
+               remark, create_id, create_by, create_time, update_id, update_by, update_time
+          from t_ctms_customer
+    </sql>
+
+    <select id="selectCustomerList" parameterType="CtmsCustomer" resultMap="CtmsCustomerResult">
+        <include refid="selectCustomerVo"/>
+        <where>
+            <if test="code != null and code != ''">
+                AND code like concat('%', #{code}, '%')
+            </if>
+            <if test="name != null and name != ''">
+                AND name like concat('%', #{name}, '%')
+            </if>
+            <if test="enableFlag != null and enableFlag != ''">
+                AND enable_flag = #{enableFlag}
+            </if>
+        </where>
+        order by code asc
+    </select>
+
+    <select id="selectCustomerById" parameterType="String" resultMap="CtmsCustomerResult">
+        <include refid="selectCustomerVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectCustomerByCode" parameterType="String" resultMap="CtmsCustomerResult">
+        <include refid="selectCustomerVo"/>
+        where code = #{code} limit 1
+    </select>
+
+    <select id="selectCustomerByName" parameterType="String" resultMap="CtmsCustomerResult">
+        <include refid="selectCustomerVo"/>
+        where name = #{name} limit 1
+    </select>
+
+    <insert id="insertCustomer" parameterType="CtmsCustomer">
+        insert into t_ctms_customer(
+            id, code, name, short_name, tax_no, contact_name, contact_phone,
+            address, bank_name, bank_account, credit_limit, level, enable_flag,
+            remark, create_id, create_by, create_time, update_time
+        )values(
+            #{id}, #{code}, #{name}, #{shortName}, #{taxNo}, #{contactName}, #{contactPhone},
+            #{address}, #{bankName}, #{bankAccount}, #{creditLimit}, #{level}, #{enableFlag},
+            #{remark}, #{createId}, #{createBy}, sysdate(), sysdate()
+        )
+    </insert>
+
+    <!-- 编码不可改：列清单里刻意不含 code -->
+    <update id="updateCustomer" parameterType="CtmsCustomer">
+        update t_ctms_customer
+           set name          = #{name},
+               short_name    = #{shortName},
+               tax_no        = #{taxNo},
+               contact_name  = #{contactName},
+               contact_phone = #{contactPhone},
+               address       = #{address},
+               bank_name     = #{bankName},
+               bank_account  = #{bankAccount},
+               credit_limit  = #{creditLimit},
+               level         = #{level},
+               enable_flag   = #{enableFlag},
+               remark        = #{remark},
+               update_id     = #{updateId},
+               update_by     = #{updateBy},
+               update_time   = sysdate()
+         where id = #{id}
+    </update>
+
+    <delete id="deleteCustomerById" parameterType="String">
+        delete from t_ctms_customer where id = #{id}
+    </delete>
+
+    <select id="countCustomerReferences" parameterType="String" resultType="int">
+        select count(*) from t_ctms_contract where customer_id = #{id}
+    </select>
+
+    <!-- ==================== 供应商档案 ==================== -->
+
+    <resultMap type="CtmsSupplier" id="CtmsSupplierResult">
+        <id     property="id"           column="id"            />
+        <result property="code"         column="code"          />
+        <result property="name"         column="name"          />
+        <result property="shortName"    column="short_name"    />
+        <result property="taxNo"        column="tax_no"        />
+        <result property="contactName"  column="contact_name"  />
+        <result property="contactPhone" column="contact_phone" />
+        <result property="address"      column="address"       />
+        <result property="bankName"     column="bank_name"     />
+        <result property="bankAccount"  column="bank_account"  />
+        <result property="creditLimit"  column="credit_limit"  />
+        <result property="level"        column="level"         />
+        <result property="supplyScope"  column="supply_scope"  />
+        <result property="paymentDays"  column="payment_days"  />
+        <result property="enableFlag"   column="enable_flag"   />
+        <result property="remark"       column="remark"        />
+        <result property="createId"     column="create_id"     />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateId"     column="update_id"     />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+    </resultMap>
+
+    <sql id="selectSupplierVo">
+        select id, code, name, short_name, tax_no, contact_name, contact_phone,
+               address, bank_name, bank_account, credit_limit, level, supply_scope,
+               payment_days, enable_flag, remark, create_id, create_by, create_time,
+               update_id, update_by, update_time
+          from t_ctms_supplier
+    </sql>
+
+    <select id="selectSupplierList" parameterType="CtmsSupplier" resultMap="CtmsSupplierResult">
+        <include refid="selectSupplierVo"/>
+        <where>
+            <if test="code != null and code != ''">
+                AND code like concat('%', #{code}, '%')
+            </if>
+            <if test="name != null and name != ''">
+                AND name like concat('%', #{name}, '%')
+            </if>
+            <if test="enableFlag != null and enableFlag != ''">
+                AND enable_flag = #{enableFlag}
+            </if>
+        </where>
+        order by code asc
+    </select>
+
+    <select id="selectSupplierById" parameterType="String" resultMap="CtmsSupplierResult">
+        <include refid="selectSupplierVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectSupplierByCode" parameterType="String" resultMap="CtmsSupplierResult">
+        <include refid="selectSupplierVo"/>
+        where code = #{code} limit 1
+    </select>
+
+    <select id="selectSupplierByName" parameterType="String" resultMap="CtmsSupplierResult">
+        <include refid="selectSupplierVo"/>
+        where name = #{name} limit 1
+    </select>
+
+    <insert id="insertSupplier" parameterType="CtmsSupplier">
+        insert into t_ctms_supplier(
+            id, code, name, short_name, tax_no, contact_name, contact_phone,
+            address, bank_name, bank_account, credit_limit, level, supply_scope,
+            payment_days, enable_flag, remark, create_id, create_by, create_time, update_time
+        )values(
+            #{id}, #{code}, #{name}, #{shortName}, #{taxNo}, #{contactName}, #{contactPhone},
+            #{address}, #{bankName}, #{bankAccount}, #{creditLimit}, #{level}, #{supplyScope},
+            #{paymentDays}, #{enableFlag}, #{remark}, #{createId}, #{createBy}, sysdate(), sysdate()
+        )
+    </insert>
+
+    <!-- 编码不可改：列清单里刻意不含 code -->
+    <update id="updateSupplier" parameterType="CtmsSupplier">
+        update t_ctms_supplier
+           set name          = #{name},
+               short_name    = #{shortName},
+               tax_no        = #{taxNo},
+               contact_name  = #{contactName},
+               contact_phone = #{contactPhone},
+               address       = #{address},
+               bank_name     = #{bankName},
+               bank_account  = #{bankAccount},
+               credit_limit  = #{creditLimit},
+               level         = #{level},
+               supply_scope  = #{supplyScope},
+               payment_days  = #{paymentDays},
+               enable_flag   = #{enableFlag},
+               remark        = #{remark},
+               update_id     = #{updateId},
+               update_by     = #{updateBy},
+               update_time   = sysdate()
+         where id = #{id}
+    </update>
+
+    <delete id="deleteSupplierById" parameterType="String">
+        delete from t_ctms_supplier where id = #{id}
+    </delete>
+
+    <select id="countSupplierReferences" parameterType="String" resultType="int">
+        select count(*) from t_ctms_contract where supplier_id = #{id}
+    </select>
+
+    <!-- ==================== 合同表存在性 ==================== -->
+
+    <!--
+      只查 information_schema 元数据，不触碰 t_ctms_contract 本身，
+      所以表不存在时本语句依然能正常返回 0（这正是引用统计的前置探测手段）。
+    -->
+    <select id="existsContractTable" resultType="int">
+        select count(*) from information_schema.tables
+         where table_schema = database() and table_name = 't_ctms_contract'
+    </select>
+
+</mapper>

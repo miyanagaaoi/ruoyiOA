@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workflow.mapper.PrintRefMapper">
+
+    <!--
+      发起人组织：t_workflow_form.create_id → sys_user → sys_dept。
+
+      ⚠ 这里**不能**用流程记录里的 start_user_name / start_dept_name：
+        ruoyi-flowable 全仓没有任何 setStartUserName / setStartDeptName（实测接口恒返回 null），
+        所以打印件上的「报送人/报送单位」一直是空的。单据自身的 create_id 才是可靠来源。
+      ⚠ 不用 nick_name 判空：RuoYi 允许昵称为空，退回账号名。
+    -->
+    <select id="selectSubmitterOrgByBusinessId" parameterType="String"
+            resultType="com.ruoyi.workflow.print.model.SubmitterOrg">
+        select u.user_id        as userId,
+               ifnull(nullif(u.nick_name, ''), u.user_name) as userName,
+               d.dept_id        as deptId,
+               d.dept_name      as deptName,
+               d.ancestors      as ancestors
+          from t_workflow_form f
+          join sys_user u on u.user_id = f.create_id
+          left join sys_dept d on d.dept_id = u.dept_id
+         where f.id = #{businessId}
+         limit 1
+    </select>
+
+    <select id="selectDeptNameById" parameterType="String" resultType="java.lang.String">
+        select dept_name from sys_dept where dept_id = #{deptId} limit 1
+    </select>
+
+    <!--
+      抄送栏（showCcNode='1' 才由前端出栏）。
+
+      ⚠ 抄送 = t_workflow_todo 里 handle_type='6' 的一条只读待办
+        （TodoHandleTypeEnum.COPY("6","抄送")，见 TodoServiceImpl.buildCopyTaskTodo）。
+        抄送人/时间/节点名分别落在 cur_handler_name / send_time / cur_node。
+      ⚠ 已阅办的抄送**仍在这张表**（read_flag='1'），所以不要把 read_flag 当过滤条件 ——
+        否则打印件上的抄送栏会随着"已阅"逐渐消失。
+      用显式别名而不是开 mapUnderscoreToCamelCase：结果列名与属性名一一对应，不依赖全局配置。
+    -->
+    <select id="selectCcNodesByBusinessId" parameterType="String"
+            resultType="com.ruoyi.workflow.print.model.PrintCcNode">
+        select cur_node         as nodeName,
+               cur_handler_name as handlerName,
+               send_time        as sendTime,
+               read_flag        as readFlag
+          from t_workflow_todo
+         where business_id = #{businessId}
+           and handle_type = '6'
+           and del_flag = '0'
+         order by send_time, cur_handler_name
+    </select>
+
+</mapper>

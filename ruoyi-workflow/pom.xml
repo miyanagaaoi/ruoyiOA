@@ -88,5 +88,19 @@
             <artifactId>ruoyi-worksetting</artifactId>
             <version>${person.version}</version>
         </dependency>
+
+        <!--
+          单元测试（2.0 B2 §1.4 / §1.5 / §1.6）。
+
+          之前本模块**没有任何测试框架**：`src/test` 下只有几个 main() 形式的冒烟程序，
+          `mvn test` 跑出来是 "Tests run: 0"。内置版式的标题与栏目是本次变更的验收依据
+          （AC-61 要与 PRD 附录 A 逐项对应），必须有可执行、可断言的用例，所以引入 JUnit 4。
+          版本由 spring-boot-dependencies 统一管理，不在这里写死。
+        -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

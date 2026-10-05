@@ -8,6 +8,7 @@ import com.ruoyi.common.exception.base.BaseException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.template.domain.Template;
 import com.ruoyi.template.service.ITemplateService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,7 @@ import java.util.Objects;
  *
  * @Author wocurr.com
  */
+@Slf4j
 @Service
 public class BizFLowServiceImpl implements IBizFLowService {
 
@@ -35,11 +37,15 @@ public class BizFLowServiceImpl implements IBizFLowService {
         if (Objects.isNull(template)) {
             throw new BaseException("未找到模板");
         }
-        if (StringUtils.isBlank(template.getType())) {
-            throw new BaseException("模板类型为空");
-        }
         if (StringUtils.isBlank(template.getFormCode())) {
             throw new BaseException("表单编码为空");
+        }
+        // 2.0（B1 §3.5，REQ-FORM-003）：`type`（模板分类/分组）为空不再是硬错误。
+        // 发起页现在把这类模板归入「未分类」组并允许发起（delta spec workbook/form-definition：
+        // 「它在发起审批页面出现在「未分类」分组下并可被有权用户发起」）。
+        // 这里只提示一条日志：真正决定用哪个业务实现的是 formCode（下一行），与 type 无关。
+        if (StringUtils.isBlank(template.getType())) {
+            log.warn("模板未设置分类（type 为空），按流程继续提交：templateId={}", template.getId());
         }
         IBizFLowSubmitService bizFLowSubmitImpl = bizFlowSubmitFactory.getBizFLowSubmitImplByType(template.getFormCode());
         if (Objects.isNull(bizFLowSubmitImpl)) {

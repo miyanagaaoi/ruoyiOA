@@ -36,6 +36,29 @@ public interface ISimpleFlowService {
     /** 发布：校验 → 编译 → 部署 → 版本 +1 → 写快照 */
     FlowSimple publish(String id, String remark);
 
+    /**
+     * 发布并把流程绑定回写到模板（2.0 B1 §4.2）。
+     *
+     * <p> 与 {@link #publish(String, String)} 同事务：若回写失败（例如模板被删），
+     * 整次发布回滚 —— 不留下"引擎已部署、模板未绑定"的悬空态。 </p>
+     *
+     * @param id         流程主键
+     * @param remark     发布备注
+     * @param templateId 要回写的模板ID；为空时等价于 {@link #publish(String, String)}
+     */
+    FlowSimple publish(String id, String remark, String templateId);
+
+    /**
+     * 按模板取用或创建流程草稿（2.0 B1 §4.1）。
+     *
+     * <p> 模板已绑定 → 返回其草稿（**不覆盖**）；未绑定 → 按
+     * {@code tpl_ + 模板ID前8位} 生成流程标识、创建草稿并回写绑定。 </p>
+     *
+     * @param templateId 模板ID
+     * @return 该模板的流程草稿
+     */
+    FlowSimple getOrCreateByTemplate(String templateId);
+
     /** 版本历史（倒序） */
     List<FlowSimpleHistory> history(String defKey);
 

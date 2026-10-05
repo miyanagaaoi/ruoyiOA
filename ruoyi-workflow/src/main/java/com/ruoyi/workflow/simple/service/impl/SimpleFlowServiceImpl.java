@@ -1,6 +1,8 @@
 package com.ruoyi.workflow.simple.service.impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.flowable.factory.FlowServiceFactory;
@@ -18,6 +20,7 @@ import com.ruoyi.template.domain.Template;
 import com.ruoyi.template.domain.TemplateNodeFieldAuth;
 import com.ruoyi.template.service.ITemplateNodeFieldAuthService;
 import com.ruoyi.template.service.ITemplateService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.engine.repository.ProcessDefinition;
@@ -38,6 +41,7 @@ import java.util.stream.Collectors;
  *
  * @author 二开
  */
+@Slf4j
 @Service
 public class SimpleFlowServiceImpl extends FlowServiceFactory implements ISimpleFlowService {
 
@@ -45,6 +49,17 @@ public class SimpleFlowServiceImpl extends FlowServiceFactory implements ISimple
     private static final String STATUS_DRAFT = "0";
     /** 已发布 */
     private static final String STATUS_PUBLISHED = "1";
+    /** 流程模式：0-简化流程（B1 §4.1，与 t_template.flow_mode 同口径） */
+    public static final String FLOW_MODE_SIMPLE = "0";
+    /**
+     * 模板派生流程标识的前缀（B1 §4.1）。
+     *
+     * <p> <b>派生规则只有这一处定义</b> —— {@code tools/audit/audit-flow-template-binding.js}
+     * 会检查全仓没有第二处拼 {@code tpl_} 前缀的地方，避免前端/后端各算一套导致标识对不上。 </p>
+     */
+    public static final String TEMPLATE_DEF_KEY_PREFIX = "tpl_";
+    /** 取模板ID的前 8 位做后缀 */
+    private static final int TEMPLATE_DEF_KEY_ID_LEN = 8;
 
     @Autowired
     private FlowSimpleMapper flowSimpleMapper;
@@ -113,6 +128,8 @@ public class SimpleFlowServiceImpl extends FlowServiceFactory implements ISimple
         if (db == null) {
             throw new ServiceException("流程不存在或已删除：" + flowSimple.getId());
         }
+        // 2.0（B1 §3.4）：编辑已绑定模板的流程，同样要模板级授权（未绑定模板则跳过）
+        templateService.checkFlowManageByFlowId(flowSimple.getId());
         if (STATUS_PUBLISHED.equals(db.getStatus()) && !StringUtils.equals(db.getDefKey(), def.getKey())) {
             throw new ServiceException("已发布的流程不允许修改 key");
         }
@@ -139,8 +156,17 @@ public class SimpleFlowServiceImpl extends FlowServiceFactory implements ISimple
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public FlowSimple publish(String id, String remark) {
+        return publish(id, remark, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public FlowSimple publish(String id, String remark, String templateId) {
+        // 0) 模板级授权（2.0 B1 §3.4，REQ-PERM-005）：该流程若已绑定模板，
+        //    只有流程管理员/创建人/有模板编辑权限者能发布；未绑定模板则不做此校验。
+        //    必须放在最前面：失败时流程定义与模板绑定都不允许有任何变化。
+        templateService.checkFlowManageByFlowId(id);
         FlowSimple db = requireById(id);
         SimpleFlowDef def = parse(db.getContent());
 
@@ -213,7 +239,139 @@ public class SimpleFlowServiceImpl extends FlowServiceFactory implements ISimple
         //    发布时**同时落库**，供提交时做服务端强制 —— 只靠前端置灰不算通过。
         syncNodeFieldAuth(def);
 
+        // 8) 回写模板绑定（2.0 B1 §4.2/§4.3/§4.4）
+        //    与部署同一事务：回写失败（如模板已被删）会连带回滚本次部署，
+        //    不留下"界面说发布了、发起时找不到流程"的静默悬空态。
+        //    第 4.3 条：回写只认当前启用行 —— 调用方给 templateId 就用它，
+        //    没给（rollback 等内部调用）就按 simple_flow_id 反查，同样落在启用行上。
+        String bindTemplateId = StringUtils.isNotBlank(templateId)
+                ? templateId
+                : templateService.getTemplateIdBySimpleFlowId(db.getId());
+        if (StringUtils.isNotBlank(bindTemplateId)) {
+            templateService.saveFlowBinding(bindTemplateId, db.getId(), def.getKey(), FLOW_MODE_SIMPLE);
+        }
+
         return flowSimpleMapper.selectById(db.getId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public FlowSimple getOrCreateByTemplate(String templateId) {
+        if (StringUtils.isBlank(templateId)) {
+            throw new ServiceException("模板ID为空");
+        }
+        // 授权：能管理这条模板的流程，才能取/建它的草稿（§3.4）
+        templateService.checkFlowManagePermission(templateId);
+        Template template = templateService.getTemplateById(templateId);
+        if (template == null || "1".equals(template.getDelFlag())) {
+            throw new ServiceException("未找到模板：" + templateId);
+        }
+
+        // 1) 已绑定且草稿还在 → 直接返回，**绝不覆盖已有草稿**（§4.1：连续调用返回同一个流程 id）
+        if (StringUtils.isNotBlank(template.getSimpleFlowId())) {
+            FlowSimple bound = flowSimpleMapper.selectById(template.getSimpleFlowId());
+            if (bound != null) {
+                return bound;
+            }
+            // 绑定指向的草稿已被删除：清掉悬空引用后重建
+            log.warn("模板绑定的流程草稿不存在，重建草稿：templateId={} staleFlowId={}",
+                    templateId, template.getSimpleFlowId());
+        }
+
+        // 2) 流程标识由系统派生（用户不手输）：tpl_ + 模板ID 前 8 位
+        String defKey = uniqueDefKey(buildTemplateDefKey(templateId));
+
+        // 3) 建草稿
+        String userId = SecurityUtils.getUserId();
+        String userName = SecurityUtils.getUsername();
+        FlowSimple flow = new FlowSimple();
+        flow.setId(uuid());
+        flow.setDefKey(defKey);
+        flow.setName(StringUtils.defaultIfBlank(template.getName(), defKey));
+        flow.setCategory(StringUtils.defaultIfBlank(template.getType(), "template"));
+        flow.setContent(defaultDraftContent(template, defKey));
+        flow.setSchemaVersion(1);
+        flow.setStatus(STATUS_DRAFT);
+        flow.setVersion(0);
+        flow.setCreateId(userId);
+        flow.setCreateBy(userName);
+        flow.setUpdateId(userId);
+        flow.setUpdateBy(userName);
+        flowSimpleMapper.insert(flow);
+
+        // 4) 回写绑定：此时还没发布，defKey 传 null（不动模板已有的 def_key）
+        templateService.saveFlowBinding(templateId, flow.getId(), null, FLOW_MODE_SIMPLE);
+        return flowSimpleMapper.selectById(flow.getId());
+    }
+
+    /**
+     * 流程标识派生规则：{@code tpl_} + 模板ID前 8 位。
+     *
+     * <p> <b>全仓唯一一处定义</b>（静态审计会校验）——前端只展示后端给的值，不自己算。 </p>
+     */
+    public static String buildTemplateDefKey(String templateId) {
+        String id = StringUtils.defaultString(templateId);
+        String head = id.length() > TEMPLATE_DEF_KEY_ID_LEN ? id.substring(0, TEMPLATE_DEF_KEY_ID_LEN) : id;
+        return TEMPLATE_DEF_KEY_PREFIX + head;
+    }
+
+    /** defKey 在未删除范围内唯一；被占用时加数字后缀（正常情况下同一模板第二次调用会命中"已绑定"分支） */
+    private String uniqueDefKey(String base) {
+        String candidate = base;
+        int i = 1;
+        while (flowSimpleMapper.selectByDefKey(candidate) != null) {
+            i++;
+            if (i > 50) {
+                throw new ServiceException("流程标识生成失败：" + base + " 已被占用");
+            }
+            candidate = base + "_" + i;
+        }
+        return candidate;
+    }
+
+    /**
+     * 草稿的初始内容：开始 → 部门负责人审批 → 结束。
+     *
+     * <p> 首个审批节点用「部门负责人」（无需人员ID，也避开校验规则 V-3 对
+     * 首个节点不能用「角色 / 发起人自选」的限制）；用户可在设计器里继续改。 </p>
+     */
+    private String defaultDraftContent(Template template, String defKey) {
+        JSONObject def = new JSONObject();
+        def.put("schemaVersion", 1);
+        def.put("key", defKey);
+        def.put("name", StringUtils.defaultIfBlank(template.getName(), defKey));
+        def.put("category", StringUtils.defaultIfBlank(template.getType(), "template"));
+
+        JSONArray nodes = new JSONArray();
+        nodes.add(newNode("start", SimpleFlowDef.T_START, "开始"));
+
+        JSONObject approve = newNode("n1", SimpleFlowDef.T_APPROVE, "部门负责人审批");
+        JSONObject assignee = new JSONObject();
+        assignee.put("source", SimpleFlowDef.S_DEPT_LEADER);
+        assignee.put("userIds", new JSONArray());
+        assignee.put("roleIds", new JSONArray());
+        assignee.put("level", 1);
+        approve.put("assignee", assignee);
+        approve.put("multiMode", SimpleFlowDef.M_SINGLE);
+        approve.put("signMode", "NONE");
+        JSONArray buttons = new JSONArray();
+        buttons.add("agree");
+        buttons.add("return");
+        buttons.add("reject");
+        approve.put("buttons", buttons);
+        nodes.add(approve);
+
+        nodes.add(newNode("end", SimpleFlowDef.T_END, "结束"));
+        def.put("nodes", nodes);
+        return def.toJSONString();
+    }
+
+    private JSONObject newNode(String id, String type, String name) {
+        JSONObject node = new JSONObject();
+        node.put("id", id);
+        node.put("type", type);
+        node.put("name", name);
+        return node;
     }
 
     /**

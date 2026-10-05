@@ -75,4 +75,17 @@ public class PrintTemplate implements Serializable {
     private String updateId;
     private String updateBy;
     private Date updateTime;
+
+    /**
+     * <b>内置版式键</b>（{@code contract} / {@code fund} / {@code matter} / {@code payment}）。
+     *
+     * <p> ⚠ <b>不是本表的列</b>：{@code t_template_print_template} 里没有这一列，
+     * 它只在"回退到内置版式"时由服务端赋值（真实来源是 {@code t_template.builtin_print_key}），
+     * 好让客户端能区分"这套内置版式是哪一套"：
+     * 前端据此决定排版路径 —— {@code contract} 保持升级前的"按表单 schema 自动排版"（零回归锚点），
+     * 另外三套以版式常量为准（为固定纸质表单定制的栏目），见 {@code print/index.vue#baseRows}。 </p>
+     *
+     * <p> 自定义模板（{@code t_tpl.id} 有值）该字段恒为 null。 </p>
+     */
+    private String builtinKey;
 }

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.ruoyi</groupId>
+        <artifactId>ruoyi</artifactId>
+        <version>3.9.1</version>
+    </parent>
+
+    <artifactId>ruoyi-ctms</artifactId>
+    <version>1.0.1</version>
+    <description>合同台账与往来单位档案（2.0 B3）；B4 在同一模块追加单据/库存域</description>
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <!--
+      依赖口径（design.md D-1 + REQ-NFR-001 模块边界）：
+
+        · ruoyi-common   —— BaseController / AjaxResult / SecurityUtils / @Log / 异常；
+                            ⚠ 它已经带了 `spring-boot-starter-security`，所以
+                            `@PreAuthorize("@ss.hasPermi('ctms:*')")` 在本模块可用，不必再单列依赖。
+        · ruoyi-system   —— 组织与账号（数据范围要用 `sys_dept.ancestors` 与 `sys_user`）
+        · ruoyi-serial   —— 编号：**只调它的 API**（ICodeGenService），不在这里重写编号能力
+        · ruoyi-file     —— 附件上传/存储能力（只复用，不重写）
+
+      ⚠ **禁止**在本模块引入或新建：第二套账号表/组织树/自研令牌/代码常量权限表，
+        以及任何"关闭认证即可访问"的后门（`oa-v2-overview` 的 platform/module-boundary）。
+        权限点真源是 `sys_menu` + `@PreAuthorize`；字典用 `sys_dict_*`；参数用 `sys_config`。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-system</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-serial</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-file</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+
+        <!--
+          单元测试（B3 §3）：档案的唯一性/必填/引用保护与物料域约束都是"规则 + 编排"，
+          做成不依赖 Spring 容器与数据库的表驱动用例最可靠（内存桩 Mapper，与 ruoyi-template
+          的 TemplateUpdateSemanticsCheck 同思路）。
+        -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

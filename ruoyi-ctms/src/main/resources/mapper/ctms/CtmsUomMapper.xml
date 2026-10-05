@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsUomMapper">
+
+	<!-- 计量单位（2.0 B3 §3.3）：update 不改 code，其余业务列全量覆盖 -->
+	<resultMap type="CtmsUom" id="CtmsUomResult">
+		<id     property="id"         column="id"          />
+		<result property="code"       column="code"        />
+		<result property="name"       column="name"        />
+		<result property="decimals"   column="decimals"    />
+		<result property="enableFlag" column="enable_flag" />
+		<result property="remark"     column="remark"      />
+		<result property="createId"   column="create_id"   />
+		<result property="createBy"   column="create_by"   />
+		<result property="createTime" column="create_time" />
+		<result property="updateId"   column="update_id"   />
+		<result property="updateBy"   column="update_by"   />
+		<result property="updateTime" column="update_time" />
+	</resultMap>
+
+	<sql id="selectUomVo">
+		select id, code, name, decimals, enable_flag, remark,
+		       create_id, create_by, create_time, update_id, update_by, update_time
+		from t_ctms_uom
+	</sql>
+
+	<select id="selectUomList" parameterType="CtmsUom" resultMap="CtmsUomResult">
+		<include refid="selectUomVo"/>
+		<where>
+			<if test="code != null and code != ''">
+				AND code like concat('%', #{code}, '%')
+			</if>
+			<if test="name != null and name != ''">
+				AND name like concat('%', #{name}, '%')
+			</if>
+			<if test="enableFlag != null and enableFlag != ''">
+				AND enable_flag = #{enableFlag}
+			</if>
+		</where>
+		order by code asc
+	</select>
+
+	<select id="selectUomById" parameterType="String" resultMap="CtmsUomResult">
+		<include refid="selectUomVo"/>
+		where id = #{id}
+	</select>
+
+	<!-- 编码全局唯一：停用项也占号，所以这里不带 enable_flag 过滤 -->
+	<select id="selectUomByCode" parameterType="String" resultMap="CtmsUomResult">
+		<include refid="selectUomVo"/>
+		where code = #{code}
+		limit 1
+	</select>
+
+	<select id="countProductsByUom" resultType="int">
+		select count(1) from t_ctms_product where uom_id = #{uomId}
+	</select>
+
+	<insert id="insertUom" parameterType="CtmsUom">
+		insert into t_ctms_uom(
+			id, code, name, decimals, enable_flag, remark,
+			create_time, create_id, create_by, update_time, update_id, update_by
+		)values(
+			#{id},
+			#{code},
+			#{name},
+			<choose>
+				<when test="decimals != null">#{decimals},</when>
+				<otherwise>2,</otherwise>
+			</choose>
+			<choose>
+				<when test="enableFlag != null and enableFlag != ''">#{enableFlag},</when>
+				<otherwise>'1',</otherwise>
+			</choose>
+			#{remark},
+			sysdate(),
+			#{createId},
+			#{createBy},
+			sysdate(),
+			#{updateId},
+			#{updateBy}
+		)
+	</insert>
+
+	<update id="updateUom" parameterType="CtmsUom">
+		update t_ctms_uom
+		set name = #{name},
+			decimals = #{decimals},
+			enable_flag = #{enableFlag},
+			remark = #{remark},
+			update_id = #{updateId},
+			update_by = #{updateBy},
+			update_time = sysdate()
+		where id = #{id}
+	</update>
+
+	<delete id="deleteUomById" parameterType="String">
+		delete from t_ctms_uom where id = #{id}
+	</delete>
+
+</mapper>

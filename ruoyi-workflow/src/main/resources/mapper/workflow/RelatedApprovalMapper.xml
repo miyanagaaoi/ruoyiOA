@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  单据关联关系（2.0 B1 §7，REQ-FORM-010 / AC-53..AC-55）
+
+  候选单据口径说明（服务端唯一口径）：
+    · 模板命中控件的候选清单（t_template_related_approval，由 ruoyi-template 维护）；
+    · 与被关联模板**同一分组**（t_template.type 相同，都为空也算同一组"未分类"）；
+    · **本人发起** —— 以 t_workflow_my_draft.create_id 为准。
+      为什么不查 t_workflow_todo：动态表单的 todo.business_id/title 大面积是 NULL
+      （异步消费者按需回填），拿它当"我发起的单据"会漏单。
+  @author 二开
+-->
+<mapper namespace="com.ruoyi.workflow.related.mapper.RelatedApprovalMapper">
+
+    <resultMap id="RelatedApprovalResult" type="com.ruoyi.workflow.related.domain.RelatedApproval">
+        <id     property="id"                column="id"                  />
+        <result property="businessId"        column="business_id"         />
+        <result property="fieldVmodel"       column="field_vmodel"        />
+        <result property="relatedBusinessId" column="related_business_id" />
+        <result property="relatedTemplateId" column="related_template_id" />
+        <result property="relatedBusinessNo" column="related_business_no" />
+        <result property="createId"          column="create_id"           />
+        <result property="createTime"        column="create_time"         />
+    </resultMap>
+
+    <resultMap id="CandidateResult" type="com.ruoyi.workflow.related.domain.RelatedApprovalCandidate">
+        <result property="businessId"   column="business_id"   />
+        <result property="businessNo"   column="business_no"   />
+        <result property="templateId"   column="template_id"   />
+        <result property="templateName" column="template_name" />
+        <result property="title"        column="title"         />
+        <result property="status"       column="status"        />
+        <result property="createTime"   column="create_time"   />
+    </resultMap>
+
+    <insert id="batchInsert">
+        insert into t_workflow_related_approval
+            (id, business_id, field_vmodel, related_business_id, related_template_id, related_business_no, create_id, create_time)
+        values
+        <foreach collection="rows" item="row" separator=",">
+            (#{row.id}, #{row.businessId}, #{row.fieldVmodel}, #{row.relatedBusinessId},
+             #{row.relatedTemplateId}, #{row.relatedBusinessNo}, #{row.createId}, #{row.createTime})
+        </foreach>
+    </insert>
+
+    <delete id="deleteByBusinessId" parameterType="String">
+        delete from t_workflow_related_approval where business_id = #{businessId}
+    </delete>
+
+    <select id="selectByBusinessId" parameterType="String" resultMap="RelatedApprovalResult">
+        select id, business_id, field_vmodel, related_business_id, related_template_id,
+               related_business_no, create_id, create_time
+          from t_workflow_related_approval
+         where business_id = #{businessId}
+         order by field_vmodel, create_time
+    </select>
+
+    <select id="selectByRelatedBusinessId" parameterType="String" resultMap="RelatedApprovalResult">
+        select id, business_id, field_vmodel, related_business_id, related_template_id,
+               related_business_no, create_id, create_time
+          from t_workflow_related_approval
+         where related_business_id = #{relatedBusinessId}
+         order by create_time desc
+    </select>
+
+    <select id="selectCandidates" resultMap="CandidateResult">
+        select d.biz_id                as business_id,
+               d.biz_title             as business_no,
+               d.template_id           as template_id,
+               t.name                  as template_name,
+               d.biz_title             as title,
+               d.status                as status,
+               d.create_time           as create_time
+          from t_workflow_my_draft d
+          join t_template t on t.id = d.template_id
+         where d.del_flag = '0'
+           and t.del_flag = '0'
+           and t.enable_flag = '1'
+           and d.create_id = #{userId}
+           and d.template_id in
+               <foreach collection="allowTemplateIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+           and ifnull(t.type, '') = ifnull(#{hostType}, '')
+        <if test="keyword != null and keyword != ''">
+           and (d.biz_title like concat('%', #{keyword}, '%') or d.biz_id like concat('%', #{keyword}, '%'))
+        </if>
+         order by d.create_time desc
+         limit 50
+    </select>
+
+    <select id="selectCandidateByBusinessId" parameterType="String" resultMap="CandidateResult">
+        select d.biz_id      as business_id,
+               d.biz_title   as business_no,
+               d.template_id as template_id,
+               t.name        as template_name,
+               d.biz_title   as title,
+               d.status      as status,
+               d.create_time as create_time
+          from t_workflow_my_draft d
+          join t_template t on t.id = d.template_id
+         where d.biz_id = #{businessId}
+           and d.del_flag = '0'
+         limit 1
+    </select>
+
+</mapper>

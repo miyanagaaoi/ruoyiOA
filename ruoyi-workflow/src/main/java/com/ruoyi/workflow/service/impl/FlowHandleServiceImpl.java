@@ -28,6 +28,7 @@ import com.ruoyi.template.domain.Template;
 import com.ruoyi.template.domain.TemplateMessageNotice;
 import com.ruoyi.template.enums.MessageNoticeTypeEnum;
 import com.ruoyi.template.service.ITemplateMessageNoticeService;
+import com.ruoyi.template.domain.Template;
 import com.ruoyi.template.service.ITemplateService;
 import com.ruoyi.todo.domain.Done;
 import com.ruoyi.todo.domain.Todo;
@@ -49,6 +50,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.bpmn.model.UserTask;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -952,7 +954,7 @@ public class FlowHandleServiceImpl implements IFlowHandleService {
     }
 
     /**
-     * 校验取回参数
+     * 校验取回参数（2.0 B1 §5.7：叠加模板的可撤销时限）
      *
      * @param flowTaskVo 流程对象
      */
@@ -963,6 +965,42 @@ public class FlowHandleServiceImpl implements IFlowHandleService {
         }
         setDefaultDone(done, flowTaskVo);
         flowTaskVo.setHandleType(TodoHandleTypeEnum.REVOKE.getCode());
+        validateRevokeWindow(flowTaskVo, done);
+    }
+
+    /**
+     * 模板级「提交后多少分钟内可撤销」的服务端强制（2.0 B1 §5.7，REQ-FORM-009）。
+     *
+     * <p> 口径：{@code t_template.revoke_limit_minutes = 0}（**默认值**）表示不限制 ——
+     * 存量模板因此零回归；配了正整数时，从**流程实例发起时间**开始计时，
+     * 超出即拒绝（delta spec：撤销被拒绝并提示超出可撤销时限）。 </p>
+     *
+     * <p> 取不到实例/时间时**放过**：这是策略校验，不该因为读不到快照就把正常办理卡死。 </p>
+     */
+    private void validateRevokeWindow(FlowTaskVo flowTaskVo, Done done) {
+        String templateId = StringUtils.defaultIfBlank(flowTaskVo.getTemplateId(), done.getTemplateId());
+        if (StringUtils.isBlank(templateId)) {
+            return;
+        }
+        Template template = templateService.getTemplateById(templateId);
+        if (template == null || template.getRevokeLimitMinutes() == null || template.getRevokeLimitMinutes() <= 0) {
+            return;
+        }
+        String procInsId = StringUtils.defaultIfBlank(flowTaskVo.getProcInsId(), done.getProcInstId());
+        if (StringUtils.isBlank(procInsId)) {
+            return;
+        }
+        HistoricProcessInstance instance = flowInstanceService.getHistoricProcessInstanceById(procInsId);
+        if (instance == null || instance.getStartTime() == null) {
+            return;
+        }
+        long minutes = (System.currentTimeMillis() - instance.getStartTime().getTime()) / 60000L;
+        if (minutes > template.getRevokeLimitMinutes()) {
+            log.warn("超出可撤销时限被拒：templateId={} procInsId={} 已过 {} 分钟 > 上限 {} 分钟",
+                    templateId, procInsId, minutes, template.getRevokeLimitMinutes());
+            throw new BaseException("已超出可撤销时限：该模板配置为提交后 "
+                    + template.getRevokeLimitMinutes() + " 分钟内可撤销，当前已过 " + minutes + " 分钟");
+        }
     }
 
     /**

@@ -20,6 +20,11 @@ public enum ComponentTypeEnum {
     CALC("design-calc"),
     /** 表单内嵌签名位（P1）：值 = fileId */
     SIGNATURE("design-signature"),
+    /**
+     * 关联审批控件（2.0 B1 §7，REQ-FORM-010 / AC-53）：值 = 被关联单据的业务ID数组。
+     * 单据号的"翻译"在展示层按 {@code t_workflow_related_approval} 的快照做，这里只保留原值。
+     */
+    RELATED_APPROVAL("design-related-approval"),
     /** 分组标题：纯排版，**没有值**，永远不会出现在 valData 里 */
     SECTION("design-section"),
     /** 说明文字：纯排版，**没有值** */

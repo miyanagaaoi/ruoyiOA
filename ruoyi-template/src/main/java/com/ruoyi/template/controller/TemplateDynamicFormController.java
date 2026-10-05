@@ -8,6 +8,8 @@ import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.enums.WhetherStatus;
 import com.ruoyi.template.domain.TemplateDynamicForm;
 import com.ruoyi.template.service.ITemplateDynamicFormService;
+import com.ruoyi.template.service.ITemplateService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -19,9 +21,13 @@ import java.util.List;
  * 
  * @author wucorr.com
  */
+@Slf4j
 @RestController
 @RequestMapping("/template/dynamic/form")
 public class TemplateDynamicFormController extends BaseController {
+
+    @Autowired
+    private ITemplateService templateService;
     @Autowired
     private ITemplateDynamicFormService templateDynamicFormService;
 
@@ -64,7 +70,24 @@ public class TemplateDynamicFormController extends BaseController {
     @Log(title = "动态单", businessType = BusinessType.UPDATE)
     @PutMapping
     public AjaxResult edit(@RequestBody TemplateDynamicForm templateDynamicForm) {
-        return toAjax(templateDynamicFormService.updateTemplateDynamicForm(templateDynamicForm));
+        int rows = templateDynamicFormService.updateTemplateDynamicForm(templateDynamicForm);
+        // 2.0（B1 §7.10）：换版本会把模板显式改指到新表单，把影响面回给前端做提示。
+        // 提示口径是"当前有多少模板正使用这张表单"，而不是"本次改指了几条" ——
+        // 后者在"表单一改再改"时会让人以为影响面在缩水。
+        int affected = 0;
+        try {
+            // 按 form_key 的**当前版本**统计：换版本后 form_id 已指向新行，
+            // 拿旧 id 去数永远是 0，提示就成了误报。
+            affected = templateService.countTemplatesOnFormKey(templateDynamicForm.getFormKey());
+            if (affected == 0) {
+                affected = templateService.countTemplatesOnForm(templateDynamicForm.getId());
+            }
+        } catch (Exception e) {
+            log.warn("统计表单影响面失败（不影响保存结果）：{}", e.getMessage());
+        }
+        AjaxResult result = toAjax(rows);
+        result.put("affectedTemplates", affected);
+        return result;
     }
 
     /**

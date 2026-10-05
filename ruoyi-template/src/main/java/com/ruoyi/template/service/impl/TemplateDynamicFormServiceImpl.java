@@ -7,12 +7,14 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.ruoyi.template.domain.TemplateDynamicForm;
 import com.ruoyi.template.mapper.TemplateDynamicFormMapper;
+import com.ruoyi.template.mapper.TemplateMapper;
 import com.ruoyi.template.mapper.TemplateSourceTargetMapper;
 import com.ruoyi.template.module.FormOption;
 import com.ruoyi.template.service.ITemplateDynamicFormService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
@@ -25,6 +27,9 @@ import java.util.List;
 @Slf4j
 @Service
 public class TemplateDynamicFormServiceImpl implements ITemplateDynamicFormService {
+
+    @Autowired
+    private TemplateMapper templateMapper;
     @Autowired
     private TemplateDynamicFormMapper templateDynamicFormMapper;
 
@@ -76,6 +81,7 @@ public class TemplateDynamicFormServiceImpl implements ITemplateDynamicFormServi
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int updateTemplateDynamicForm(TemplateDynamicForm templateDynamicForm) {
         TemplateDynamicForm newDynamicForm = TemplateSourceTargetMapper.INSTANCE.copyDynamicForm(templateDynamicForm);
         String userId = SecurityUtils.getUserId();
@@ -92,7 +98,13 @@ public class TemplateDynamicFormServiceImpl implements ITemplateDynamicFormServi
         newDynamicForm.setCreateId(userId);
         newDynamicForm.setCreateBy(user.getNickName());
         newDynamicForm.setCreateTime(now);
-        return templateDynamicFormMapper.insertTemplateDynamicForm(newDynamicForm);
+        int rows = templateDynamicFormMapper.insertTemplateDynamicForm(newDynamicForm);
+        // 2.0（B1 §7.10）动态表单版本化：模板上的 form_id 存的是"具体那一版"，
+        // 不跟着改指，模板就会永远停在旧版本上（用户看到"保存成功"，改的却是空气）。
+        // 与表单插入同事务：改指失败就一起回滚，不会出现"新版本在、模板还指旧版"。
+        int repointed = templateMapper.repointFormId(templateDynamicForm.getId(), newDynamicForm.getId());
+        log.info("动态表单换版本：old={} new={} 已改指模板数={}", templateDynamicForm.getId(), newDynamicForm.getId(), repointed);
+        return rows;
     }
 
     /**

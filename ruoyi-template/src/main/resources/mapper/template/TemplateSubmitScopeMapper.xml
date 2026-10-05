@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.template.mapper.TemplateSubmitScopeMapper">
+
+    <!-- 显式 resultMap：不依赖全局 map-underscore-to-camel-case 开关 -->
+    <resultMap type="com.ruoyi.template.domain.TemplateSubmitScope" id="TemplateSubmitScopeResult">
+        <result property="id"         column="id"/>
+        <result property="templateId" column="template_id"/>
+        <result property="scopeType"  column="scope_type"/>
+        <result property="targetId"   column="target_id"/>
+        <result property="createId"   column="create_id"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <sql id="selectVo">
+        select id, template_id, scope_type, target_id, create_id, create_time
+        from t_template_submit_scope
+    </sql>
+
+    <select id="selectByTemplateId" resultMap="TemplateSubmitScopeResult">
+        <include refid="selectVo"/>
+        where template_id = #{templateId}
+        order by scope_type, create_time
+    </select>
+
+    <select id="selectByTemplateIds" resultMap="TemplateSubmitScopeResult">
+        <include refid="selectVo"/>
+        where template_id in
+        <foreach item="tid" collection="templateIds" open="(" separator="," close=")">
+            #{tid}
+        </foreach>
+    </select>
+
+    <select id="countByTemplateId" resultType="int">
+        select count(*) from t_template_submit_scope where template_id = #{templateId}
+    </select>
+
+    <delete id="deleteByTemplateId">
+        delete from t_template_submit_scope where template_id = #{templateId}
+    </delete>
+
+    <insert id="batchInsert">
+        insert into t_template_submit_scope
+            (id, template_id, scope_type, target_id, create_id, create_time)
+        values
+        <foreach collection="list" item="it" separator=",">
+            (#{it.id}, #{it.templateId}, #{it.scopeType}, #{it.targetId}, #{it.createId}, sysdate())
+        </foreach>
+    </insert>
+
+</mapper>

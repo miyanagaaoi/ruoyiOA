@@ -28,6 +28,17 @@
             <groupId>com.ruoyi</groupId>
             <artifactId>ruoyi-framework</artifactId>
         </dependency>
+
+        <!--
+          单元测试（2.0 B3 §1.3）：合同编号扩展的四条判定标准主要是**渲染与分桶**的纯逻辑，
+          做成表驱动单测最省事也最可靠（不必起容器、不依赖 Redis/DB）。
+          版本由 spring-boot-dependencies 统一管理。
+        -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>

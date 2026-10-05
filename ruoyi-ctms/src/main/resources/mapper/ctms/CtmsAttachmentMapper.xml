@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  附件挂载元数据（t_ctms_attachment，15 列）的 Mapper（B3 第 6 组，任务 6.1~6.3）。
+
+  口径说明：
+    · 本表只软删除：没有物理 delete，删除改 del_flag='1'；
+      因此"列表"与"按 id 取单条"都按 del_flag='0' 过滤
+      → 删除后下载接口取不到该文件（任务 6.3 的可观察行为）。
+    · 物理文件（字节流、随机命名、目录分片）由平台 ruoyi-file 负责，
+      本表只存元数据 + 对象挂载关系（design D-5）。
+    · (object_type, object_id) 是多态定位，刻意不加外键（DDL 侧只建复合索引）。
+    · create_time/update_time 一律用 sysdate()，不信任应用传入的时间
+      （与 CtmsPartnerMapper / CtmsChangeLogMapper 同款）。
+
+  ⚠ 数据范围片段 ${contractDataScopeSql} 只允许来自服务端白名单拼接
+    （ContractDataScope 的低层 SQL 片段 + 当前登录用户ID/部门ID），
+    绝不接受请求参数、请求头或前端传入的字符串 —— 否则就是一个 SQL 注入点。
+    片段语义是"这个 contract_id 是否落在当前用户可见范围内"，
+    与合同列表用的 is 同一处判定（CtmsContractServiceImpl.canAccess）。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsAttachmentMapper">
+
+    <resultMap type="CtmsAttachment" id="CtmsAttachmentResult">
+        <id     property="id"          column="id"           />
+        <result property="contractId"  column="contract_id"  />
+        <result property="fileName"    column="file_name"    />
+        <result property="storedPath"  column="stored_path"  />
+        <result property="contentType" column="content_type" />
+        <result property="sizeBytes"   column="size_bytes"   />
+        <result property="delFlag"     column="del_flag"     />
+        <result property="objectType"  column="object_type"  />
+        <result property="objectId"    column="object_id"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"  column="update_time"  />
+        <!-- 非持久化：isDeleted() 由 del_flag 派生，没有对应列，不在此映射。 -->
+    </resultMap>
+
+    <sql id="selectAttachmentVo">
+        select id, contract_id, file_name, stored_path, content_type, size_bytes, del_flag,
+               object_type, object_id, create_id, create_by, create_time,
+               update_id, update_by, update_time
+          from t_ctms_attachment
+    </sql>
+
+    <!--
+      列表：只返回未删除行；数据范围片段为可空（服务层决定要不要加）。
+      ⚠ 片段用 ${} 原样拼接，理由见文件头；判定只在服务层一处产生。
+    -->
+    <select id="selectAttachmentList" resultMap="CtmsAttachmentResult">
+        <include refid="selectAttachmentVo"/>
+        <where>
+              del_flag = '0'
+          and object_type = #{objectType}
+          and object_id = #{objectId}
+            <if test="contractDataScopeSql != null and contractDataScopeSql != ''">
+              and exists (
+                    select 1 from t_ctms_contract c
+                     where c.id = t_ctms_attachment.contract_id
+                       and ( ${contractDataScopeSql} )
+                  )
+            </if>
+        </where>
+        order by create_time desc, id desc
+    </select>
+
+    <!-- 按主键取单条：已删除行取不到（刻意） -->
+    <select id="selectAttachmentById" resultMap="CtmsAttachmentResult">
+        <include refid="selectAttachmentVo"/>
+         where id = #{id}
+           and del_flag = '0'
+    </select>
+
+    <!-- id 由服务层生成，时间走 sysdate() -->
+    <insert id="insertAttachment" parameterType="CtmsAttachment">
+        insert into t_ctms_attachment(
+            id, contract_id, file_name, stored_path, content_type, size_bytes, del_flag,
+            object_type, object_id, create_id, create_by, create_time, update_time
+        )values(
+            #{id}, #{contractId}, #{fileName}, #{storedPath}, #{contentType}, #{sizeBytes}, #{delFlag},
+            #{objectType}, #{objectId}, #{createId}, #{createBy}, sysdate(), sysdate()
+        )
+    </insert>
+
+    <!-- 软删除：只置标志位 + 更新人/时间，物理文件保留（审计与"可追溯"优先） -->
+    <update id="softDeleteAttachment">
+        update t_ctms_attachment
+           set del_flag    = '1',
+               update_id   = #{updateId},
+               update_by   = #{updateBy},
+               update_time = sysdate()
+         where id = #{id}
+           and del_flag = '0'
+    </update>
+
+    <select id="countByObject" resultType="int">
+        select count(*) from t_ctms_attachment
+         where object_type = #{objectType}
+           and object_id = #{objectId}
+           and del_flag = '0'
+    </select>
+
+</mapper>

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  历史甲乙方迁移草案（t_ctms_party_draft，13 列）的 Mapper（B3 第 7 组任务 7.1）。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致，否则扫描不到
+  （mapperLocations = classpath*:mapper/**/*Mapper.xml）。
+
+  口径说明：
+    · 列清单就是 DDL 的 13 列（sql/二开-合同台账.sql 第 262~282 行），一列不多一列不少；
+      resultMap 与 selectDraftVo 都必须与之逐列对齐（单测 CtmsMigrationServiceImplTest
+      会解析 DDL 与本文件做集合比对，故意不是"看着像对"）。
+    · 本表没有 del_flag、没有 remark 之外的自由列，也没有物理删除：草案靠 status 流转。
+    · 幂等键是唯一索引 uk_party_draft(party_type, raw_name)。扫描的写入顺序固定是
+      "selectDraftByTypeAndName → 命中就 updateDraft / 未命中才 insertDraft"，
+      所以 updateDraft 刻意不写 party_type / raw_name（改幂等键等于换一条草案）。
+    · selectDraftByTypeAndName 用 = 比较，比较规则由列的排序规则（utf8mb4_0900_ai_ci）决定，
+      是【大小写 + 重音不敏感】的；Java 侧的分组键用同一个口径（MigrationRules.rawNameKey），
+      否则 'Acme' 与 'acme' 会被分成两组、第二条 insert 直接撞唯一键（真库 1062 / 接口 500）。
+    · status 的"全部状态"由服务层把 status 归一为 null 表达，不在 XML 里写 status != 'all'：
+      MyBatis 的 OGNL 把单引号字面量当 Character，与 String 比较恒不相等（DEV-ENV §6.43）。
+-->
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsPartyDraftMapper">
+
+    <resultMap type="CtmsPartyDraft" id="CtmsPartyDraftResult">
+        <id     property="id"            column="id"             />
+        <result property="partyType"     column="party_type"     />
+        <result property="rawName"       column="raw_name"       />
+        <result property="contractCount" column="contract_count" />
+        <result property="status"        column="status"         />
+        <result property="matchedId"     column="matched_id"     />
+        <result property="remark"        column="remark"         />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="createId"      column="create_id"      />
+        <result property="createBy"      column="create_by"      />
+        <result property="updateId"      column="update_id"      />
+        <result property="updateBy"      column="update_by"      />
+    </resultMap>
+
+    <sql id="selectDraftVo">
+        select id, party_type, raw_name, contract_count, status, matched_id, remark,
+               create_time, update_time, create_id, create_by, update_id, update_by
+          from t_ctms_party_draft
+    </sql>
+
+    <select id="selectDraftList" parameterType="CtmsPartyDraft" resultMap="CtmsPartyDraftResult">
+        <include refid="selectDraftVo"/>
+        <where>
+            <if test="id != null and id != ''">
+                and id = #{id}
+            </if>
+            <if test="partyType != null and partyType != ''">
+                and party_type = #{partyType}
+            </if>
+            <if test="rawName != null and rawName != ''">
+                and raw_name like concat('%', #{rawName}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+            <if test="matchedId != null and matchedId != ''">
+                and matched_id = #{matchedId}
+            </if>
+        </where>
+        order by create_time desc, id desc
+    </select>
+
+    <!-- 幂等键查找：比较规则 = 列的排序规则（ai_ci，大小写/重音不敏感），与 uk_party_draft 等价 -->
+    <select id="selectDraftByTypeAndName" resultMap="CtmsPartyDraftResult">
+        <include refid="selectDraftVo"/>
+        where party_type = #{partyType}
+          and raw_name = #{rawName}
+        limit 1
+    </select>
+
+    <select id="selectDraftById" parameterType="String" resultMap="CtmsPartyDraftResult">
+        <include refid="selectDraftVo"/>
+        where id = #{id}
+    </select>
+
+    <!-- id 由服务层生成（表无默认值）；create_time/update_time 由库函数给出，与服务端时钟解耦 -->
+    <insert id="insertDraft" parameterType="CtmsPartyDraft">
+        insert into t_ctms_party_draft(
+            id, party_type, raw_name, contract_count, status, matched_id, remark,
+            create_id, create_by, create_time, update_id, update_by, update_time
+        )values(
+            #{id}, #{partyType}, #{rawName}, #{contractCount}, #{status}, #{matchedId}, #{remark},
+            #{createId}, #{createBy}, sysdate(), #{updateId}, #{updateBy}, sysdate()
+        )
+    </insert>
+
+    <!-- 不含 party_type / raw_name：幂等键只读，认领/忽略/刷新计数都只改业务列与审计列 -->
+    <update id="updateDraft" parameterType="CtmsPartyDraft">
+        update t_ctms_party_draft
+           set contract_count = #{contractCount},
+               status         = #{status},
+               matched_id     = #{matchedId},
+               remark         = #{remark},
+               update_id      = #{updateId},
+               update_by      = #{updateBy},
+               update_time    = sysdate()
+         where id = #{id}
+    </update>
+
+</mapper>

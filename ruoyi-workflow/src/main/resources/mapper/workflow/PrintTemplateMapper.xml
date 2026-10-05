@@ -55,6 +55,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
       第四路 union：**草稿**。草稿尚未发起流程，上面三张表都不会有它的记录，
       它只存在于 t_workflow_form（主键即业务ID）。缺了这一路，草稿打印会取不到
       templateId，进而拿不到表单数据 —— 打印出来是一张空壳。
+
+      第五路 union（2.0 B2 补）：**我起草的**（t_workflow_my_draft）。
+      ⚠ 实测：`/biz/form/save` 写 t_workflow_form 时**不带 template_id**（那一列对动态表单恒为 NULL），
+        模板关联是异步落到 t_workflow_my_draft.template_id 的。只有第四路时，草稿打印解析到
+        templateId=null → 回退**默认内置版式**（contract）→ 一张 fund 版式的单据会被打成合同版式，
+        而且表单字段表整片为空（踩过：探针单据 templateId=[] title=[集团合同类文件流转审批单]）。
+      ⚠ 顺序：my_draft 放**最后**（ord 最大），让"已进入流程"的待办/已办优先；
+        它们与 my_draft 同时存在时，以流程侧记录为准。
     -->
     <select id="selectTemplateIdByBusinessId" parameterType="String" resultType="String">
         select template_id from (
@@ -65,9 +73,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             select template_id, 3 as ord from t_workflow_recycle where business_id = #{businessId} and template_id is not null
             union all
             select template_id, 4 as ord from t_workflow_form    where id          = #{businessId} and template_id is not null
+            union all
+            select template_id, 5 as ord from t_workflow_my_draft where biz_id     = #{businessId} and template_id is not null
         ) t
         order by ord
         limit 1
+    </select>
+
+    <!--
+      单据模板绑定的内置版式键（2.0 B2）。取不到就是 null，服务层回退 'contract'。
+      ⚠ 这一列由 B1/B2 的增量脚本加上，脚本带 information_schema 守卫，可反复执行。
+    -->
+    <select id="selectBuiltinPrintKeyByTemplateId" parameterType="String" resultType="java.lang.String">
+        select builtin_print_key from t_template
+         where id = #{templateId} and del_flag = '0'
+         limit 1
     </select>
 
     <select id="selectList" parameterType="PrintTemplate" resultMap="PrintTemplateResult">
@@ -145,6 +165,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and id != #{keepId}
           and del_flag = '0'
           and enable_flag = '1'
+    </update>
+
+    <!--
+      只改单据模板的内置版式键（2.0 B2）。**窄接口**：不动该表的任何其它列，
+      因此不会像"全量 DTO 回写"那样把未提交的字段打掉。
+    -->
+    <update id="updateBuiltinPrintKey">
+        update t_template
+           set builtin_print_key = #{builtinKey}
+         where id = #{templateId} and del_flag = '0'
     </update>
 
 </mapper>

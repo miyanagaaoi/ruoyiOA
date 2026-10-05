@@ -88,4 +88,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             template_id = #{templateId}
         </where>
     </select>
+
+    <!-- 2.0（B1 §1.1）：原地更新语义下"一个模板只有一套配置"的清扫语句 -->
+    <delete id="deleteMessageNoticeByTemplateId" parameterType="String">
+        delete from t_template_message_notice where template_id = #{templateId}
+    </delete>
 </mapper>

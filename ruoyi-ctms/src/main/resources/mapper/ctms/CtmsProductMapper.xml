@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsProductMapper">
+
+	<!-- 物料档案（2.0 B3 §3.3）：update 不改 code（编码不可改），其余业务列全量覆盖（含置 null） -->
+	<resultMap type="CtmsProduct" id="CtmsProductResult">
+		<id     property="id"            column="id"              />
+		<result property="code"          column="code"            />
+		<result property="name"          column="name"            />
+		<result property="spec"          column="spec"            />
+		<result property="productTypeId" column="product_type_id" />
+		<result property="uomId"         column="uom_id"          />
+		<result property="brand"         column="brand"           />
+		<result property="barcode"       column="barcode"         />
+		<result property="defaultPrice"  column="default_price"   />
+		<result property="safetyStock"   column="safety_stock"    />
+		<result property="enableFlag"    column="enable_flag"     />
+		<result property="remark"        column="remark"          />
+		<result property="createId"      column="create_id"       />
+		<result property="createBy"      column="create_by"       />
+		<result property="createTime"    column="create_time"     />
+		<result property="updateId"      column="update_id"       />
+		<result property="updateBy"      column="update_by"       />
+		<result property="updateTime"    column="update_time"     />
+	</resultMap>
+
+	<sql id="selectProductVo">
+		select id, code, name, spec, product_type_id, uom_id, brand, barcode,
+		       default_price, safety_stock, enable_flag, remark,
+		       create_id, create_by, create_time, update_id, update_by, update_time
+		from t_ctms_product
+	</sql>
+
+	<select id="selectProductList" parameterType="CtmsProduct" resultMap="CtmsProductResult">
+		<include refid="selectProductVo"/>
+		<where>
+			<if test="name != null and name != ''">
+				AND name like concat('%', #{name}, '%')
+			</if>
+			<if test="code != null and code != ''">
+				AND code like concat('%', #{code}, '%')
+			</if>
+			<if test="productTypeId != null and productTypeId != ''">
+				AND product_type_id = #{productTypeId}
+			</if>
+			<if test="uomId != null and uomId != ''">
+				AND uom_id = #{uomId}
+			</if>
+			<if test="enableFlag != null and enableFlag != ''">
+				AND enable_flag = #{enableFlag}
+			</if>
+		</where>
+		order by code asc
+	</select>
+
+	<select id="selectProductById" parameterType="String" resultMap="CtmsProductResult">
+		<include refid="selectProductVo"/>
+		where id = #{id}
+	</select>
+
+	<select id="selectProductByCode" parameterType="String" resultMap="CtmsProductResult">
+		<include refid="selectProductVo"/>
+		where code = #{code}
+		limit 1
+	</select>
+
+	<insert id="insertProduct" parameterType="CtmsProduct">
+		insert into t_ctms_product(
+			id, code, name, spec, product_type_id, uom_id, brand, barcode,
+			default_price, safety_stock, enable_flag, remark,
+			create_time, create_id, create_by, update_time, update_id, update_by
+		)values(
+			#{id},
+			#{code},
+			#{name},
+			#{spec},
+			#{productTypeId},
+			#{uomId},
+			#{brand},
+			#{barcode},
+			<choose>
+				<when test="defaultPrice != null">#{defaultPrice},</when>
+				<otherwise>0,</otherwise>
+			</choose>
+			#{safetyStock},
+			<choose>
+				<when test="enableFlag != null and enableFlag != ''">#{enableFlag},</when>
+				<otherwise>'1',</otherwise>
+			</choose>
+			#{remark},
+			sysdate(),
+			#{createId},
+			#{createBy},
+			sysdate(),
+			#{updateId},
+			#{updateBy}
+		)
+	</insert>
+
+	<update id="updateProduct" parameterType="CtmsProduct">
+		update t_ctms_product
+		set name = #{name},
+			spec = #{spec},
+			product_type_id = #{productTypeId},
+			uom_id = #{uomId},
+			brand = #{brand},
+			barcode = #{barcode},
+			default_price = #{defaultPrice},
+			safety_stock = #{safetyStock},
+			enable_flag = #{enableFlag},
+			remark = #{remark},
+			update_id = #{updateId},
+			update_by = #{updateBy},
+			update_time = sysdate()
+		where id = #{id}
+	</update>
+
+	<delete id="deleteProductById" parameterType="String">
+		delete from t_ctms_product where id = #{id}
+	</delete>
+
+</mapper>

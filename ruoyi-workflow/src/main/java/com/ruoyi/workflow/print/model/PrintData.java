@@ -2,7 +2,6 @@ package com.ruoyi.workflow.print.model;
 
 import com.ruoyi.workflow.domain.PrintTemplate;
 import lombok.Data;
-
 import java.io.Serializable;
 import java.util.Date;
 import java.util.List;
@@ -48,6 +47,15 @@ public class PrintData implements Serializable {
     /** 发起人所属公司/部门（$submitterDept） */
     private String submitterDept;
 
+    /**
+     * 发起人所属<b>公司级</b>部门（$submitterCompany）。
+     *
+     * <p> 由发起人的 {@code sys_dept.ancestors} 上溯到公司级；
+     * 本部门已是公司级时就是它自己。资金/事项两套内置版式的「审批单位」「报送单位」用它
+     * （PRD 附录 A 的取值口径是"发起人所属公司"，不是所属部门）。 </p>
+     */
+    private String submitterCompany;
+
     /** 发起时间（$submitTime） */
     private Date submitTime;
 
@@ -64,14 +72,19 @@ public class PrintData implements Serializable {
      */
     private Object formData;
 
-    /** 表单 Schema（供打印页按 field_map 取值） */
-    private Object formSchema;
-
     /** 签批栏：按流程节点顺序 */
     private List<Node> nodes;
 
     /** 附件清单（只打印清单，不打印文件内容） */
     private List<Attachment> attachments;
+
+    /**
+     * 抄送栏数据（2.0 B2 §4.5）。
+     *
+     * <p> 是否**出栏**由生效打印模板的 {@code showCcNode} 决定（前端处理）——
+     * 服务端只负责把"有没有抄送记录、抄送给谁、什么时候"给全。 </p>
+     */
+    private List<PrintCcNode> ccNodes;
 
     /** 水印文字（模板 watermark=0 时为空） */
     private String watermarkText;

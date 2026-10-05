@@ -31,6 +31,14 @@ public interface PrintTemplateMapper {
      */
     String selectTemplateIdByBusinessId(String businessId);
 
+    /**
+     * 取单据模板绑定的**内置打印版式键**（{@code t_template.builtin_print_key}）。
+     *
+     * <p> 兜底版式走内置时用它决定标题与版式（2.0 B2 / REQ-PRINT-011）。
+     * 取不到（模板不存在、或列还是空值）时返回 null，由服务层回退 {@code contract}。 </p>
+     */
+    String selectBuiltinPrintKeyByTemplateId(String templateId);
+
     /** 查询列表 */
     List<PrintTemplate> selectList(PrintTemplate query);
 
@@ -55,4 +63,16 @@ public interface PrintTemplateMapper {
      * @param keepId     要保留的那一套（新启用/新保存的那套）
      */
     int disableOthers(@Param("templateId") String templateId, @Param("keepId") String keepId);
+
+    /**
+     * 只更新单据模板的**内置版式键**（{@code t_template.builtin_print_key}）。
+     *
+     * <p> 为什么单独一个窄接口，而不是复用 {@code PUT /workflow/template}：
+     * 后者走 {@code TemplateDTO} 的全量 MapStruct 拷贝（未提交的字段会被置空），
+     * 从打印模板配置页发一次"只改版式键"的请求会把单据模板的其它字段一起打掉；
+     * 而且那条链路要求 {@code workflow:template:edit} 权限，
+     * 与配置页的 {@code workflow:print:template:edit} 不是一回事。 </p>
+     */
+    int updateBuiltinPrintKey(@Param("templateId") String templateId,
+                              @Param("builtinKey") String builtinKey);
 }

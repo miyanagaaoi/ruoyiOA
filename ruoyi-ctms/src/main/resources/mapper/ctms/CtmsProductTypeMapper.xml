@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.ctms.mapper.CtmsProductTypeMapper">
+
+	<!--
+	  商品类型树（2.0 B3 §3.3）：
+	    · resultMap 逐列写全，create_by/create_time/update_by/update_time/remark 来自 BaseEntity；
+	    · write 路径 create_time 用 sysdate()；
+	    · update 路径**不改 code**（编码不可改），其余业务列全量覆盖（含置 null）。
+	-->
+	<resultMap type="CtmsProductType" id="CtmsProductTypeResult">
+		<id     property="id"         column="id"          />
+		<result property="parentId"   column="parent_id"   />
+		<result property="code"       column="code"        />
+		<result property="name"       column="name"        />
+		<result property="path"       column="path"        />
+		<result property="level"      column="level"       />
+		<result property="sort"       column="sort"        />
+		<result property="enableFlag" column="enable_flag" />
+		<result property="remark"     column="remark"      />
+		<result property="createId"   column="create_id"   />
+		<result property="createBy"   column="create_by"   />
+		<result property="createTime" column="create_time" />
+		<result property="updateId"   column="update_id"   />
+		<result property="updateBy"   column="update_by"   />
+		<result property="updateTime" column="update_time" />
+	</resultMap>
+
+	<sql id="selectProductTypeVo">
+		select id, parent_id, code, name, path, level, sort, enable_flag, remark,
+		       create_id, create_by, create_time, update_id, update_by, update_time
+		from t_ctms_product_type
+	</sql>
+
+	<select id="selectProductTypeList" parameterType="CtmsProductType" resultMap="CtmsProductTypeResult">
+		<include refid="selectProductTypeVo"/>
+		<where>
+			<if test="name != null and name != ''">
+				AND name like concat('%', #{name}, '%')
+			</if>
+			<if test="parentId != null and parentId != ''">
+				AND parent_id = #{parentId}
+			</if>
+			<if test="enableFlag != null and enableFlag != ''">
+				AND enable_flag = #{enableFlag}
+			</if>
+		</where>
+		order by sort asc, code asc
+	</select>
+
+	<select id="selectProductTypeById" parameterType="String" resultMap="CtmsProductTypeResult">
+		<include refid="selectProductTypeVo"/>
+		where id = #{id}
+	</select>
+
+	<!-- 同父下名称唯一：根层级的 parent_id 为 null，必须用 is null 而不是 = null -->
+	<select id="selectProductTypeByNameAndParent" resultMap="CtmsProductTypeResult">
+		<include refid="selectProductTypeVo"/>
+		where name = #{name}
+		<choose>
+			<when test="parentId != null and parentId != ''">
+				and parent_id = #{parentId}
+			</when>
+			<otherwise>
+				and parent_id is null
+			</otherwise>
+		</choose>
+		limit 1
+	</select>
+
+	<select id="countChildren" resultType="int">
+		select count(1) from t_ctms_product_type where parent_id = #{parentId}
+	</select>
+
+	<select id="countProductsByType" resultType="int">
+		select count(1) from t_ctms_product where product_type_id = #{productTypeId}
+	</select>
+
+	<insert id="insertProductType" parameterType="CtmsProductType">
+		insert into t_ctms_product_type(
+			id, parent_id, code, name, path, level, sort, enable_flag, remark,
+			create_time, create_id, create_by, update_time, update_id, update_by
+		)values(
+			#{id},
+			#{parentId},
+			#{code},
+			#{name},
+			<choose>
+				<when test="path != null and path != ''">#{path},</when>
+				<otherwise>'/',</otherwise>
+			</choose>
+			<choose>
+				<when test="level != null">#{level},</when>
+				<otherwise>1,</otherwise>
+			</choose>
+			<choose>
+				<when test="sort != null">#{sort},</when>
+				<otherwise>0,</otherwise>
+			</choose>
+			<choose>
+				<when test="enableFlag != null and enableFlag != ''">#{enableFlag},</when>
+				<otherwise>'1',</otherwise>
+			</choose>
+			#{remark},
+			sysdate(),
+			#{createId},
+			#{createBy},
+			sysdate(),
+			#{updateId},
+			#{updateBy}
+		)
+	</insert>
+
+	<update id="updateProductType" parameterType="CtmsProductType">
+		update t_ctms_product_type
+		set parent_id = #{parentId},
+			name = #{name},
+			path = #{path},
+			level = #{level},
+			sort = #{sort},
+			enable_flag = #{enableFlag},
+			remark = #{remark},
+			update_id = #{updateId},
+			update_by = #{updateBy},
+			update_time = sysdate()
+		where id = #{id}
+	</update>
+
+	<delete id="deleteProductTypeById" parameterType="String">
+		delete from t_ctms_product_type where id = #{id}
+	</delete>
+
+</mapper>
