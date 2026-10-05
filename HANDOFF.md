@@ -53,7 +53,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-e2e-check.ps1  
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-perm-audit.ps1                # 权限点双向核对
 ```
 
-⚠ **本机没有 `pwsh`**，只有 Windows PowerShell 5.1（别用 `??`、`-Parallel` 等 7.x 语法）。
+⚠ **两个 PowerShell 宿主都在**：`powershell`（**5.1，门禁一律用它**）与 `pwsh` 7.6.6（`C:\Program Files\PowerShell\7\pwsh.exe`，已实测可跑同一批脚本且结果逐条一致 —— 但**换宿主属于环境变更**，见 DEV-ENV §3.5）。
 ⚠ **改 `.ps1` 必须保住 UTF-8 BOM**；`.java/.xml/.md` 必须**无 BOM**（判定与修复见 DEV-ENV §6.33 末段）。
 ⚠ 在 PowerShell 里写 `"$var"`，**变量后紧跟中文/引号/`$` 时必须写 `${var}`**（DEV-ENV §6.44）。
 

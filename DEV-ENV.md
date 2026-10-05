@@ -15,7 +15,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-env.ps1      # 一�
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1 # 重新登录拿 token
 ```
 
-详见 **§4 常用命令**。（本机没有 `pwsh`，只有 Windows PowerShell 5.1，用 `powershell`。）
+详见 **§4 常用命令**。（本机 `powershell` = Windows PowerShell 5.1；另有 pwsh 7.6.6，见 §3.5。）
 
 ---
 
@@ -74,7 +74,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1 # 重�
 | Maven | 3.x | 3.9.16 @ `C:\Tools\apache-maven-3.9.16` | ✅ |
 | Node | README 写 14+ | v24.19.0 | ✅ 已由 `.npmrc` 处理 OpenSSL |
 | npm | — | 11.17.0 | ✅ |
-| Shell | — | **Windows PowerShell 5.1（无 pwsh 7）** | ⚠️ 别用 `??`、`-Parallel` 等 7.x 语法 |
+| Shell | — | **两者都在**：Windows PowerShell **5.1**（`powershell`，系统自带）与 **pwsh 7.6.6**（`C:\Program Files\PowerShell\7\pwsh.exe`，2026-10-05 补装） | **门禁脚本一律继续用 `powershell` 跑**（既有验收结论都在 5.1 上取得）；pwsh 已实测可跑同一批脚本且结果逐条一致，但**换宿主属于环境变更**，见 §3.5 |
 
 ### 3.1 JDK：已由 toolchains 自动解决
 
@@ -151,6 +151,46 @@ mvn -B -pl ruoyi-workflow test          # 无需 -s，直接可跑（见 §4.4�
 > ⚠ 本模块此前**没有任何测试框架**，`src/test` 下只有 `main()` 形式的冒烟程序（`mvn test` 跑出来是
 > `Tests run: 0`）。2.0 B2 为"内置版式常量"引入了 JUnit 4（版本由 `spring-boot-dependencies` 管理）。
 
+### 3.5 pwsh 7 共存：**能跑，但门禁仍推荐用 `powershell`（5.1）**（2026-10-05 实测）
+
+本机现在两个宿主都有：
+
+| 宿主 | 路径 | 版本 |
+| --- | --- | --- |
+| `powershell` | `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` | **5.1**（系统自带） |
+| `pwsh` | `C:\Program Files\PowerShell\7\pwsh.exe`（已在机器 PATH，**新开的终端才生效**） | **7.6.6** |
+
+**关键差异（正是 §6.33 那个"中文变 `?`"坑的根源）**：
+
+| 项 | PowerShell 5.1 | pwsh 7.6.6 |
+| --- | --- | --- |
+| `$OutputEncoding` 默认 | **`us-ascii`** | **`utf-8`** ✅ |
+| `[Console]::OutputEncoding` 默认 | ANSI（GBK） | **`utf-8`** ✅ |
+| 管道喂中文 SQL 给 `mysql.exe` | 变 `?`（`SELECT HEX('合同台账')` → `3F3F3F3F`） | **正常**（→ `E59088E5908CE58FB0E8B4A6`） |
+
+> ⚠ **但在脚本里**该坑与宿主无关：`tools\*.ps1` 都已显式设 `$OutputEncoding = UTF8`，
+> 所以在两个宿主下结果一致。**不要因为换到 pwsh 就把脚本里那行删掉** —— 它保证的是"换宿主/换机器都不坏"。
+
+**兼容性实测（2026-10-05，pwsh 7.6.6 逐条跑，结果与 5.1 完全一致）**：
+
+| 脚本 | 5.1 | pwsh 7.6.6 |
+| --- | --- | --- |
+| `ctms-perm-audit.ps1` | 15/15 差异为空 | **一致** |
+| `ctms-migration-check.ps1` | 52/0 | **一致** |
+| `ctms-contract-check.ps1`（261 条，含 4.8b 矩阵） | 261/0 | **一致** |
+| `ctms-commercials-check.ps1` | 116/0 | **一致** |
+| `ctms-e2e-check.ps1` | 91/0 | **一致** |
+
+**21 个 `.ps1` 逐一 `Parser::ParseFile` 全部 OK**；静态扫过：无 `Get-WmiObject`、`System.Web`、
+`Microsoft.Win32`、`Windows.Forms`、`-AsHashtable` 等 7.x 不兼容/5.1 专有用法。
+唯一的 `Add-Type` 在 `ctms-contract-check.ps1:197`，是 `-AssemblyName … -ErrorAction SilentlyContinue`
+的**兼容写法**（pwsh 下程序集已内置、该调用报错但被吞掉，实测无影响）。
+
+**规矩**：
+1. **交付门禁与验收记录一律继续用 `powershell`（5.1）** —— 既有全部结论都在 5.1 上取得，**换宿主属于环境变更**，会让"这条断言在哪个宿主下通过"变得不可比；
+2. 新写的脚本要**同时兼容两个宿主**（别用 `??`、`-Parallel`、`-AsHashtable` 等 7.x 专有语法，除非显式声明只支持 pwsh）；
+3. 若某天要正式迁到 pwsh，**必须把 §7 的 16 项门禁在两个宿主下各跑一遍并逐条留档**，不能只凭"都能跑"就切换。
+
 ## 4. 常用命令
 
 ### 4.1 一键启停（推荐，脚本在仓库根目录）
@@ -200,7 +240,8 @@ cd F:\dsh\ruoyiOA\ruoyi-vue-oa-master ; mvn -B -pl ruoyi-workflow test
 两个脚本都是**幂等**的（端口已监听就跳过），可反复执行；所有进程用 WMI 拉起，
 完全脱离调用方句柄，不会把终端/CI 挂住。
 
-> ⚠️ 本机**没有 `pwsh`**，只有 Windows PowerShell 5.1，必须用 `powershell`。
+> ⚠️ 本机 `powershell` = Windows PowerShell 5.1 **（推荐继续用它跑所有验收脚本）**；
+> 另已安装 **pwsh 7.6.6**（`C:\Program Files\PowerShell\7\pwsh.exe`），兼容性实测见 §3.5。
 > ⚠️ 这些 `.ps1` 都存成 **UTF-8 with BOM** —— 5.1 读无 BOM 的 UTF-8 会把中文注释
 > 当 ANSI 解码，直接 `Unexpected token` 解析失败。新增脚本时务必保持带 BOM。
 > ⚠️ `.ps1` 里**不能写 `/** … */` 块注释**（那是 JS 的写法，PowerShell 只有 `<# … #>`）；
@@ -853,7 +894,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oa-login.ps1
 | 9 | `cd ruoyi-vue-oa-ui-master ; npm.cmd run test:unit` | 前端用例（39 条） | 纯 Node，不依赖浏览器；零新增依赖 |
 | 10 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\b3-sql-drill.ps1` | **B3 SQL 四件套演练（68 条断言）**：建表幂等 ×2、体检逐列比对 + 数据零变化、快照一致、回滚中止守卫、完整回滚（含"装前快照 → 装 → 回滚回到装前"）、CONSTRAINTS_ONLY | 需要 MySQL 在线；**只在一次性库 `b3_rollback_drill`(+`-migrate`) 里跑并收尾 DROP DATABASE**，不动 rad_oa |
 | 11 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-masterdata-check.ps1` | **B3 主数据档案接口验收（79 条断言）**：客户/供应商 CRUD 与唯一性、简称必填与账期非负、物料域类型树 5 级/叶子约束/单位小数位/引用保护、启停用与引用保护、不做数据范围隔离 | 需要已登录；夹具 ASCII 前缀 `C…/S…`，收尾全清；**幂等**（连跑两次残留 0 行） |
-| 12 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-contract-check.ps1` | **B3 合同主体接口验收（253 条断言）**：登记/编辑、状态自由流转、多维筛选与标签交集、软删除 30 天边界、框架四条守卫、自动标签、变更历史、详情只读、数据范围 403、编号由服务端生成；**4.8b 数据范围矩阵**（AC-79：7 档 × 4 夹具 × 列表/详情/导出三面 + 范围外编辑/删除/恢复三个旁路，逐格与基线比对、整集逐 id 相等） | 需要已登录；夹具 ASCII 前缀 `CTM*`；**有运行锁**，不可并发（见 §6.42）；**幂等**（连跑两次残留 0）；清理顺序纪律见 §6.45；会临时借用 `common`/`bm` 角色改授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.48）；断言数 113 → **253** 系 9.2 矩阵段新增。另：B3 菜单在真库是 **27 行 = 1 个 M 类目录 + 4 个 C 类菜单 + 22 个 F 类按钮**（其中 26 行带 `ctms:*` 权限点），别把 27 与"权限点数 26"混为一谈 |
+| 12 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-contract-check.ps1` | **B3 合同主体接口验收（261 条断言）**：登记/编辑、状态自由流转、多维筛选与标签交集、软删除 30 天边界、框架四条守卫、自动标签、变更历史、详情只读、数据范围 403、编号由服务端生成；**4.8b 数据范围矩阵**（AC-79：7 档 × 4 夹具 × 列表/详情/导出三面 + 范围外编辑/删除/恢复三个旁路，逐格与基线比对、整集逐 id 相等） | 需要已登录；夹具 ASCII 前缀 `CTM*`；**有运行锁**，不可并发（见 §6.42）；**幂等**（连跑两次残留 0）；清理顺序纪律见 §6.45；会临时借用 `common`/`bm` 角色改授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.48）；断言数 **113 → 253**（9.2 矩阵段）**→ 261**（10.2 的 R1 修复：导出面改按 xlsx 判定 + 补"行数 == 列表 total"双证 + 反向越权断言，见 §6.50 与 notes/integration-check.md §7.4-R1）。另：B3 菜单在真库是 **27 行 = 1 个 M 类目录 + 4 个 C 类菜单 + 22 个 F 类按钮**（其中 26 行带 `ctms:*` 权限点），别把 27 与"权限点数 26"混为一谈 |
 | 13 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-commercials-check.ps1` | **B3 商务要素/质保/编号接口验收（116 条断言）**：C-1 金额先舍入再汇总、行项校验与物料快照、标的物摘要落库、质保到期算法与金额↔比例互换、关闭质保清空 7 字段、质保提醒窗口边界与释放闭环、付款比例（不扣质保金/金额 0 空值）、编号格式与按「类型码+主体码+年份」分桶/跨年重置/预览不占号/停用占号不复用/类型主体校验 | 需要已登录；夹具 ASCII 前缀 `CTMSAL/CCOM`；**有运行锁**，不可并发；**幂等**（连跑两次残留 0 行）；编号断言全部用"同轮前后对照"，不假设 Redis 计数器起点（见文件头 ⚠） |
 | 14 | `cd ruoyi-vue-oa-master ; mvn -B -pl ruoyi-ctms test` | 后端单测（**174 条**：主数据规则/物料域/合同规则/合同编号规则/合同服务/数据范围/附件规则与附件服务） | 需要直连 settings（仓库根 `.mvn/maven.config` 已配） |
 | 15 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\ctms-attachment-check.ps1` | **B3 附件接入接口验收（69 条断言）**：对象挂载层与对象存在性、未注册对象类型被拒、`(object_type,object_id)` 复合索引、**白名单比平台窄**（zip/mp4 判别用例）、20MB 双向边界、**HTTP 413** 与半成品清理、随机命名与中文名、按对象查看权（403）与数据范围 403、删除留痕（字段名`附件`）与删除后不可下载 | 需要已登录；夹具 ASCII 前缀 `ATTC*/ATCUS*`；**有运行锁**，不可并发；**幂等**（连跑两次残留 0 行）；会临时借用 `common` 角色授权与数据范围，收尾还原且入口有自愈哨兵（见 §6.47/§6.48） |
