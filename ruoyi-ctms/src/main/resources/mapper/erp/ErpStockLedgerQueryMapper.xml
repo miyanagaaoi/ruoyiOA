@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  库存流水查询 / 下钻 / 累计（t_ctms_stock_ledger 的只读投影）的 Mapper（B4 第 7 组：库存账）。
+
+  口径说明：
+    · 本文件**只有 select**：写入侧是 T3 的 ErpStockLedgerMapper.insertLedger（只有 insert）。
+      两个文件合起来 = "流水只增不改"（AC-73）—— 没有任何 update/delete 语句可被调用。
+    · 列表与下钻**共用** selectLedgerRows：下钻只是多带 product_id + warehouse_id，
+      因此"下钻看到的行"与"列表里的行"永远同一处筛选与同一处数据范围。
+    · 时间倒序用 create_time desc, id desc：同一事务内写入的多行 create_time 可能相同，
+      用 id 兜底保证顺序稳定（分页不会漏行/重行）。
+    · 数据范围片段直接作用于主表别名 `l`（流水表有 dept_id / create_id 列），
+      由服务层用 ErpDocScope.buildDataScopeSql("l") 生成。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.ledger.mapper.ErpStockLedgerQueryMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.ledger.domain.ErpStockLedgerRow" id="ErpStockLedgerRowResult">
+        <id     property="id"              column="id"               />
+        <result property="productId"       column="product_id"       />
+        <result property="warehouseId"     column="warehouse_id"     />
+        <result property="bizType"         column="biz_type"         />
+        <result property="docType"         column="doc_type"         />
+        <result property="docNo"           column="doc_no"           />
+        <result property="srcDocNo"        column="src_doc_no"       />
+        <result property="qtyChange"       column="qty_change"       />
+        <result property="qtyAfter"        column="qty_after"        />
+        <result property="unitPrice"       column="unit_price"       />
+        <result property="deptId"          column="dept_id"          />
+        <result property="operatorId"      column="operator_id"      />
+        <result property="createBy"        column="create_by"        />
+        <result property="remark"          column="remark"           />
+        <result property="ledgerTime"      column="ledger_time"      />
+        <result property="productCode"     column="product_code"     />
+        <result property="productName"     column="product_name"     />
+        <result property="spec"            column="spec"             />
+        <result property="productTypeName" column="product_type_name"/>
+        <result property="warehouseCode"   column="warehouse_code"   />
+        <result property="warehouseName"   column="warehouse_name"   />
+        <!-- 非持久化字段（ledgerId / bizTypeFilter / docTypeFilter / keyword / 时间区间 /
+             dataScopeSql）由服务层装配；displayName 与 isReversal 由 Java 派生。 -->
+    </resultMap>
+
+    <sql id="selectLedgerVo">
+        select l.id, l.product_id, l.warehouse_id, l.biz_type, l.doc_type, l.doc_no, l.src_doc_no,
+               l.qty_change, l.qty_after, l.unit_price, l.dept_id,
+               l.create_id as operator_id, l.create_by, l.remark, l.create_time as ledger_time,
+               p.code  as product_code,
+               p.name  as product_name,
+               p.spec  as spec,
+               pt.name as product_type_name,
+               w.code  as warehouse_code,
+               w.name  as warehouse_name
+          from t_ctms_stock_ledger l
+          left join t_ctms_product      p  on p.id  = l.product_id
+          left join t_ctms_product_type pt on pt.id = p.product_type_id
+          left join t_ctms_warehouse    w  on w.id  = l.warehouse_id
+    </sql>
+
+    <select id="selectLedgerRows" parameterType="com.ruoyi.ctms.erp.ledger.domain.ErpStockLedgerRow"
+            resultMap="ErpStockLedgerRowResult">
+        <include refid="selectLedgerVo"/>
+        <where>
+            <if test="ledgerId != null and ledgerId != ''">
+                and l.id = #{ledgerId}
+            </if>
+            <if test="productId != null and productId != ''">
+                and l.product_id = #{productId}
+            </if>
+            <if test="warehouseId != null and warehouseId != ''">
+                and l.warehouse_id = #{warehouseId}
+            </if>
+            <if test="bizTypeFilter != null and bizTypeFilter != ''">
+                and l.biz_type = #{bizTypeFilter}
+            </if>
+            <if test="docTypeFilter != null and docTypeFilter != ''">
+                and l.doc_type = #{docTypeFilter}
+            </if>
+            <if test="beginTime != null">
+                and l.create_time &gt;= #{beginTime}
+            </if>
+            <if test="endTime != null">
+                and l.create_time &lt;= #{endTime}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (l.doc_no like concat('%', #{keyword}, '%')
+                     or l.src_doc_no like concat('%', #{keyword}, '%')
+                     or p.code like concat('%', #{keyword}, '%')
+                     or p.name like concat('%', #{keyword}, '%'))
+            </if>
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and ( ${dataScopeSql} )
+            </if>
+        </where>
+        order by l.create_time desc, l.id desc
+    </select>
+
+    <select id="selectLedgerRowById" resultMap="ErpStockLedgerRowResult">
+        <include refid="selectLedgerVo"/>
+         where l.id = #{id}
+    </select>
+
+    <select id="selectLedgerQtySums" resultType="com.ruoyi.ctms.erp.ledger.domain.ErpLedgerQtySum">
+        select product_id as productId, warehouse_id as warehouseId, sum(qty_change) as qtySum
+          from t_ctms_stock_ledger
+         group by product_id, warehouse_id
+    </select>
+</mapper>

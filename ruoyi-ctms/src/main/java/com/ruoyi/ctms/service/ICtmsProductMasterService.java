@@ -78,6 +78,13 @@ public interface ICtmsProductMasterService
     List<CtmsUom> selectUomList(CtmsUom query);
 
     /**
+     * 计量单位选择器（B4 §2.2）：**只返回启用中的单位**，供物料建档时的单位下拉使用。
+     *
+     * @return 启用中的单位（按 code 升序）
+     */
+    List<CtmsUom> selectUomOptions();
+
+    /**
      * 按主键查询计量单位。
      *
      * @param id 单位ID
@@ -115,6 +122,14 @@ public interface ICtmsProductMasterService
     List<CtmsWarehouse> selectWarehouseList(CtmsWarehouse query);
 
     /**
+     * 仓库选择器（B4 §2.3）：**只返回启用中的仓库**，供新单据的仓库下拉使用
+     * （规格「停用仓库 MUST NOT 出现在新单据的仓库下拉中」）。
+     *
+     * @return 启用中的仓库（按 code 升序）
+     */
+    List<CtmsWarehouse> selectWarehouseOptions();
+
+    /**
      * 按主键查询仓库。
      *
      * @param id 仓库ID
@@ -123,22 +138,23 @@ public interface ICtmsProductMasterService
     CtmsWarehouse selectWarehouseById(String id);
 
     /**
-     * 新增仓库：编码/名称非空、编码全局唯一。
+     * 新增仓库：编码/名称非空、**编码与名称都全局唯一**（B4 §2.3）。
      *
      * @param warehouse 仓库
      */
     void insertWarehouse(CtmsWarehouse warehouse);
 
     /**
-     * 修改仓库（编码不可改）。
+     * 修改仓库（编码不可改；改名同样查重并排除自身）。
      *
      * @param warehouse 仓库
      */
     void updateWarehouse(CtmsWarehouse warehouse);
 
     /**
-     * 删除仓库：B3 阶段还没有库存/单据表，这里直接物理删除；
-     * 「有结存或被单据引用禁止删除」是 B4 的守卫，届时在本方法内补。
+     * 删除仓库（B4 §2.3 的守卫已落地）：**有库存结存、有库存流水、被任一单据引用时被拒绝**
+     * （{@code 仓库已有库存结存，无法删除} / {@code 仓库已有库存流水，无法删除} /
+     * {@code 仓库已被单据引用，无法删除}），无引用时物理删除。
      *
      * @param id 仓库ID
      */
@@ -151,6 +167,13 @@ public interface ICtmsProductMasterService
      * @return 物料集合
      */
     List<CtmsProduct> selectProductList(CtmsProduct query);
+
+    /**
+     * 物料选择器（B4 §2.4）：**只返回启用中的物料**，供新单据行项的物料下拉使用。
+     *
+     * @return 启用中的物料（按 code 升序）
+     */
+    List<CtmsProduct> selectProductOptions();
 
     /**
      * 按主键查询物料。
@@ -175,7 +198,9 @@ public interface ICtmsProductMasterService
     void updateProduct(CtmsProduct product);
 
     /**
-     * 删除物料（物理删除）。
+     * 删除物料（B4 §2.4 的守卫已落地）：**有库存结存、有库存流水、被单据行项引用时被拒绝**
+     * （{@code 物料已有库存结存，无法删除} / {@code 物料已有库存流水，无法删除} /
+     * {@code 物料已被单据行项引用，无法删除}），无引用时物理删除。
      *
      * @param id 物料ID
      */

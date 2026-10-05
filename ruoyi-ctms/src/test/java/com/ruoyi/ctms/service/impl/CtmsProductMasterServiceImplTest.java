@@ -15,6 +15,8 @@ import com.ruoyi.ctms.domain.CtmsProduct;
 import com.ruoyi.ctms.domain.CtmsProductType;
 import com.ruoyi.ctms.domain.CtmsUom;
 import com.ruoyi.ctms.domain.CtmsWarehouse;
+import com.ruoyi.ctms.erp.master.ErpMasterRefGuards;
+import com.ruoyi.ctms.erp.master.mapper.ErpMasterRefMapper;
 import com.ruoyi.ctms.mapper.CtmsProductMapper;
 import com.ruoyi.ctms.mapper.CtmsProductTypeMapper;
 import com.ruoyi.ctms.mapper.CtmsUomMapper;
@@ -51,6 +53,14 @@ public class CtmsProductMasterServiceImplTest
 
     private final StubWarehouseMapper warehouseMapper = new StubWarehouseMapper();
 
+    /**
+     * B4 §2.3/§2.4 新增的引用统计桩（仓库/物料删除守卫用）。
+     *
+     * <p> 默认全部 0（= 无引用 → 可删），各用例按需设置某一档计数。
+     * 必须注入：守卫对"统计未装配"是<b>保护性拒绝</b>（宁可报错也不无校验地删档）。 </p>
+     */
+    private final StubMasterRefMapper refMapper = new StubMasterRefMapper();
+
     private final CtmsProductMasterServiceImpl service = new CtmsProductMasterServiceImpl();
 
     @Before
@@ -60,6 +70,7 @@ public class CtmsProductMasterServiceImplTest
         inject("uomMapper", uomMapper);
         inject("warehouseMapper", warehouseMapper);
         inject("productMapper", productMapper);
+        inject("masterRefMapper", refMapper);
     }
 
     /* ==================== 商品类型树 ==================== */
@@ -371,7 +382,7 @@ public class CtmsProductMasterServiceImplTest
     }
 
     @Test
-    public void 仓库编码名称非空且B3阶段可直接物理删除()
+    public void 仓库编码名称非空且无引用时可物理删除()
     {
         assertRejected("仓库编码不能为空", new Runnable()
         {
@@ -391,7 +402,243 @@ public class CtmsProductMasterServiceImplTest
         });
         CtmsWarehouse warehouse = insertWarehouse("WH02", "二号仓");
         service.deleteWarehouseById(warehouse.getId());
-        assertNull("B3 阶段仓库是物理删除（引用守卫留给 B4）", warehouseMapper.store.get(warehouse.getId()));
+        assertNull("无引用时仍是物理删除（有结存/流水/单据时的拒绝见下面三条用例）",
+                warehouseMapper.store.get(warehouse.getId()));
+    }
+
+    /* ==================== B4 §2.3：仓库的名称唯一与引用守卫 ==================== */
+
+    @Test
+    public void 仓库名称重复被拒()
+    {
+        insertWarehouse("WH01", "一号仓");
+        assertRejected("仓库名称已存在", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                // 编码不同、名称相同：B4 规格要求名称也全局唯一
+                insertWarehouse("WH02", "一号仓");
+            }
+        });
+        assertEquals("被拒的仓库不能落库", 1, warehouseMapper.store.size());
+    }
+
+    @Test
+    public void 仓库改名时同名要排除自身并查重()
+    {
+        CtmsWarehouse first = insertWarehouse("WH01", "一号仓");
+        CtmsWarehouse second = insertWarehouse("WH02", "二号仓");
+
+        // ① 改成自己的名字（只是顺带改地址）必须放行
+        CtmsWarehouse same = new CtmsWarehouse();
+        same.setId(first.getId());
+        same.setCode(first.getCode());
+        same.setName("一号仓");
+        same.setAddress("新地址");
+        service.updateWarehouse(same);
+        assertEquals("新地址", warehouseMapper.store.get(first.getId()).getAddress());
+
+        // ② 改成别人的名字必须被拒
+        final CtmsWarehouse clash = new CtmsWarehouse();
+        clash.setId(second.getId());
+        clash.setCode(second.getCode());
+        clash.setName("一号仓");
+        assertRejected("仓库名称已存在", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.updateWarehouse(clash);
+            }
+        });
+        assertEquals("被拒的改名不能生效", "二号仓", warehouseMapper.store.get(second.getId()).getName());
+    }
+
+    @Test
+    public void 有结存的仓库删除被拒()
+    {
+        CtmsWarehouse warehouse = insertWarehouse("WH01", "一号仓");
+        refMapper.stockRefs = 2;
+        assertRejected("仓库已有库存结存，无法删除", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteWarehouseById(warehouse.getId());
+            }
+        });
+        assertNotNull("被拒时仓库必须还在", warehouseMapper.store.get(warehouse.getId()));
+    }
+
+    @Test
+    public void 有流水的仓库删除被拒()
+    {
+        CtmsWarehouse warehouse = insertWarehouse("WH01", "一号仓");
+        refMapper.ledgerRefs = 1;
+        assertRejected("仓库已有库存流水，无法删除", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteWarehouseById(warehouse.getId());
+            }
+        });
+        assertNotNull(warehouseMapper.store.get(warehouse.getId()));
+    }
+
+    @Test
+    public void 被单据引用的仓库删除被拒()
+    {
+        CtmsWarehouse warehouse = insertWarehouse("WH01", "一号仓");
+        refMapper.warehouseDocRefs = 1;
+        assertRejected("仓库已被单据引用，无法删除", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteWarehouseById(warehouse.getId());
+            }
+        });
+        assertNotNull(warehouseMapper.store.get(warehouse.getId()));
+    }
+
+    @Test
+    public void 引用统计未装配时删除被保护性拒绝()
+    {
+        final CtmsWarehouse warehouse = insertWarehouse("WH01", "一号仓");
+        final CtmsProductMasterServiceImpl bare = new CtmsProductMasterServiceImpl();
+        injectTo(bare, "warehouseMapper", warehouseMapper);
+        // 未注入 masterRefMapper：守卫必须拒绝，而不是"统计不到就放行"
+        assertRejected(ErpMasterRefGuards.COUNTER_MISSING_MESSAGE, new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                bare.deleteWarehouseById(warehouse.getId());
+            }
+        });
+        assertNotNull("保护性拒绝后仓库仍在", warehouseMapper.store.get(warehouse.getId()));
+    }
+
+    @Test
+    public void 仓库不存在时删除被拒()
+    {
+        assertRejected("仓库不存在", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteWarehouseById("");
+            }
+        });
+        assertRejected("仓库不存在", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteWarehouseById("NOT-EXIST");
+            }
+        });
+    }
+
+    /* ==================== B4 §2.4：物料的引用守卫与选择器 ==================== */
+
+    @Test
+    public void 被结存流水或单据引用的物料删除被拒()
+    {
+        CtmsUom uom = insertUom("KG", "千克", Integer.valueOf(3));
+        CtmsProductType type = insertType("原材料", null, "MAT");
+        CtmsProduct product = insertProduct("钢材", type.getId(), uom.getId(), null);
+
+        refMapper.stockRefs = 1;
+        assertRejected("物料已有库存结存，无法删除", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteProductById(product.getId());
+            }
+        });
+        refMapper.stockRefs = 0;
+
+        refMapper.ledgerRefs = 1;
+        assertRejected("物料已有库存流水，无法删除", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteProductById(product.getId());
+            }
+        });
+        refMapper.ledgerRefs = 0;
+
+        refMapper.productDocRefs = 1;
+        assertRejected("物料已被单据行项引用，无法删除", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.deleteProductById(product.getId());
+            }
+        });
+        assertNotNull("被拒时物料必须还在", productMapper.store.get(product.getId()));
+    }
+
+    @Test
+    public void 无引用的物料可以删除()
+    {
+        CtmsUom uom = insertUom("KG", "千克", Integer.valueOf(3));
+        CtmsProductType type = insertType("原材料", null, "MAT");
+        CtmsProduct product = insertProduct("钢材", type.getId(), uom.getId(), null);
+        service.deleteProductById(product.getId());
+        assertNull("无引用时物理删除", productMapper.store.get(product.getId()));
+    }
+
+    @Test
+    public void 三个选择器只返回启用中的档案()
+    {
+        // 仓库：一个启用、一个停用
+        insertWarehouse("WH01", "一号仓");
+        CtmsWarehouse off = insertWarehouse("WH02", "二号仓");
+        CtmsWarehouse patch = new CtmsWarehouse();
+        patch.setId(off.getId());
+        patch.setCode(off.getCode());
+        patch.setName(off.getName());
+        patch.setEnableFlag("0");
+        service.updateWarehouse(patch);
+
+        assertEquals("仓库选择器只返回启用项", 1, service.selectWarehouseOptions().size());
+        assertEquals("WH01", service.selectWarehouseOptions().get(0).getCode());
+        assertEquals("档案列表仍能看到停用项（enableFlag 为空 = 不限）", 2,
+                service.selectWarehouseList(new CtmsWarehouse()).size());
+
+        // 计量单位：一个启用、一个停用
+        CtmsUom on = insertUom("KG", "千克", Integer.valueOf(3));
+        CtmsUom offUom = insertUom("TON", "吨", Integer.valueOf(3));
+        CtmsUom uomPatch = new CtmsUom();
+        uomPatch.setId(offUom.getId());
+        uomPatch.setCode(offUom.getCode());
+        uomPatch.setName(offUom.getName());
+        uomPatch.setEnableFlag("0");
+        service.updateUom(uomPatch);
+        assertEquals("单位选择器只返回启用项", 1, service.selectUomOptions().size());
+        assertEquals("KG", service.selectUomOptions().get(0).getCode());
+        assertEquals(on.getId(), service.selectUomOptions().get(0).getId());
+
+        // 物料：一个启用、一个停用
+        CtmsProductType type = insertType("原材料", null, "MAT");
+        insertProduct("启用物料", type.getId(), on.getId(), null);
+        CtmsProduct offProduct = insertProduct("停用物料", type.getId(), on.getId(), null);
+        CtmsProduct productPatch = new CtmsProduct();
+        productPatch.setId(offProduct.getId());
+        productPatch.setName(offProduct.getName());
+        productPatch.setProductTypeId(type.getId());
+        productPatch.setUomId(on.getId());
+        productPatch.setEnableFlag("0");
+        service.updateProduct(productPatch);
+        assertEquals("物料选择器只返回启用项", 1, service.selectProductOptions().size());
+        assertEquals("启用物料", service.selectProductOptions().get(0).getName());
     }
 
     /* ==================== 物料档案 ==================== */
@@ -622,11 +869,23 @@ public class CtmsProductMasterServiceImplTest
 
     private void inject(String fieldName, Object value)
     {
+        injectTo(service, fieldName, value);
+    }
+
+    /**
+     * 向任意实例注入字段（用于"故意不装配某个依赖"的用例，例如引用统计缺失时的保护性拒绝）。
+     *
+     * @param target    目标实例
+     * @param fieldName 字段名
+     * @param value     值
+     */
+    private void injectTo(Object target, String fieldName, Object value)
+    {
         try
         {
             Field field = CtmsProductMasterServiceImpl.class.getDeclaredField(fieldName);
             field.setAccessible(true);
-            field.set(service, value);
+            field.set(target, value);
         }
         catch (Exception e)
         {
@@ -1136,6 +1395,48 @@ public class CtmsProductMasterServiceImplTest
             p.setUpdateBy(src.getUpdateBy());
             p.setUpdateTime(src.getUpdateTime());
             return p;
+        }
+    }
+
+    /**
+     * B4 §2.3/§2.4 的引用统计桩：四档计数各自可设（默认全 0 = 无引用）。
+     *
+     * <p> 桩不查库，因此"有结存/有流水/被单据引用"三种拒绝可以逐条断言到<b>文案</b>；
+     * 真实 SQL 的覆盖由 {@code tools/ctms-masterdata-check.ps1} 与 notes/02-master.md
+     * 的接口断言清单（t10 在 env 窗口跑）负责。 </p>
+     */
+    private static class StubMasterRefMapper implements ErpMasterRefMapper
+    {
+        private int stockRefs;
+
+        private int ledgerRefs;
+
+        private int warehouseDocRefs;
+
+        private int productDocRefs;
+
+        @Override
+        public int countStockRefs(String warehouseId, String productId)
+        {
+            return stockRefs;
+        }
+
+        @Override
+        public int countLedgerRefs(String warehouseId, String productId)
+        {
+            return ledgerRefs;
+        }
+
+        @Override
+        public int countDocRefsByWarehouse(String warehouseId)
+        {
+            return warehouseDocRefs;
+        }
+
+        @Override
+        public int countDocRefsByProduct(String productId)
+        {
+            return productDocRefs;
         }
     }
 

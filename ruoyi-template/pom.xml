@@ -42,6 +42,20 @@
             <artifactId>mapstruct-processor</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <!--
+          单元测试（2.0 B1 §7.10 / PRD V-8 反向校验）。
+
+          本模块 `src/test` 原先只有 main() 形式的自检程序（`*Check.java`），
+          `mvn test` 跑出来是 "Tests run: 0"；而"表单保存前必须拦住会让已发布流程条件字段失效的改动"
+          需要可执行、可断言的用例，故引入 JUnit 4（与 ruoyi-workflow 同口径）。
+          版本由 spring-boot-dependencies 统一管理，不在这里写死。
+        -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>

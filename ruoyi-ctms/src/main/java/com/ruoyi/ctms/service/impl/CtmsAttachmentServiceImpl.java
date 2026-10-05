@@ -18,6 +18,7 @@ import com.ruoyi.common.utils.file.MimeTypeUtils;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.ruoyi.ctms.domain.CtmsAttachment;
 import com.ruoyi.ctms.domain.CtmsChangeLog;
+import com.ruoyi.ctms.erp.base.service.IErpDocObjectAccess;
 import com.ruoyi.ctms.mapper.CtmsAttachmentMapper;
 import com.ruoyi.ctms.mapper.CtmsChangeLogMapper;
 import com.ruoyi.ctms.service.ICtmsAttachmentService;
@@ -66,6 +67,22 @@ public class CtmsAttachmentServiceImpl implements ICtmsAttachmentService
     @Autowired
     private ICtmsContractService contractService;
 
+    /**
+     * <p> B4 单据对象的"存在性 + 数据范围"校验（接入点 ②）。 </p>
+     *
+     * <p> B4 的 8 类单据对象类型（{@code purchase_request}/{@code purchase_order}/
+     * {@code sales_request}/{@code sales_order}/{@code stock_in}/
+     * {@code stock_out}/{@code stock_take}/{@code stock_transfer}）在
+     * {@link CtmsAttachmentObjectTypes#registered()} 里登记后，存在性校验由本接口承担
+     * （实现在 B4 的公共层，见 {@code IErpDocObjectAccess}）。 </p>
+     *
+     * <p> 声明为 {@code required = false} 的原因：B3 的单测不装配 Spring 容器，
+     * 只装配合同对象即可跑通；若容器里没有 B4 的实现，单据对象类型会被明确拒绝
+     * （见 {@link #requireObjectAccess}），不会静默放过。 </p>
+     */
+    @Autowired(required = false)
+    private IErpDocObjectAccess erpDocObjectAccess;
+
     @Autowired
     private CtmsChangeLogMapper changeLogMapper;
 
@@ -77,7 +94,7 @@ public class CtmsAttachmentServiceImpl implements ICtmsAttachmentService
         String type = checkObjectType(objectType);
         String id = checkObjectId(objectId);
         requireObjectAccess(type, id);
-        List<CtmsAttachment> list = attachmentMapper.selectAttachmentList(type, id, contractDataScopeSql());
+        List<CtmsAttachment> list = attachmentMapper.selectAttachmentList(type, id, dataScopeSqlFor(type));
         return list == null ? new ArrayList<CtmsAttachment>() : list;
     }
 
@@ -313,16 +330,19 @@ public class CtmsAttachmentServiceImpl implements ICtmsAttachmentService
     }
 
     /**
-     * <p> 对象存在性 + 可见性校验（任务 6.1 的"对象不存在被拒"）。 </p>
+     * <p> 对象存在性 + 可见性校验（任务 6.1 的"对象不存在被拒"；B4 接入点 ②）。 </p>
      *
-     * <p> 分派点：合同对象走 {@code ICtmsContractService.checkContractAccess}，
-     * 该方法在对象不存在时抛「合同不存在」、范围外抛业务码 403；
-     * B4 的单据对象在这里追加分支（对象类型常量在
-     * {@link CtmsAttachmentObjectTypes}，两边必须同批改）。 </p>
+     * <p> 分派点两处，各自<b>只有一份</b>判定实现： </p>
+     * <ul>
+     *   <li> 合同对象 → {@code ICtmsContractService.checkContractAccess}
+     *        （不存在抛"合同不存在"、范围外抛业务码 403）； </li>
+     *   <li> B4 的 8 类单据对象 → {@link IErpDocObjectAccess#checkObjectAccess}
+     *        （按单据类型查对应表 + 同一套四档数据范围判定）。 </li>
+     * </ul>
      *
      * <p> 未注册的类型在上一步就已被拒，因此走到这里的分支一定是已登记的；
      * 仍然显式抛错是为了让"注册了类型却忘了写校验分支"变成一次明确的失败，
-     * 而不是静默放过。 </p>
+     * 而不是静默放过（会产生指向不存在对象的孤儿附件）。 </p>
      *
      * @param objectType 对象类型（已归一）
      * @param objectId   对象标识
@@ -334,16 +354,33 @@ public class CtmsAttachmentServiceImpl implements ICtmsAttachmentService
             contractService.checkContractAccess(objectId);
             return;
         }
+        if (erpDocObjectAccess != null && erpDocObjectAccess.supports(objectType))
+        {
+            erpDocObjectAccess.checkObjectAccess(objectType, objectId);
+            return;
+        }
         throw new ServiceException("未注册的对象类型：" + objectType);
     }
 
     /**
-     * 数据范围片段（合同维度）。附件列表用它把"看不见的合同"的附件一起排掉。
+     * <p> 数据范围片段：<b>只对合同对象加</b>。 </p>
      *
-     * @return 白名单片段；"全部数据"档返回空串（不加条件）
+     * <p> 合同附件的数据范围落在 {@code contract_id} 上（SQL 里 {@code exists(... t_ctms_contract c ...)}），
+     * 与合同列表同一处判定；而 B4 单据附件的 {@code contract_id} 为 NULL，
+     * 若把合同片段硬套上去，<b>所有单据附件都会被过滤掉</b>（列表永远为空）——
+     * 这是 B4 接入时实测要小心的一处。单据附件的数据范围在
+     * {@link #requireObjectAccess} 里按"对象本身是否可见"判定（列表已按
+     * {@code object_type + object_id} 收敛到单个对象，无需再拼片段）。 </p>
+     *
+     * @param objectType 已归一的对象类型
+     * @return 合同对象的白名单片段；单据对象返回 null（不加条件）
      */
-    private String contractDataScopeSql()
+    private String dataScopeSqlFor(String objectType)
     {
+        if (!CtmsAttachmentObjectTypes.CONTRACT.equals(objectType))
+        {
+            return null;
+        }
         try
         {
             return ContractDataScope.buildDataScopeSql();

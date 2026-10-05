@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  销售订单行项（t_ctms_sales_order_item，23 列）的 Mapper（B4 第 5 组）。
+
+  口径说明：
+    · 行项是从属明细：编辑口径是「先按单据全删、再整批插入」；
+    · amount 由服务层经 ErpAmounts.lineAmount 先 HALF_UP 舍入到 2 位后写入；
+    · shipped_qty（已出库数量）的累加/回退走 addShippedQty / subtractShippedQty：
+      由出库单「过账成功」路径调用，红冲回退时用 greatest(0, ...) 保证不小于 0；
+    · src_item_id 记录来源销售申请行项（下推时写入），是过账回写时的匹配依据。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.sales.mapper.ErpSalesOrderItemMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.sales.domain.ErpSalesOrderItem" id="ErpSalesOrderItemResult">
+        <id     property="id"            column="id"             />
+        <result property="docId"         column="doc_id"         />
+        <result property="seq"           column="seq"            />
+        <result property="productId"     column="product_id"     />
+        <result property="productCode"   column="product_code"   />
+        <result property="productName"   column="product_name"   />
+        <result property="spec"          column="spec"           />
+        <result property="uomName"       column="uom_name"       />
+        <result property="uomDecimals"   column="uom_decimals"   />
+        <result property="qty"           column="qty"            />
+        <result property="unitPrice"     column="unit_price"     />
+        <result property="amount"        column="amount"         />
+        <result property="warehouseId"   column="warehouse_id"   />
+        <result property="warehouseName" column="warehouse_name" />
+        <result property="srcItemId"     column="src_item_id"    />
+        <result property="remark"        column="remark"         />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="createId"      column="create_id"      />
+        <result property="createBy"      column="create_by"      />
+        <result property="updateId"      column="update_id"      />
+        <result property="updateBy"      column="update_by"      />
+        <result property="shippedQty"    column="shipped_qty"    />
+    </resultMap>
+
+    <sql id="selectSalesOrderItemVo">
+        select id, doc_id, seq, product_id, product_code, product_name, spec,
+               uom_name, uom_decimals, qty, unit_price, amount,
+               warehouse_id, warehouse_name, src_item_id, remark,
+               create_time, update_time, create_id, create_by, update_id, update_by,
+               shipped_qty
+          from t_ctms_sales_order_item
+    </sql>
+
+    <select id="selectItemsByDocId" parameterType="java.lang.String" resultMap="ErpSalesOrderItemResult">
+        <include refid="selectSalesOrderItemVo"/>
+        where doc_id = #{docId}
+        order by seq asc
+    </select>
+
+    <!-- 列表派生列的批量取数（每页一次，避免 N+1）；@MapKey("docId") 让服务层直接按单据取值 -->
+    <select id="selectItemsByDocIds" resultMap="ErpSalesOrderItemResult">
+        <include refid="selectSalesOrderItemVo"/>
+        where doc_id in
+        <foreach collection="docIds" item="docId" open="(" separator="," close=")">#{docId}</foreach>
+        order by doc_id asc, seq asc
+    </select>
+
+    <select id="selectItemsBySrcItemIds" resultMap="ErpSalesOrderItemResult">
+        <include refid="selectSalesOrderItemVo"/>
+        where src_item_id in
+        <foreach collection="srcItemIds" item="srcItemId" open="(" separator="," close=")">#{srcItemId}</foreach>
+        order by doc_id asc, seq asc
+    </select>
+
+    <select id="selectItemById" parameterType="java.lang.String" resultMap="ErpSalesOrderItemResult">
+        <include refid="selectSalesOrderItemVo"/>
+        where id = #{id}
+    </select>
+
+    <delete id="deleteItemsByDocId" parameterType="java.lang.String">
+        delete from t_ctms_sales_order_item where doc_id = #{docId}
+    </delete>
+
+    <!-- id 由服务层生成；shipped_qty 由服务层显式写入（编辑路径下恒为 0：只有草稿可编辑） -->
+    <insert id="batchInsertItems">
+        insert into t_ctms_sales_order_item(
+            id, doc_id, seq, product_id, product_code, product_name, spec,
+            uom_name, uom_decimals, qty, unit_price, amount,
+            warehouse_id, warehouse_name, src_item_id, remark,
+            create_time, update_time, create_id, create_by, update_id, update_by,
+            shipped_qty
+        )values
+        <foreach collection="items" item="item" separator=",">
+            (
+            #{item.id}, #{item.docId}, #{item.seq}, #{item.productId}, #{item.productCode},
+            #{item.productName}, #{item.spec}, #{item.uomName}, #{item.uomDecimals},
+            #{item.qty}, #{item.unitPrice}, #{item.amount},
+            #{item.warehouseId}, #{item.warehouseName}, #{item.srcItemId}, #{item.remark},
+            sysdate(), sysdate(), #{item.createId}, #{item.createBy}, #{item.updateId}, #{item.updateBy},
+            <choose>
+                <when test="item.shippedQty != null">#{item.shippedQty}</when>
+                <otherwise>0</otherwise>
+            </choose>
+            )
+        </foreach>
+    </insert>
+
+    <!-- 过账成功时累加已出库量（出库单过账路径调用） -->
+    <update id="addShippedQty">
+        update t_ctms_sales_order_item
+        set shipped_qty = shipped_qty + #{delta},
+            update_time = sysdate()
+        where id = #{itemId}
+    </update>
+
+    <!-- 红冲回退：greatest(0, ...) 保证已出库量不为负 -->
+    <update id="subtractShippedQty">
+        update t_ctms_sales_order_item
+        set shipped_qty = greatest(0, shipped_qty - #{delta}),
+            update_time = sysdate()
+        where id = #{itemId}
+    </update>
+
+    <!--
+      编辑路径：按主键 upsert。
+      ⚠ shipped_qty 刻意不在更新列里：过账累加过的行不能被编辑清零（红冲回退权在过账路径）。
+    -->
+    <insert id="batchUpsertItems">
+        insert into t_ctms_sales_order_item(
+            id, doc_id, seq, product_id, product_code, product_name, spec,
+            uom_name, uom_decimals, qty, unit_price, amount,
+            warehouse_id, warehouse_name, src_item_id, remark,
+            create_time, update_time, create_id, create_by, update_id, update_by,
+            shipped_qty
+        )values
+        <foreach collection="items" item="item" separator=",">
+            (
+            #{item.id}, #{item.docId}, #{item.seq}, #{item.productId}, #{item.productCode},
+            #{item.productName}, #{item.spec}, #{item.uomName}, #{item.uomDecimals},
+            #{item.qty}, #{item.unitPrice}, #{item.amount},
+            #{item.warehouseId}, #{item.warehouseName}, #{item.srcItemId}, #{item.remark},
+            sysdate(), sysdate(), #{item.createId}, #{item.createBy}, #{item.updateId}, #{item.updateBy},
+            <choose>
+                <when test="item.shippedQty != null">#{item.shippedQty}</when>
+                <otherwise>0</otherwise>
+            </choose>
+            )
+        </foreach>
+        on duplicate key update
+            seq = values(seq),
+            product_id = values(product_id),
+            product_code = values(product_code),
+            product_name = values(product_name),
+            spec = values(spec),
+            uom_name = values(uom_name),
+            uom_decimals = values(uom_decimals),
+            qty = values(qty),
+            unit_price = values(unit_price),
+            amount = values(amount),
+            warehouse_id = values(warehouse_id),
+            warehouse_name = values(warehouse_name),
+            src_item_id = values(src_item_id),
+            remark = values(remark),
+            update_time = sysdate(),
+            update_id = values(update_id),
+            update_by = values(update_by)
+    </insert>
+
+</mapper>

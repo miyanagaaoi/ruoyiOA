@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  单据公共查询（B4 公共层；附件接入点 ②）。
+
+  口径说明：
+    · 只取"访问判定"要用的 5 个字段（id / doc_no / status / dept_id / create_id），
+      不返回业务字段，避免调用方顺手外泄单据数据（与 B3 的 checkContractAccess 同款纪律）。
+    · 表名全部是**字面量**，由 <choose> 按 docType 分支选中；不接受任何动态表名，
+      因此本文件里没有一处 ${}（只有 #{} 占位）。
+    · 只过滤 del_flag='0'（未删除）；**不过滤状态**：作废单据仍然"存在"，
+      给它挂附件不会产生孤儿附件，是否允许由单据服务在编辑入口另行把关。
+    · 列名别名成驼峰（docNo/deptId/createId），使结果 Map 的键与
+      map-underscore-to-camel-case 配置无关。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.base.mapper.ErpDocLookupMapper">
+
+    <!--
+      按单据类型取表头判定字段。
+      ⚠ 8 个分支的表名与 ErpDocType 的枚举值逐字对应；新增单据类型必须同时改三处：
+        枚举 / 本查询 / ErpDocObjectAccessServiceImpl 的分派说明。
+      ⚠ otherwise 分支给"零行结果"而不是报错：未知类型在服务层会被明确拒绝
+        （"未注册的对象类型"），这里只需保证不拼出非法 SQL。
+    -->
+    <select id="selectDocHeaderByType" resultType="java.util.Map">
+        <choose>
+            <when test="docType == 'purchase_request'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_purchase_request
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <when test="docType == 'purchase_order'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_purchase_order
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <when test="docType == 'sales_request'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_sales_request
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <when test="docType == 'sales_order'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_sales_order
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <when test="docType == 'stock_in'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_stock_in
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <when test="docType == 'stock_out'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_stock_out
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <when test="docType == 'stock_take'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_stocktake
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <when test="docType == 'stock_transfer'">
+                select id as id, doc_no as docNo, status as status,
+                       dept_id as deptId, create_id as createId
+                  from t_ctms_transfer
+                 where id = #{docId} and del_flag = '0'
+            </when>
+            <otherwise>
+                select null as id, null as docNo, null as status,
+                       null as deptId, null as createId
+                 from t_ctms_stock where 1 = 0
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 部门祖先链：只读平台部门树，不新增组织表 -->
+    <select id="selectDeptAncestors" resultType="java.lang.String">
+        select ancestors from sys_dept where dept_id = #{deptId}
+    </select>
+
+</mapper>

@@ -9,6 +9,7 @@ import com.ruoyi.common.enums.WhetherStatus;
 import com.ruoyi.template.domain.TemplateDynamicForm;
 import com.ruoyi.template.service.ITemplateDynamicFormService;
 import com.ruoyi.template.service.ITemplateService;
+import com.ruoyi.template.support.FormV8Impact;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -70,6 +71,9 @@ public class TemplateDynamicFormController extends BaseController {
     @Log(title = "动态单", businessType = BusinessType.UPDATE)
     @PutMapping
     public AjaxResult edit(@RequestBody TemplateDynamicForm templateDynamicForm) {
+        // PRD V-8 反向校验（只读预演）：拿"放行但有告警"的明细。真正的阻断在 Service 里
+        // （同一份判定逻辑再跑一次并在阻断时抛业务异常）——这样任何调用方都绕不过去。
+        FormV8Impact impact = templateDynamicFormService.previewFormSaveImpact(templateDynamicForm);
         int rows = templateDynamicFormService.updateTemplateDynamicForm(templateDynamicForm);
         // 2.0（B1 §7.10）：换版本会把模板显式改指到新表单，把影响面回给前端做提示。
         // 提示口径是"当前有多少模板正使用这张表单"，而不是"本次改指了几条" ——
@@ -87,6 +91,9 @@ public class TemplateDynamicFormController extends BaseController {
         }
         AjaxResult result = toAjax(rows);
         result.put("affectedTemplates", affected);
+        // PRD V-8：换版本会**留下**指向旧版本表单的流程（模板改指了、流程没改），
+        // 必须把这些流程明确回给界面，不能让"界面显示 A、校验按 B"静默发生。
+        result.put("formFlowWarnings", impact.getWarnings());
         return result;
     }
 

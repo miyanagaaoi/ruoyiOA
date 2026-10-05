@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  调拨单行项（t_ctms_transfer_item，22 列）的 Mapper（B4 第 6 组）。
+
+  口径说明：
+    · 行项随表头**全量替换**（先 deleteItemsByDocId 再 batchInsertItems，同一事务内），
+      序号由服务层从 1 连续重排；
+    · 快照列（product_code/product_name/spec/uom_name/uom_decimals）由公共层守卫在写入前固化
+      —— 历史单据因此不受物料改名影响（AC-72）；
+    · **warehouse_id / warehouse_name 恒为 null**：调拨的仓库由表头两仓决定（tasks.md §6.1
+      "行项不使用行级仓库"），列保留只是为了复用公共行项字段，服务层写入前会清空；
+    · unit_price / amount 恒为 0（调拨不产生金额；流水单价也写 0）；
+    · create_time/update_time 走 sysdate()。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.stockops.mapper.ErpTransferItemMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.stockops.domain.ErpTransferItem" id="ErpTransferItemResult">
+        <id     property="id"            column="id"             />
+        <result property="docId"         column="doc_id"         />
+        <result property="seq"           column="seq"            />
+        <result property="productId"     column="product_id"     />
+        <result property="productCode"   column="product_code"   />
+        <result property="productName"   column="product_name"   />
+        <result property="spec"          column="spec"           />
+        <result property="uomName"       column="uom_name"       />
+        <result property="uomDecimals"   column="uom_decimals"   />
+        <result property="qty"           column="qty"            />
+        <result property="unitPrice"     column="unit_price"     />
+        <result property="amount"        column="amount"         />
+        <result property="warehouseId"   column="warehouse_id"   />
+        <result property="warehouseName" column="warehouse_name" />
+        <result property="srcItemId"     column="src_item_id"    />
+        <result property="remark"        column="remark"         />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="createId"      column="create_id"      />
+        <result property="createBy"      column="create_by"      />
+        <result property="updateId"      column="update_id"      />
+        <result property="updateBy"      column="update_by"      />
+    </resultMap>
+
+    <sql id="selectTransferItemVo">
+        select id, doc_id, seq, product_id, product_code, product_name, spec, uom_name, uom_decimals,
+               qty, unit_price, amount, warehouse_id, warehouse_name, src_item_id, remark,
+               create_time, update_time, create_id, create_by, update_id, update_by
+          from t_ctms_transfer_item
+    </sql>
+
+    <select id="selectItemsByDocId" resultMap="ErpTransferItemResult">
+        <include refid="selectTransferItemVo"/>
+         where doc_id = #{docId}
+         order by seq, id
+    </select>
+
+    <insert id="batchInsertItems">
+        insert into t_ctms_transfer_item(
+            id, doc_id, seq, product_id, product_code, product_name, spec, uom_name, uom_decimals,
+            qty, unit_price, amount, warehouse_id, warehouse_name, src_item_id, remark,
+            create_time, update_time, create_id, create_by
+        )values
+        <foreach collection="items" item="item" separator=",">
+            (
+            #{item.id}, #{item.docId}, #{item.seq}, #{item.productId}, #{item.productCode},
+            #{item.productName}, #{item.spec}, #{item.uomName}, #{item.uomDecimals},
+            #{item.qty}, #{item.unitPrice}, #{item.amount}, null, null,
+            #{item.srcItemId}, #{item.remark}, sysdate(), sysdate(), #{item.createId}, #{item.createBy}
+            )
+        </foreach>
+    </insert>
+
+    <delete id="deleteItemsByDocId">
+        delete from t_ctms_transfer_item where doc_id = #{docId}
+    </delete>
+
+</mapper>

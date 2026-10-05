@@ -158,6 +158,22 @@ public class CtmsProductMasterController extends BaseController
     }
 
     /**
+     * 计量单位选择器（B4 §2.2）：只返回**启用中**的单位，供物料建档的下拉使用。
+     *
+     * <p> 与 {@code /uom/list} 刻意分开（沿用 B3 对往来单位 options 的同一口径）：
+     * 档案页要能看到停用项，选择器不能。路由上 {@code /options} 是字面量映射，
+     * 与 {@code /{id:[A-Za-z0-9]+}} 共存时 Spring 优先匹配字面量（见类注释）。 </p>
+     *
+     * @return 启用中的单位
+     */
+    @PreAuthorize("@ss.hasPermi('ctms:partner:query')")
+    @GetMapping("/uom/options")
+    public AjaxResult uomOptions()
+    {
+        return success(productMasterService.selectUomOptions());
+    }
+
+    /**
      * 查询计量单位详细。
      *
      * @param id 单位ID
@@ -233,6 +249,18 @@ public class CtmsProductMasterController extends BaseController
     }
 
     /**
+     * 仓库选择器（B4 §2.3）：只返回**启用中**的仓库 —— 单据的仓库下拉用它。
+     *
+     * @return 启用中的仓库
+     */
+    @PreAuthorize("@ss.hasPermi('ctms:partner:query')")
+    @GetMapping("/warehouse/options")
+    public AjaxResult warehouseOptions()
+    {
+        return success(productMasterService.selectWarehouseOptions());
+    }
+
+    /**
      * 查询仓库详细。
      *
      * @param id 仓库ID
@@ -276,10 +304,7 @@ public class CtmsProductMasterController extends BaseController
     }
 
     /**
-     * 删除仓库。
-     *
-     * <p> B3 阶段直接物理删除；「有结存或被单据引用禁止删除」的守卫留给 B4
-     * （详见服务实现 {@code deleteWarehouseById} 的注释）。 </p>
+     * 删除仓库（B4 §2.3：有结存 / 有流水 / 被单据引用时被服务端拒绝）。
      *
      * @param id 仓库ID
      * @return 结果
@@ -308,6 +333,18 @@ public class CtmsProductMasterController extends BaseController
         startPage();
         List<CtmsProduct> list = productMasterService.selectProductList(query);
         return getDataTable(list);
+    }
+
+    /**
+     * 物料选择器（B4 §2.4）：只返回**启用中**的物料 —— 单据行项的物料下拉用它。
+     *
+     * @return 启用中的物料
+     */
+    @PreAuthorize("@ss.hasPermi('ctms:partner:query')")
+    @GetMapping("/product/options")
+    public AjaxResult productOptions()
+    {
+        return success(productMasterService.selectProductOptions());
     }
 
     /**

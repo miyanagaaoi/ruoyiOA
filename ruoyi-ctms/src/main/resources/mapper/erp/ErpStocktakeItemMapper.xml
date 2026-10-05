@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  盘点单行项（t_ctms_stocktake_item，26 列）的 Mapper（B4 第 6 组）。
+
+  口径说明（tasks.md §6.3/§6.4）：
+    · 多四列相对公共行项：book_qty（账面，生成时固化）/ actual_qty（实盘，非负）/
+      diff_qty（差异 = 实盘 − 账面，定点 3 位）/ diff_reason（差异原因）；
+    · **warehouse_id / warehouse_name 恒为 null**：盘点仓库由表头决定（仓库列在盘点里不使用）；
+    · qty / unit_price / amount 三列盘点不使用，写 0（列保留是为了复用公共行项字段）；
+    · create_time/update_time 走 sysdate()；行项随表头全量替换。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.stockops.mapper.ErpStocktakeItemMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.stockops.domain.ErpStocktakeItem" id="ErpStocktakeItemResult">
+        <id     property="id"            column="id"             />
+        <result property="docId"         column="doc_id"         />
+        <result property="seq"           column="seq"            />
+        <result property="productId"     column="product_id"     />
+        <result property="productCode"   column="product_code"   />
+        <result property="productName"   column="product_name"   />
+        <result property="spec"          column="spec"           />
+        <result property="uomName"       column="uom_name"       />
+        <result property="uomDecimals"   column="uom_decimals"   />
+        <result property="qty"           column="qty"            />
+        <result property="unitPrice"     column="unit_price"     />
+        <result property="amount"        column="amount"         />
+        <result property="warehouseId"   column="warehouse_id"   />
+        <result property="warehouseName" column="warehouse_name" />
+        <result property="srcItemId"     column="src_item_id"    />
+        <result property="remark"        column="remark"         />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="createId"      column="create_id"      />
+        <result property="createBy"      column="create_by"      />
+        <result property="updateId"      column="update_id"      />
+        <result property="updateBy"      column="update_by"      />
+        <result property="bookQty"       column="book_qty"       />
+        <result property="actualQty"     column="actual_qty"     />
+        <result property="diffQty"       column="diff_qty"       />
+        <result property="diffReason"    column="diff_reason"    />
+    </resultMap>
+
+    <sql id="selectStocktakeItemVo">
+        select id, doc_id, seq, product_id, product_code, product_name, spec, uom_name, uom_decimals,
+               qty, unit_price, amount, warehouse_id, warehouse_name, src_item_id, remark,
+               create_time, update_time, create_id, create_by, update_id, update_by,
+               book_qty, actual_qty, diff_qty, diff_reason
+          from t_ctms_stocktake_item
+    </sql>
+
+    <select id="selectItemsByDocId" resultMap="ErpStocktakeItemResult">
+        <include refid="selectStocktakeItemVo"/>
+         where doc_id = #{docId}
+         order by seq, id
+    </select>
+
+    <insert id="batchInsertItems">
+        insert into t_ctms_stocktake_item(
+            id, doc_id, seq, product_id, product_code, product_name, spec, uom_name, uom_decimals,
+            qty, unit_price, amount, warehouse_id, warehouse_name, src_item_id, remark,
+            create_time, update_time, create_id, create_by,
+            book_qty, actual_qty, diff_qty, diff_reason
+        )values
+        <foreach collection="items" item="item" separator=",">
+            (
+            #{item.id}, #{item.docId}, #{item.seq}, #{item.productId}, #{item.productCode},
+            #{item.productName}, #{item.spec}, #{item.uomName}, #{item.uomDecimals},
+            #{item.qty}, #{item.unitPrice}, #{item.amount}, null, null,
+            #{item.srcItemId}, #{item.remark}, sysdate(), sysdate(), #{item.createId}, #{item.createBy},
+            #{item.bookQty}, #{item.actualQty}, #{item.diffQty}, #{item.diffReason}
+            )
+        </foreach>
+    </insert>
+
+    <delete id="deleteItemsByDocId">
+        delete from t_ctms_stocktake_item where doc_id = #{docId}
+    </delete>
+
+</mapper>

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  盘点单表头（t_ctms_stocktake，36 列）的 Mapper（B4 第 6 组：调拨与盘点）。
+
+  口径说明（逐条对应 tasks.md §6.3~§6.5）：
+    · warehouse_id 是**盘点仓库**（DDL 级 NOT NULL + 外键）；账面数量按该仓库结存固化，
+      因此服务层不允许改仓库（改仓库会让已固化的账面失去意义）；
+    · generated_in_id/no 与 generated_out_id/no 是**生成单回填**两对列（无外键）：
+      审核时写、反审核级联作废生成单后**保留**（作废凭据），再次审核时覆盖为新的生成单；
+    · posted 的语义是"其生成单已过账"（盘点单自身不写结存）；
+    · dept_id / create_id / create_by 是创建时快照，update 不更新；doc_no 不可改；
+    · 列表默认排除已作废与已删除；includeVoided 用 Boolean（OGNL 单引号坑见 B3 Mapper 注释）；
+    · dataScopeSql 用 ${} 原样拼接（只由服务层 ErpDocScope 拼出）。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.stockops.mapper.ErpStocktakeMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.stockops.domain.ErpStocktake" id="ErpStocktakeResult">
+        <id     property="id"               column="id"                 />
+        <result property="docNo"            column="doc_no"             />
+        <result property="docDate"          column="doc_date"           />
+        <result property="status"           column="status"             />
+        <result property="deptId"           column="dept_id"            />
+        <result property="createId"         column="create_id"          />
+        <result property="createBy"         column="create_by"          />
+        <result property="handlerUserId"    column="handler_user_id"    />
+        <result property="handlerName"      column="handler_name"       />
+        <result property="remark"           column="remark"             />
+        <result property="contractId"       column="contract_id"        />
+        <result property="contractNo"       column="contract_no"        />
+        <result property="sourceDocType"    column="source_doc_type"    />
+        <result property="sourceDocId"      column="source_doc_id"      />
+        <result property="sourceDocNo"      column="source_doc_no"      />
+        <result property="submittedBy"      column="submitted_by"       />
+        <result property="submittedAt"      column="submitted_at"       />
+        <result property="approvedBy"       column="approved_by"        />
+        <result property="approvedAt"       column="approved_at"        />
+        <result property="voidedBy"         column="voided_by"          />
+        <result property="voidedAt"         column="voided_at"          />
+        <result property="voidReason"       column="void_reason"        />
+        <result property="posted"           column="posted"             />
+        <result property="delFlag"          column="del_flag"           />
+        <result property="createTime"       column="create_time"        />
+        <result property="updateTime"       column="update_time"        />
+        <result property="updateId"         column="update_id"          />
+        <result property="updateBy"         column="update_by"          />
+        <result property="warehouseId"      column="warehouse_id"       />
+        <result property="warehouseName"    column="warehouse_name"     />
+        <result property="takeType"         column="take_type"          />
+        <result property="scopeNote"        column="scope_note"         />
+        <result property="generatedInId"    column="generated_in_id"    />
+        <result property="generatedInNo"    column="generated_in_no"    />
+        <result property="generatedOutId"   column="generated_out_id"   />
+        <result property="generatedOutNo"   column="generated_out_no"   />
+        <!-- 非持久化字段（items / productTypeIds / dataScopeSql / 日期区间 / 关键字 / includeVoided）不在此映射 -->
+    </resultMap>
+
+    <sql id="selectStocktakeVo">
+        select d.id, d.doc_no, d.doc_date, d.status, d.dept_id, d.create_id, d.create_by,
+               d.handler_user_id, d.handler_name, d.remark, d.contract_id, d.contract_no,
+               d.source_doc_type, d.source_doc_id, d.source_doc_no, d.submitted_by, d.submitted_at,
+               d.approved_by, d.approved_at, d.voided_by, d.voided_at, d.void_reason, d.posted,
+               d.del_flag, d.create_time, d.update_time, d.update_id, d.update_by,
+               d.warehouse_id, d.warehouse_name, d.take_type, d.scope_note,
+               d.generated_in_id, d.generated_in_no, d.generated_out_id, d.generated_out_no
+          from t_ctms_stocktake d
+    </sql>
+
+    <select id="selectStocktakeList" parameterType="com.ruoyi.ctms.erp.stockops.domain.ErpStocktake"
+            resultMap="ErpStocktakeResult">
+        <include refid="selectStocktakeVo"/>
+        <where>
+            d.del_flag = '0'
+            <if test="includeVoided == null or includeVoided == false">
+                and d.status &lt;&gt; 'voided'
+            </if>
+            <if test="status != null and status != ''">
+                and d.status = #{status}
+            </if>
+            <if test="docNo != null and docNo != ''">
+                and d.doc_no like concat('%', #{docNo}, '%')
+            </if>
+            <if test="warehouseId != null and warehouseId != ''">
+                and d.warehouse_id = #{warehouseId}
+            </if>
+            <if test="takeType != null and takeType != ''">
+                and d.take_type = #{takeType}
+            </if>
+            <if test="handlerName != null and handlerName != ''">
+                and d.handler_name like concat('%', #{handlerName}, '%')
+            </if>
+            <if test="beginDocDate != null">
+                and d.doc_date &gt;= #{beginDocDate}
+            </if>
+            <if test="endDocDate != null">
+                and d.doc_date &lt;= #{endDocDate}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (d.doc_no like concat('%', #{keyword}, '%')
+                     or d.remark like concat('%', #{keyword}, '%')
+                     or d.scope_note like concat('%', #{keyword}, '%'))
+            </if>
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and ( ${dataScopeSql} )
+            </if>
+        </where>
+        order by d.doc_no desc
+    </select>
+
+    <select id="selectStocktakeById" resultMap="ErpStocktakeResult">
+        <include refid="selectStocktakeVo"/>
+         where d.id = #{id}
+    </select>
+
+    <insert id="insertStocktake" parameterType="com.ruoyi.ctms.erp.stockops.domain.ErpStocktake">
+        insert into t_ctms_stocktake(
+            id, doc_no, doc_date, status, dept_id, create_id, create_by, handler_user_id, handler_name,
+            remark, contract_id, contract_no, source_doc_type, source_doc_id, source_doc_no,
+            submitted_by, submitted_at, approved_by, approved_at, voided_by, voided_at, void_reason,
+            posted, del_flag, create_time, update_time, update_id, update_by,
+            warehouse_id, warehouse_name, take_type, scope_note,
+            generated_in_id, generated_in_no, generated_out_id, generated_out_no
+        )values(
+            #{id}, #{docNo}, #{docDate}, #{status}, #{deptId}, #{createId}, #{createBy},
+            #{handlerUserId}, #{handlerName}, #{remark}, #{contractId}, #{contractNo},
+            #{sourceDocType}, #{sourceDocId}, #{sourceDocNo}, #{submittedBy}, #{submittedAt},
+            #{approvedBy}, #{approvedAt}, #{voidedBy}, #{voidedAt}, #{voidReason},
+            #{posted}, #{delFlag}, sysdate(), sysdate(), #{updateId}, #{updateBy},
+            #{warehouseId}, #{warehouseName}, #{takeType}, #{scopeNote},
+            #{generatedInId}, #{generatedInNo}, #{generatedOutId}, #{generatedOutNo}
+        )
+    </insert>
+
+    <update id="updateStocktake" parameterType="com.ruoyi.ctms.erp.stockops.domain.ErpStocktake">
+        update t_ctms_stocktake
+        <set>
+            doc_date          = #{docDate},
+            status            = #{status},
+            handler_user_id   = #{handlerUserId},
+            handler_name      = #{handlerName},
+            remark            = #{remark},
+            contract_id       = #{contractId},
+            contract_no       = #{contractNo},
+            source_doc_type   = #{sourceDocType},
+            source_doc_id     = #{sourceDocId},
+            source_doc_no     = #{sourceDocNo},
+            submitted_by      = #{submittedBy},
+            submitted_at      = #{submittedAt},
+            approved_by       = #{approvedBy},
+            approved_at       = #{approvedAt},
+            voided_by         = #{voidedBy},
+            voided_at         = #{voidedAt},
+            void_reason       = #{voidReason},
+            posted            = #{posted},
+            del_flag          = #{delFlag},
+            warehouse_id      = #{warehouseId},
+            warehouse_name    = #{warehouseName},
+            take_type         = #{takeType},
+            scope_note        = #{scopeNote},
+            generated_in_id   = #{generatedInId},
+            generated_in_no   = #{generatedInNo},
+            generated_out_id  = #{generatedOutId},
+            generated_out_no  = #{generatedOutNo},
+            update_id         = #{updateId},
+            update_by         = #{updateBy},
+            update_time       = sysdate()
+        </set>
+        <!-- dept_id / create_id / create_by / doc_no 刻意不在更新列里（快照与单号不可变） -->
+         where id = #{id}
+    </update>
+
+    <!-- 物理删除：仅草稿可删（状态守卫在服务层）；行项由外键 ON DELETE CASCADE 一并删除 -->
+    <delete id="deleteStocktakeByIds">
+        delete from t_ctms_stocktake where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

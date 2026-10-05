@@ -2,6 +2,7 @@ package com.ruoyi.template.service.impl;
 
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.enums.WhetherStatus;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.DateUtils;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.uuid.IdUtils;
@@ -11,6 +12,8 @@ import com.ruoyi.template.mapper.TemplateMapper;
 import com.ruoyi.template.mapper.TemplateSourceTargetMapper;
 import com.ruoyi.template.module.FormOption;
 import com.ruoyi.template.service.ITemplateDynamicFormService;
+import com.ruoyi.template.support.FormV8Guard;
+import com.ruoyi.template.support.FormV8Impact;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,6 +35,20 @@ public class TemplateDynamicFormServiceImpl implements ITemplateDynamicFormServi
     private TemplateMapper templateMapper;
     @Autowired
     private TemplateDynamicFormMapper templateDynamicFormMapper;
+    @Autowired
+    private FormV8Guard formV8Guard;
+
+    /**
+     * PRD V-8 反向校验（只读预演）—— 见 {@link ITemplateDynamicFormService#previewFormSaveImpact}。
+     */
+    @Override
+    public FormV8Impact previewFormSaveImpact(TemplateDynamicForm templateDynamicForm) {
+        if (formV8Guard == null || templateDynamicForm == null) {
+            // 单测/非 Spring 场景注入不到守卫时不影响保存（与守卫内部的"缺 provider 只 WARN"同口径）
+            return new FormV8Impact();
+        }
+        return formV8Guard.analyze(templateDynamicForm.getId(), templateDynamicForm.getContent());
+    }
 
     /**
      * 查询动态单
@@ -76,13 +93,23 @@ public class TemplateDynamicFormServiceImpl implements ITemplateDynamicFormServi
 
     /**
      * 修改动态单
-     * 
+     *
+     * <p> <b>PRD V-8 反向校验（2.0 B1 §7.10 补）</b>：保存 = 停用旧版本行 + 插一条新版本行，
+     * 模板会被改指到新版本，而流程 {@code content.formId} 不会 —— 于是"条件字段被删 / 改为非必填"
+     * 会**静默**地让已发布流程的条件失效。这里在**任何写库动作之前**先校验：
+     * 命中阻断项就抛业务异常并列出受影响的流程；只有告警项则放行（告警由 Controller 回给界面 + WARN 日志）。 </p>
+     *
      * @param templateDynamicForm 动态单
      * @return 结果
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int updateTemplateDynamicForm(TemplateDynamicForm templateDynamicForm) {
+        // 0) PRD V-8 反向校验：必须在写库之前（阻断时不留任何"新版本已插入"的半成品）
+        FormV8Impact impact = previewFormSaveImpact(templateDynamicForm);
+        if (impact.isBlocked()) {
+            throw new ServiceException(impact.describe());
+        }
         TemplateDynamicForm newDynamicForm = TemplateSourceTargetMapper.INSTANCE.copyDynamicForm(templateDynamicForm);
         String userId = SecurityUtils.getUserId();
         SysUser user = SecurityUtils.getLoginUser().getUser();

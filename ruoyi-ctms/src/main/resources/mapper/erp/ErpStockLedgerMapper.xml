@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  库存流水（t_ctms_stock_ledger，16 列）的 Mapper（B4 第 3 组：过账与红冲）。
+
+  口径说明（与 spec/stock-ledger 的"流水只增不改"一一对应）：
+    · 本表刻意**没有** update / delete 语句：红冲是"追加一条负数流水"，
+      原流水保留可查（这就是"不可修改/删除"在库级的实现）；
+    · update_time/update_id/update_by 三个全局审计列在本表**不存在**（见 DDL 注释），
+      所以 insert 只写 create_time = sysdate()（记账时间就是创建时间）；
+    · biz_type 的红冲前缀（"红冲-"）由服务层拼，SQL 侧不做字符串处理；
+    · sumQtyChangeByKey 是"结存 = 流水累计和"不变式的右侧，coalesce 保证无流水时返回 0。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.posting.mapper.ErpStockLedgerMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.posting.domain.ErpStockLedger" id="ErpStockLedgerResult">
+        <id     property="id"          column="id"           />
+        <result property="productId"   column="product_id"   />
+        <result property="warehouseId" column="warehouse_id" />
+        <result property="bizType"     column="biz_type"     />
+        <result property="docType"     column="doc_type"     />
+        <result property="docId"       column="doc_id"       />
+        <result property="docNo"       column="doc_no"       />
+        <result property="srcDocNo"    column="src_doc_no"   />
+        <result property="qtyChange"   column="qty_change"   />
+        <result property="qtyAfter"    column="qty_after"    />
+        <result property="unitPrice"   column="unit_price"   />
+        <result property="deptId"      column="dept_id"      />
+        <result property="createId"    column="create_id"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="remark"      column="remark"       />
+        <result property="createTime"  column="create_time"  />
+    </resultMap>
+
+    <sql id="selectLedgerVo">
+        select id, product_id, warehouse_id, biz_type, doc_type, doc_id, doc_no, src_doc_no,
+               qty_change, qty_after, unit_price, dept_id, create_id, create_by, remark, create_time
+          from t_ctms_stock_ledger
+    </sql>
+
+    <!-- 只增：id 由服务层生成，记账时间走 sysdate() -->
+    <insert id="insertLedger" parameterType="com.ruoyi.ctms.erp.posting.domain.ErpStockLedger">
+        insert into t_ctms_stock_ledger(
+            id, product_id, warehouse_id, biz_type, doc_type, doc_id, doc_no, src_doc_no,
+            qty_change, qty_after, unit_price, dept_id, create_id, create_by, remark, create_time
+        )values(
+            #{id}, #{productId}, #{warehouseId}, #{bizType}, #{docType}, #{docId}, #{docNo}, #{srcDocNo},
+            #{qtyChange}, #{qtyAfter}, #{unitPrice}, #{deptId}, #{createId}, #{createBy}, #{remark}, sysdate()
+        )
+    </insert>
+
+    <select id="selectLedgerByDoc" resultMap="ErpStockLedgerResult">
+        <include refid="selectLedgerVo"/>
+         where doc_type = #{docType}
+           and doc_id = #{docId}
+         order by id
+    </select>
+
+    <select id="sumQtyChangeByKey" resultType="java.math.BigDecimal">
+        select coalesce(sum(qty_change), 0)
+          from t_ctms_stock_ledger
+         where product_id = #{productId}
+           and warehouse_id = #{warehouseId}
+    </select>
+
+    <select id="countLedger" resultType="int">
+        select count(1) from t_ctms_stock_ledger
+    </select>
+
+</mapper>

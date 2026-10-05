@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  采购申请单主体（t_ctms_purchase_request）的 Mapper（B4 采购线 T4）。
+
+  命名硬规则：文件名以 Mapper.xml 结尾、namespace 与接口全限定名一致、列名以 XML 注释里的
+  别名 d 指代单据表（base 的 ErpDocScope 片段默认别名就是 d，两处必须一致）。
+
+  口径说明：
+    · 列表默认只返回未作废（status <> 'voided'），只有显式传 includeVoided="1"
+      或 status='voided' 才放开（AC-V2-17）；
+    · 数据范围片段由服务层写进 query.dataScopeSql，本层原样拼接（绝不来自请求参数）；
+    · 本表**没有 total_amount 列**：金额由服务层按"先舍入再汇总"现算，不在此出现；
+    · doc_no 唯一且占号不复用，selectDocNoByNo 刻意不过滤状态与 del_flag；
+    · update_request 不覆盖 doc_no / del_flag / 痕迹列（状态与痕迹走 updateRequestStatus）；
+    · delete_by_id 是物理删除，仅供回滚演练与夹具清理，业务侧一律走作废。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.procurement.mapper.ErpPurchaseRequestMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.procurement.domain.ErpPurchaseRequest"
+               id="ErpPurchaseRequestResult">
+        <id     property="id"                column="id"                  />
+        <result property="docNo"             column="doc_no"              />
+        <result property="docDate"           column="doc_date"            />
+        <result property="status"            column="status"              />
+        <result property="deptId"            column="dept_id"             />
+        <result property="createId"          column="create_id"           />
+        <result property="createBy"          column="create_by"           />
+        <result property="handlerUserId"     column="handler_user_id"     />
+        <result property="handlerName"       column="handler_name"        />
+        <result property="remark"            column="remark"              />
+        <result property="contractId"        column="contract_id"         />
+        <result property="contractNo"        column="contract_no"         />
+        <result property="sourceDocType"     column="source_doc_type"     />
+        <result property="sourceDocId"       column="source_doc_id"       />
+        <result property="sourceDocNo"       column="source_doc_no"       />
+        <result property="submittedBy"       column="submitted_by"        />
+        <result property="submittedAt"       column="submitted_at"        />
+        <result property="approvedBy"        column="approved_by"         />
+        <result property="approvedAt"        column="approved_at"         />
+        <result property="voidedBy"          column="voided_by"           />
+        <result property="voidedAt"          column="voided_at"           />
+        <result property="voidReason"        column="void_reason"         />
+        <result property="posted"            column="posted"              />
+        <result property="delFlag"           column="del_flag"            />
+        <result property="createTime"        column="create_time"         />
+        <result property="updateTime"        column="update_time"         />
+        <result property="updateId"          column="update_id"           />
+        <result property="updateBy"          column="update_by"           />
+        <!-- 采购申请单特有四列 -->
+        <result property="requestDeptId"     column="request_dept_id"     />
+        <result property="needDate"          column="need_date"           />
+        <result property="suggestSupplierId" column="suggest_supplier_id" />
+        <result property="purpose"           column="purpose"             />
+        <!-- 非持久化：deptName 是列表展示用的一列（由 sys_dept 关联带出） -->
+        <result property="deptName"          column="dept_name"           />
+        <!-- 非持久化：items / changeLogs / remainQtySum / canPush / totalAmount /
+             keyword / beginDocDate / endDocDate / includeVoided / dataScopeSql / srcItemIds
+             一律由服务层装配，没有对应列，不在此映射。 -->
+    </resultMap>
+
+    <sql id="selectRequestVo">
+        select d.id, d.doc_no, d.doc_date, d.status, d.dept_id, d.create_id, d.create_by,
+               d.handler_user_id, d.handler_name, d.remark, d.contract_id, d.contract_no,
+               d.source_doc_type, d.source_doc_id, d.source_doc_no, d.submitted_by, d.submitted_at,
+               d.approved_by, d.approved_at, d.voided_by, d.voided_at, d.void_reason,
+               d.posted, d.del_flag, d.create_time, d.update_time, d.update_id, d.update_by,
+               d.request_dept_id, d.need_date, d.suggest_supplier_id, d.purpose,
+               sd.dept_name as dept_name
+          from t_ctms_purchase_request d
+          left join sys_dept sd on sd.dept_id = d.dept_id
+    </sql>
+
+    <select id="selectRequestList"
+            parameterType="com.ruoyi.ctms.erp.procurement.domain.ErpPurchaseRequest"
+            resultMap="ErpPurchaseRequestResult">
+        <include refid="selectRequestVo"/>
+        <where>
+            <!-- 默认排除已作废；显式传 includeVoided="1" 或 status="voided" 时放开。
+                 ⚠ 字符串比较一律用双引号包在单引号属性里：OGNL 把 '1' 当 Character 字面量，
+                 `includeVoided != '1'` 会恒为 true（CtmsContractMapper 里已踩过这个坑）。 -->
+            <if test='!(status != null and status == "voided") and (includeVoided == null or includeVoided != "1")'>
+                and d.status != 'voided'
+            </if>
+            <if test="id != null and id != ''">
+                and d.id = #{id}
+            </if>
+            <if test="docNo != null and docNo != ''">
+                and d.doc_no like concat('%', #{docNo}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                and d.status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (d.doc_no like concat('%', #{keyword}, '%')
+                     or d.purpose like concat('%', #{keyword}, '%')
+                     or d.remark like concat('%', #{keyword}, '%'))
+            </if>
+            <if test="beginDocDate != null and beginDocDate != ''">
+                and d.doc_date &gt;= #{beginDocDate}
+            </if>
+            <if test="endDocDate != null and endDocDate != ''">
+                and d.doc_date &lt;= #{endDocDate}
+            </if>
+            <if test="requestDeptId != null and requestDeptId != ''">
+                and d.request_dept_id = #{requestDeptId}
+            </if>
+            <if test="deptId != null and deptId != ''">
+                and d.dept_id = #{deptId}
+            </if>
+            <if test="createId != null and createId != ''">
+                and d.create_id = #{createId}
+            </if>
+            <if test="posted != null and posted != ''">
+                and d.posted = #{posted}
+            </if>
+            <!-- 数据范围片段（服务端白名单拼出；null 表示不加条件） -->
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and (${dataScopeSql})
+            </if>
+        </where>
+        order by coalesce(d.doc_date, date(d.create_time)) desc, d.doc_no desc
+    </select>
+
+    <select id="selectRequestById" parameterType="java.lang.String" resultMap="ErpPurchaseRequestResult">
+        <include refid="selectRequestVo"/>
+        where d.id = #{id}
+    </select>
+
+    <!-- 占号不复用：查重刻意不过滤状态与 del_flag -->
+    <select id="selectDocNoByNo" parameterType="java.lang.String" resultMap="ErpPurchaseRequestResult">
+        <include refid="selectRequestVo"/>
+        where d.doc_no = #{docNo}
+        limit 1
+    </select>
+
+    <select id="selectDocNosByPrefix" parameterType="java.lang.String" resultType="java.lang.String">
+        select doc_no from t_ctms_purchase_request where doc_no like concat(#{prefix}, '%')
+    </select>
+
+    <insert id="insertRequest"
+            parameterType="com.ruoyi.ctms.erp.procurement.domain.ErpPurchaseRequest">
+        insert into t_ctms_purchase_request(
+            id, doc_no, doc_date, status, dept_id, create_id, create_by,
+            handler_user_id, handler_name, remark, contract_id, contract_no,
+            source_doc_type, source_doc_id, source_doc_no,
+            submitted_by, submitted_at, approved_by, approved_at, voided_by, voided_at, void_reason,
+            posted, del_flag, create_time, update_time, update_id, update_by,
+            request_dept_id, need_date, suggest_supplier_id, purpose
+        )values(
+            #{id}, #{docNo}, #{docDate}, #{status}, #{deptId}, #{createId}, #{createBy},
+            #{handlerUserId}, #{handlerName}, #{remark}, #{contractId}, #{contractNo},
+            #{sourceDocType}, #{sourceDocId}, #{sourceDocNo},
+            #{submittedBy}, #{submittedAt}, #{approvedBy}, #{approvedAt}, #{voidedBy}, #{voidedAt},
+            #{voidReason}, #{posted}, #{delFlag}, sysdate(), sysdate(), #{updateId}, #{updateBy},
+            #{requestDeptId}, #{needDate}, #{suggestSupplierId}, #{purpose}
+        )
+    </insert>
+
+    <!-- 不覆盖 doc_no / status / 痕迹列 / posted / del_flag / 来源列（各有专用方法） -->
+    <update id="updateRequest"
+            parameterType="com.ruoyi.ctms.erp.procurement.domain.ErpPurchaseRequest">
+        update t_ctms_purchase_request
+        <set>
+            <if test="docDate != null">doc_date = #{docDate},</if>
+            <if test="handlerUserId != null">handler_user_id = #{handlerUserId},</if>
+            <if test="handlerName != null">handler_name = #{handlerName},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="contractId != null">contract_id = #{contractId},</if>
+            <if test="contractNo != null">contract_no = #{contractNo},</if>
+            <if test="requestDeptId != null">request_dept_id = #{requestDeptId},</if>
+            <if test="needDate != null">need_date = #{needDate},</if>
+            <if test="suggestSupplierId != null">suggest_supplier_id = #{suggestSupplierId},</if>
+            <if test="purpose != null">purpose = #{purpose},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </set>
+        where id = #{id}
+    </update>
+
+    <!-- 状态流转的唯一出口：状态 + 各动作痕迹列 -->
+    <update id="updateRequestStatus"
+            parameterType="com.ruoyi.ctms.erp.procurement.domain.ErpPurchaseRequest">
+        update t_ctms_purchase_request
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="submittedBy != null">submitted_by = #{submittedBy},</if>
+            <if test="submittedAt != null">submitted_at = #{submittedAt},</if>
+            <if test="approvedBy != null">approved_by = #{approvedBy},</if>
+            <if test="approvedAt != null">approved_at = #{approvedAt},</if>
+            <if test="voidedBy != null">voided_by = #{voidedBy},</if>
+            <if test="voidedAt != null">voided_at = #{voidedAt},</if>
+            <if test="voidReason != null">void_reason = #{voidReason},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </set>
+        where id = #{id}
+    </update>
+
+    <!-- 反审核清空审核痕迹：置 NULL 是"置空"语义，用 <if test="x != null"> 表达不出来 -->
+    <update id="clearApprovalTrace">
+        update t_ctms_purchase_request
+           set approved_by = null,
+               approved_at = null,
+               update_id = #{updateId},
+               update_by = #{updateBy},
+               update_time = sysdate()
+         where id = #{id}
+    </update>
+
+    <delete id="deleteRequestById" parameterType="java.lang.String">
+        delete from t_ctms_purchase_request where id = #{id}
+    </delete>
+
+</mapper>

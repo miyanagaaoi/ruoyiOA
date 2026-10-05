@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  调拨/盘点的只读辅助查询（B4 第 6 组，tasks.md §6.3 的"按商品类型含整棵子树"）。
+
+  口径说明：
+    · 两条都是 select，只读 B3 的 t_ctms_product_type / t_ctms_product 档案表，
+      **不改**它们的结构、不写数据；写入结存/流水的职责仍只在过账引擎；
+    · 子树用 MySQL 8 的递归 CTE（本机 MySQL 8.0，库默认排序规则 utf8mb4_0900_ai_ci）；
+      递归终止靠 parent_id 树结构自洽，不做深度限制（B3 的类型树是业务维护的小树）；
+    · 只取**启用**物料（enable_flag = '1'）：与公共层"停用物料不能用于新单据"同口径，
+      避免抽盘生成到一半才因停用物料报错；停用物料的历史结存仍可被**全盘**盘到
+      （全盘的行项来自结存表，不走本查询）；
+    · 两张 B3 档案表都**没有** del_flag 列（见 sql/二开-合同台账.sql 的建表段），
+      因此这里只按 enable_flag 过滤 —— 写成 del_flag 会直接 SQL 报错；
+    · 全部 #{} 占位，没有一处 ${}。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.stockops.mapper.ErpStockOpsMapper">
+
+    <select id="selectTypeSubtreeIds" resultType="java.lang.String">
+        with recursive subtree as (
+            select id, parent_id from t_ctms_product_type where id = #{typeId}
+            union all
+            select c.id, c.parent_id
+              from t_ctms_product_type c
+              inner join subtree p on c.parent_id = p.id
+        )
+        select id from subtree
+    </select>
+
+    <select id="selectEnabledProductIdsByTypeIds" resultType="java.lang.String">
+        select p.id
+          from t_ctms_product p
+         where p.enable_flag = '1'
+           and p.product_type_id in
+        <foreach collection="typeIds" item="typeId" open="(" separator="," close=")">
+            #{typeId}
+        </foreach>
+         order by p.code, p.id
+    </select>
+
+</mapper>

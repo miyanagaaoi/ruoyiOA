@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  库存结存（t_ctms_stock，5 列）的 Mapper（B4 第 3 组：过账与红冲）。
+
+  口径说明（与 design D2/D3/D5 一一对应）：
+    · 本表**没有** update_time 之外的业务列、没有金额列（只记数量不记成本，D5）；
+    · selectStockForUpdate 是 SELECT ... FOR UPDATE：必须在事务内调用，
+      它是"负库存校验读到的值不会过期"的唯一保证（D2 的行锁）；
+    · insertStock 撞唯一键 uk_stock_product_warehouse 时由服务层捕获重复键后重试（D3），
+      SQL 里刻意不写 INSERT IGNORE / ON DUPLICATE KEY UPDATE —— 那会把
+      "插入失败"与"业务校验失败"混成一条路径（D3 的备选否决理由）；
+    · updateStockQty 写**绝对值**：负库存校验与"变动后结存快照"都按锁内读到的值算，
+      写绝对值才能让结存列与流水快照永远一致。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.posting.mapper.ErpStockMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.posting.domain.ErpStock" id="ErpStockResult">
+        <id     property="id"          column="id"           />
+        <result property="productId"   column="product_id"   />
+        <result property="warehouseId" column="warehouse_id" />
+        <result property="qty"         column="qty"          />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateTime"  column="update_time"  />
+    </resultMap>
+
+    <sql id="selectStockVo">
+        select id, product_id, warehouse_id, qty, create_time, update_time
+          from t_ctms_stock
+    </sql>
+
+    <select id="selectStockByKey" resultMap="ErpStockResult">
+        <include refid="selectStockVo"/>
+         where product_id = #{productId}
+           and warehouse_id = #{warehouseId}
+    </select>
+
+    <!-- 行锁读：必须在事务内调用（Service 的 @Transactional 方法） -->
+    <select id="selectStockForUpdate" resultMap="ErpStockResult">
+        <include refid="selectStockVo"/>
+         where product_id = #{productId}
+           and warehouse_id = #{warehouseId}
+           for update
+    </select>
+
+    <select id="selectStockList" parameterType="com.ruoyi.ctms.erp.posting.domain.ErpStock"
+            resultMap="ErpStockResult">
+        <include refid="selectStockVo"/>
+        <where>
+            <if test="productId != null and productId != ''">
+                and product_id = #{productId}
+            </if>
+            <if test="warehouseId != null and warehouseId != ''">
+                and warehouse_id = #{warehouseId}
+            </if>
+        </where>
+        order by product_id, warehouse_id
+    </select>
+
+    <!-- id 由服务层生成；create_time/update_time 用 sysdate()，不信任应用传入的时间 -->
+    <insert id="insertStock" parameterType="com.ruoyi.ctms.erp.posting.domain.ErpStock">
+        insert into t_ctms_stock(id, product_id, warehouse_id, qty, create_time, update_time)
+        values(#{id}, #{productId}, #{warehouseId}, #{qty}, sysdate(), sysdate())
+    </insert>
+
+    <update id="updateStockQty">
+        update t_ctms_stock
+           set qty = #{qty},
+               update_time = sysdate()
+         where id = #{id}
+    </update>
+
+    <select id="countStock" resultType="int">
+        select count(1) from t_ctms_stock
+    </select>
+
+</mapper>

@@ -279,6 +279,49 @@ public class TemplateUpdateSemanticsCheck {
         public String selectTemplateIdBySimpleFlowId(String simpleFlowId) {
             return null;
         }
+
+        /**
+         * 2.0 B1 §7.10 新增的接口方法。
+         *
+         * <p> ⚠ 本方法此前**漏实现**，导致 {@code mvn -pl ruoyi-template test-compile} 直接编译失败
+         * （在此之前一直没人跑过本模块的测试阶段 —— 单模块打 fat jar 走的是本地仓库里的 jar）。
+         * 语义与真实 Mapper 的 {@code countByFormKey} 保持一致：按 {@code form_key} 数模板。 </p>
+         */
+        @Override
+        public int countByFormKey(String formKey) {
+            int n = 0;
+            for (Template t : rows.values()) {
+                if (formKey != null && formKey.equals(t.getFormKey())) {
+                    n++;
+                }
+            }
+            return n;
+        }
+
+        /** 同上：§7.10 新增，此前漏实现（按 form_id 数模板） */
+        @Override
+        public int countByFormId(String formId) {
+            int n = 0;
+            for (Template t : rows.values()) {
+                if (formId != null && formId.equals(t.getFormId())) {
+                    n++;
+                }
+            }
+            return n;
+        }
+
+        /** 同上：§7.10 新增，此前漏实现（表单换版本时把模板改指到新版本） */
+        @Override
+        public int repointFormId(String oldFormId, String newFormId) {
+            int n = 0;
+            for (Template t : rows.values()) {
+                if (oldFormId != null && oldFormId.equals(t.getFormId())) {
+                    t.setFormId(newFormId);
+                    n++;
+                }
+            }
+            return n;
+        }
     }
 
     static class StubAttachmentMapper implements TemplateAttachmentMapper {

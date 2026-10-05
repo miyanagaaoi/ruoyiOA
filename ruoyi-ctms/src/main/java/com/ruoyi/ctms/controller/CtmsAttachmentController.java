@@ -143,7 +143,15 @@ public class CtmsAttachmentController extends BaseController
     }
 
     /**
-     * 已注册的对象类型清单（前端提示"这个对象能不能挂附件"，也是 B4 的追加点）。
+     * 已注册的对象类型清单（前端提示"这个对象能不能挂附件"；B4 交付后含 8 类单据对象）。
+     *
+     * <p> {@code plannedB4} 键保持不变（避免破坏既有消费者），值为<b>空数组</b> ——
+     * B4 的待补对象类型已全部挪进 {@code registered}（含任务 6.6 补的 {@code stock_transfer}
+     * 与 t19 补的两个申请单 {@code purchase_request}/{@code sales_request}），
+     * 因此 {@code registered} 恰为 <b>9 项 = 合同 + 8 类单据</b>。 </p>
+     *
+     * <p> 新增 {@code docObjectTypes} 供前端/验收脚本直接断言"8 类单据都在册"；
+     * 恒等式 {@code registered.Count = docObjectTypes.Count + 1} 由验收脚本逐项核对。 </p>
      */
     @PreAuthorize("@ss.hasPermi('ctms:attachment:list')")
     @GetMapping("/object-types")
@@ -152,6 +160,7 @@ public class CtmsAttachmentController extends BaseController
         AjaxResult ajax = AjaxResult.success();
         ajax.put("registered", CtmsAttachmentObjectTypes.registered());
         ajax.put("plannedB4", CtmsAttachmentObjectTypes.plannedB4());
+        ajax.put("docObjectTypes", CtmsAttachmentObjectTypes.docObjectTypes());
         ajax.put("maxSizeBytes", CtmsAttachmentRules.MAX_SIZE_BYTES);
         ajax.put("maxSizeMb", CtmsAttachmentRules.MAX_SIZE_MB);
         ajax.put("extensions", CtmsAttachmentRules.ALLOWED_EXTENSIONS);

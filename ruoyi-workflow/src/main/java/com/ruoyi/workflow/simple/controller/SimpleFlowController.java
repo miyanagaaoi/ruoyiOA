@@ -33,6 +33,9 @@ public class SimpleFlowController extends BaseController {
     @Autowired
     private ISimpleFlowService simpleFlowService;
 
+    @Autowired
+    private com.ruoyi.workflow.simple.support.FormConsistencyChecker formConsistencyChecker;
+
     /** 列表 */
     @PreAuthorize("@ss.hasPermi('workflow:simpleFlow:list')")
     @GetMapping("/list")
@@ -116,6 +119,22 @@ public class SimpleFlowController extends BaseController {
     @GetMapping("/history/{defKey}")
     public AjaxResult history(@PathVariable("defKey") String defKey) {
         return success(simpleFlowService.history(defKey));
+    }
+
+    /**
+     * <b>一致性巡检（只读）</b>：模板 {@code form_id} ↔ 流程 {@code content.formId} 是否一致、
+     * 两侧引用的表单行是否可用、条件字段是否满足 V-8（HANDOFF §11 第 8 行）。
+     *
+     * <p> <b>为什么是接口而不是发布前阻断</b>：错位是"表单保存"那一刻造成的，在发布链路里拦既治不了源头，
+     * 又会让存量流程（本就指向停用/软删表单的历史数据）无法重新发布；源头那侧由 PRD V-8 反向校验阻断
+     * （{@code FormV8Guard}），本接口负责扫存量。口径与误报边界见 {@code FormConsistencyChecker} 类注释。 </p>
+     *
+     * @return {@code {scannedFlows, scannedTemplates, issueCount, highCount, mediumCount, lowCount, issues[]}}
+     */
+    @PreAuthorize("@ss.hasPermi('workflow:simpleFlow:query')")
+    @GetMapping("/form-consistency")
+    public AjaxResult formConsistency() {
+        return success(formConsistencyChecker.checkAll());
     }
 
     /** 回滚（以历史版本重新发布，生成新版本） */

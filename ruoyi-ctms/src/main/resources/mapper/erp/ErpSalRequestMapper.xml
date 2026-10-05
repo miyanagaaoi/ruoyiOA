@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  销售申请单表头（t_ctms_sales_request，32 列）的 Mapper（B4 第 5 组）。
+
+  口径说明：
+    · 类型名一律用全限定名：typeAliasesPackage 只覆盖 com.ruoyi.**.domain，
+      本包是 com.ruoyi.ctms.erp.sales.domain，不依赖别名（避免启动期别名解析差异）；
+    · 数据范围片段 query.dataScopeSql 由服务层按白名单拼好后原样拼接，
+      内部用 <if> 判是否有片段，**绝不能**把请求参数塞进该字段；
+    · 列表默认排除已作废（status='voided'）与已删除（del_flag='1'），
+      includeVoided='1' 时包含已作废，del_flag 仍需为空；
+    · update 不覆盖 doc_no / del_flag / posted / create_* ：这些列有专有写入点；
+    · doc_date 是 date 列，区间筛选用 date_format 比对字符串，避免时区/时刻噪声。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.sales.mapper.ErpSalesRequestMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.sales.domain.ErpSalesRequest" id="ErpSalesRequestResult">
+        <id     property="id"                 column="id"                  />
+        <result property="docNo"              column="doc_no"              />
+        <result property="docDate"            column="doc_date"            />
+        <result property="status"             column="status"              />
+        <result property="deptId"             column="dept_id"             />
+        <result property="createId"           column="create_id"           />
+        <result property="createBy"           column="create_by"           />
+        <result property="handlerUserId"      column="handler_user_id"     />
+        <result property="handlerName"        column="handler_name"        />
+        <result property="remark"             column="remark"              />
+        <result property="contractId"         column="contract_id"         />
+        <result property="contractNo"         column="contract_no"         />
+        <result property="sourceDocType"      column="source_doc_type"     />
+        <result property="sourceDocId"        column="source_doc_id"       />
+        <result property="sourceDocNo"        column="source_doc_no"       />
+        <result property="submittedBy"        column="submitted_by"        />
+        <result property="submittedAt"        column="submitted_at"        />
+        <result property="approvedBy"         column="approved_by"         />
+        <result property="approvedAt"         column="approved_at"         />
+        <result property="voidedBy"           column="voided_by"           />
+        <result property="voidedAt"           column="voided_at"           />
+        <result property="voidReason"         column="void_reason"         />
+        <result property="posted"             column="posted"              />
+        <result property="delFlag"            column="del_flag"            />
+        <result property="createTime"         column="create_time"         />
+        <result property="updateTime"         column="update_time"         />
+        <result property="updateId"           column="update_id"           />
+        <result property="updateBy"           column="update_by"           />
+        <result property="customerId"         column="customer_id"         />
+        <result property="customerNameText"   column="customer_name_text"  />
+        <result property="salesDeptId"        column="sales_dept_id"       />
+        <result property="expectDeliveryDate" column="expect_delivery_date"/>
+        <!-- 非持久化查询字段（keyword / 日期区间 / includeVoided / dataScopeSql / items）不在此映射。 -->
+    </resultMap>
+
+    <sql id="selectSalesRequestVo">
+        select d.id, d.doc_no, d.doc_date, d.status, d.dept_id, d.create_id, d.create_by,
+               d.handler_user_id, d.handler_name, d.remark, d.contract_id, d.contract_no,
+               d.source_doc_type, d.source_doc_id, d.source_doc_no,
+               d.submitted_by, d.submitted_at, d.approved_by, d.approved_at,
+               d.voided_by, d.voided_at, d.void_reason, d.posted, d.del_flag,
+               d.create_time, d.update_time, d.update_id, d.update_by,
+               d.customer_id, d.customer_name_text, d.sales_dept_id, d.expect_delivery_date
+          from t_ctms_sales_request d
+    </sql>
+
+    <select id="selectSalesRequestList"
+            parameterType="com.ruoyi.ctms.erp.sales.domain.ErpSalesRequest"
+            resultMap="ErpSalesRequestResult">
+        <include refid="selectSalesRequestVo"/>
+        <where>
+            d.del_flag = '0'
+            <if test="includeVoided == null or includeVoided != '1'">
+                and d.status != 'voided'
+            </if>
+            <if test="status != null and status != ''">
+                and d.status = #{status}
+            </if>
+            <if test="docNo != null and docNo != ''">
+                and d.doc_no like concat('%', #{docNo}, '%')
+            </if>
+            <if test="customerId != null and customerId != ''">
+                and d.customer_id = #{customerId}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (d.doc_no like concat('%', #{keyword}, '%')
+                     or d.customer_name_text like concat('%', #{keyword}, '%')
+                     or d.remark like concat('%', #{keyword}, '%')
+                     or exists (select 1 from t_ctms_sales_request_item it
+                                 where it.doc_id = d.id
+                                   and it.product_name like concat('%', #{keyword}, '%')))
+            </if>
+            <if test="beginDocDate != null and beginDocDate != ''">
+                and date_format(d.doc_date, '%Y-%m-%d') &gt;= #{beginDocDate}
+            </if>
+            <if test="endDocDate != null and endDocDate != ''">
+                and date_format(d.doc_date, '%Y-%m-%d') &lt;= #{endDocDate}
+            </if>
+            <!-- 数据范围片段：服务端白名单拼出（ErpDocScope），别名固定为 d -->
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and (${dataScopeSql})
+            </if>
+        </where>
+        order by d.doc_date desc, d.create_time desc
+    </select>
+
+    <select id="selectSalesRequestById" parameterType="java.lang.String" resultMap="ErpSalesRequestResult">
+        <include refid="selectSalesRequestVo"/>
+        where d.id = #{id}
+    </select>
+
+    <insert id="insertSalesRequest" parameterType="com.ruoyi.ctms.erp.sales.domain.ErpSalesRequest">
+        insert into t_ctms_sales_request(
+            id, doc_no, doc_date, status, dept_id, create_id, create_by,
+            handler_user_id, handler_name, remark, contract_id, contract_no,
+            source_doc_type, source_doc_id, source_doc_no,
+            submitted_by, submitted_at, approved_by, approved_at,
+            voided_by, voided_at, void_reason, posted, del_flag,
+            create_time, update_time, update_id, update_by,
+            customer_id, customer_name_text, sales_dept_id, expect_delivery_date
+        )values(
+            #{id}, #{docNo}, #{docDate}, #{status}, #{deptId}, #{createId}, #{createBy},
+            #{handlerUserId}, #{handlerName}, #{remark}, #{contractId}, #{contractNo},
+            #{sourceDocType}, #{sourceDocId}, #{sourceDocNo},
+            #{submittedBy}, #{submittedAt}, #{approvedBy}, #{approvedAt},
+            #{voidedBy}, #{voidedAt}, #{voidReason},
+            <choose>
+                <when test="posted != null and posted != ''">#{posted},</when>
+                <otherwise>'0',</otherwise>
+            </choose>
+            <choose>
+                <when test="delFlag != null and delFlag != ''">#{delFlag},</when>
+                <otherwise>'0',</otherwise>
+            </choose>
+            sysdate(), sysdate(), #{updateId}, #{updateBy},
+            #{customerId}, #{customerNameText}, #{salesDeptId}, #{expectDeliveryDate}
+        )
+    </insert>
+
+    <!-- 不改 doc_no / del_flag / posted / create_*：各有专有写入点 -->
+    <update id="updateSalesRequest" parameterType="com.ruoyi.ctms.erp.sales.domain.ErpSalesRequest">
+        update t_ctms_sales_request
+        set doc_date = #{docDate},
+            status = #{status},
+            handler_user_id = #{handlerUserId},
+            handler_name = #{handlerName},
+            remark = #{remark},
+            contract_id = #{contractId},
+            contract_no = #{contractNo},
+            customer_id = #{customerId},
+            customer_name_text = #{customerNameText},
+            sales_dept_id = #{salesDeptId},
+            expect_delivery_date = #{expectDeliveryDate},
+            submitted_by = #{submittedBy},
+            submitted_at = #{submittedAt},
+            approved_by = #{approvedBy},
+            approved_at = #{approvedAt},
+            voided_by = #{voidedBy},
+            voided_at = #{voidedAt},
+            void_reason = #{voidReason},
+            update_id = #{updateId},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where id = #{id}
+    </update>
+
+    <!-- 「归零即完成」只改状态与更新时间，不碰其余业务列 -->
+    <update id="updateSalesRequestStatus" parameterType="com.ruoyi.ctms.erp.sales.domain.ErpSalesRequest">
+        update t_ctms_sales_request
+        set status = #{status},
+            update_id = #{updateId},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteSalesRequestById" parameterType="java.lang.String">
+        delete from t_ctms_sales_request where id = #{id}
+    </delete>
+
+    <!-- 取号：前缀含年月，尾部 6 位零填充 → 字典序最大即数值最大 -->
+    <select id="selectMaxDocNoByPrefix" resultType="java.lang.String">
+        select max(doc_no) from t_ctms_sales_request where doc_no like concat(#{prefix}, '%')
+    </select>
+
+    <select id="countRequestItems" resultType="int">
+        select count(1) from t_ctms_sales_request_item where doc_id = #{docId}
+    </select>
+
+</mapper>

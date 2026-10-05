@@ -18,6 +18,8 @@ import com.ruoyi.ctms.domain.CtmsProduct;
 import com.ruoyi.ctms.domain.CtmsProductType;
 import com.ruoyi.ctms.domain.CtmsUom;
 import com.ruoyi.ctms.domain.CtmsWarehouse;
+import com.ruoyi.ctms.erp.master.ErpMasterRefGuards;
+import com.ruoyi.ctms.erp.master.mapper.ErpMasterRefMapper;
 import com.ruoyi.ctms.mapper.CtmsProductMapper;
 import com.ruoyi.ctms.mapper.CtmsProductTypeMapper;
 import com.ruoyi.ctms.mapper.CtmsUomMapper;
@@ -26,10 +28,22 @@ import com.ruoyi.ctms.service.ICtmsProductMasterService;
 import com.ruoyi.ctms.support.ProductMasterRules;
 
 /**
- * <p> 物料域主数据服务实现（2.0 B3 §3.3）。 </p>
+ * <p> 物料域主数据服务实现（2.0 B3 §3.3；B4 §2.3/§2.4 在其上补引用守卫与选择器）。 </p>
  *
  * <p> <b>口径集中在这里，控制器不做业务判断</b>：类型树层级与物化路径、同父同名、叶子约束、
  * 编码唯一与自动生成、负值拒绝、引用删除守卫，全部在下面各方法的第一段校验里完成。 </p>
+ *
+ * <p> <b>B4 补的三件事</b>（B3 阶段无单据/结存表，刻意留到 B4，见
+ * {@code oa-contract-ledger/notes/master-data-notes.md} §1.3）： </p>
+ * <ol>
+ *   <li> 仓库<b>名称</b>唯一（B4 规格：{@code 仓库 SHALL 具有全局唯一的编码与名称}；
+ *        B3 的 DDL 只有 {@code uk_warehouse_code}，因此名称唯一在服务层强制）； </li>
+ *   <li> 仓库/物料的<b>引用守卫</b>：有结存、有流水、被单据引用时禁止物理删除
+ *        （{@link ErpMasterRefGuards} + {@link ErpMasterRefMapper}），
+ *        把"外键 1451 的 500"变成可读的中文拒绝； </li>
+ *   <li> <b>选择器</b>接口：{@code selectWarehouseOptions} / {@code selectProductOptions} /
+ *        {@code selectUomOptions} 只返回启用中的档案（规格「停用后不出现在新单据下拉」）。 </li>
+ * </ol>
  *
  * <p> <b>审计字段口径</b>：{@code createId/updateId} 是<b>用户ID列</b>，
  * {@code createBy/updateBy} 是<b>登录名快照列</b>，两者都要写。
@@ -39,12 +53,12 @@ import com.ruoyi.ctms.support.ProductMasterRules;
  * 不兜底会直接抛「获取用户ID异常」把主数据写入全部打挂。 </p>
  *
  * <p> 事务：本类方法都是「先校验后单条写」，没有多表写入，因此不额外声明事务注解；
- * B4 接入单据引用统计后若出现跨表写，再在具体方法上补 {@code @Transactional}。 </p>
+ * 引用统计是只读查询，同样不需要事务。 </p>
  *
  * @author 二开
  */
 @Service
-public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
+public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService, ErpMasterRefGuards.RefCounter
 {
     /** 启用标志：1-启用。 */
     private static final String ENABLE_FLAG_ON = "1";
@@ -72,6 +86,58 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
 
     @Autowired
     private CtmsProductMapper productMapper;
+
+    /**
+     * 引用统计（B4 §2.3 新增）：仓库/物料的删除守卫用它把"被结存/流水/单据引用"变成
+     * 可读的中文拒绝，而不是数据库外键的 1451。
+     *
+     * <p> 声明为<b>必需</b>依赖（不是 {@code required = false}）：删档这种不可逆动作
+     * 不允许出现"统计没装配就悄悄放行"的路径；装配缺失时
+     * {@link ErpMasterRefGuards} 也会保护性拒绝（见其类注释）。 </p>
+     */
+    @Autowired
+    private ErpMasterRefMapper masterRefMapper;
+
+    /* ==================== 引用统计回调（B4 §2.3） ==================== */
+
+    @Override
+    public int countStockRefs(String warehouseId, String productId)
+    {
+        return requireRefMapper().countStockRefs(warehouseId, productId);
+    }
+
+    @Override
+    public int countLedgerRefs(String warehouseId, String productId)
+    {
+        return requireRefMapper().countLedgerRefs(warehouseId, productId);
+    }
+
+    @Override
+    public int countDocRefsByWarehouse(String warehouseId)
+    {
+        return requireRefMapper().countDocRefsByWarehouse(warehouseId);
+    }
+
+    @Override
+    public int countDocRefsByProduct(String productId)
+    {
+        return requireRefMapper().countDocRefsByProduct(productId);
+    }
+
+    /**
+     * 取引用统计 Mapper；未装配时<b>保护性拒绝</b>（宁可报错，也不要无校验地物理删档）。
+     *
+     * @return 引用统计 Mapper
+     * @throws ServiceException 未装配
+     */
+    private ErpMasterRefMapper requireRefMapper()
+    {
+        if (masterRefMapper == null)
+        {
+            throw new ServiceException(ErpMasterRefGuards.COUNTER_MISSING_MESSAGE);
+        }
+        return masterRefMapper;
+    }
 
     /* ==================== 商品类型树 ==================== */
 
@@ -236,6 +302,22 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
         return uomMapper.selectUomList(query);
     }
 
+    /**
+     * 计量单位选择器（B4 §2.2）：<b>只返回启用中的单位</b>。
+     *
+     * <p> 单位的选择发生在物料建档时（物料必挂单位），停用单位不应再被新物料引用；
+     * 历史物料仍按 {@code uom_id} 正常展示（停用不级联）。 </p>
+     *
+     * @return 启用中的单位（按 code 升序）
+     */
+    @Override
+    public List<CtmsUom> selectUomOptions()
+    {
+        CtmsUom query = new CtmsUom();
+        query.setEnableFlag(ENABLE_FLAG_ON);
+        return uomMapper.selectUomList(query);
+    }
+
     @Override
     public CtmsUom selectUomById(String id)
     {
@@ -339,6 +421,22 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
         return warehouseMapper.selectWarehouseList(query);
     }
 
+    /**
+     * 仓库选择器（B4 §2.3）：<b>只返回启用中的仓库</b>，供新单据的仓库下拉使用。
+     *
+     * <p> 与"档案管理页"刻意分成两个接口（沿用 B3 对往来单位的同一口径）：
+     * 档案页要能看到停用项，单据下拉不能看到停用项；合成一个接口必然二选一地出缺陷。 </p>
+     *
+     * @return 启用中的仓库（按 code 升序）
+     */
+    @Override
+    public List<CtmsWarehouse> selectWarehouseOptions()
+    {
+        CtmsWarehouse query = new CtmsWarehouse();
+        query.setEnableFlag(ENABLE_FLAG_ON);
+        return warehouseMapper.selectWarehouseList(query);
+    }
+
     @Override
     public CtmsWarehouse selectWarehouseById(String id)
     {
@@ -364,6 +462,11 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
         if (warehouseMapper.selectWarehouseByCode(warehouse.getCode()) != null)
         {
             throw new ServiceException("仓库编码已存在");
+        }
+        // B4 §2.3：仓库**名称**也必须全局唯一（B3 的 DDL 只有 uk_warehouse_code，名称唯一在服务层强制）
+        if (findWarehouseByName(warehouse.getName(), null) != null)
+        {
+            throw new ServiceException("仓库名称已存在");
         }
         if (ProductMasterRules.isBlank(warehouse.getId()))
         {
@@ -406,6 +509,11 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
         {
             warehouse.setEnableFlag(exist.getEnableFlag());
         }
+        // B4 §2.3：改名同样要查重（排除自身），否则"改名绕过去"就成了唯一性缺口
+        if (findWarehouseByName(warehouse.getName(), warehouse.getId()) != null)
+        {
+            throw new ServiceException("仓库名称已存在");
+        }
         // 编码不可改：update 语句里不含 code，这里回填原值只为让返回对象与库内一致
         warehouse.setCode(exist.getCode());
         warehouse.setUpdateId(currentUserId());
@@ -415,18 +523,32 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
     }
 
     /**
-     * 删除仓库（物理删除）。
+     * 删除仓库（无引用时物理删除；有结存/流水/单据引用时被拒绝）。
      *
-     * <p> ⚠ <b>B3 阶段故意不做引用校验</b>：此时还没有库存结存表与出入库单据表，
-     * 任何「引用统计」都只能查空表，写了就是假守卫。
-     * 规格要求的「仓库被单据引用/有结存时禁止删除（{@code 仓库被单据引用禁止删除}）」
-     * 属于 <b>B4</b>（{@code oa-purchase-sales-stock}），B4 接入单据域后必须在此方法内补上。 </p>
+     * <p> <b>B4 §2.3 的守卫</b>（B3 阶段故意留到 B4，见
+     * {@code oa-contract-ledger/notes/master-data-notes.md} §1.3）：
+     * 仓库表被 {@code t_ctms_stock} / {@code t_ctms_stock_ledger} / 4 张单据表头
+     * （以及行项的 {@code warehouse_id}）外键或业务引用；不提前拦就会变成
+     * 数据库的 1451 错误（前端看到 500）。 </p>
+     *
+     * <p> 判定与文案全部在 {@link ErpMasterRefGuards#checkWarehouseDeletable} 一处，
+     * 本方法只负责"取行 → 守卫 → 删"三步。 </p>
      *
      * @param id 仓库ID
+     * @throws ServiceException 仓库不存在 / 有引用（结存、流水、单据之一）
      */
     @Override
     public void deleteWarehouseById(String id)
     {
+        if (ProductMasterRules.isBlank(id))
+        {
+            throw new ServiceException("仓库不存在");
+        }
+        if (warehouseMapper.selectWarehouseById(id) == null)
+        {
+            throw new ServiceException("仓库不存在");
+        }
+        ErpMasterRefGuards.checkWarehouseDeletable(this, id);
         warehouseMapper.deleteWarehouseById(id);
     }
 
@@ -435,6 +557,23 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
     @Override
     public List<CtmsProduct> selectProductList(CtmsProduct query)
     {
+        return productMapper.selectProductList(query);
+    }
+
+    /**
+     * 物料选择器（B4 §2.4）：<b>只返回启用中的物料</b>，供新单据行项的物料下拉使用。
+     *
+     * <p> 停用物料在<b>写入</b>时还会被 T1 公共层的
+     * {@code ErpMasterGuards.applyItemSnapshot} 再拦一次（带行号），
+     * 本接口只是"界面层面不给你选"，不是唯一防线。 </p>
+     *
+     * @return 启用中的物料（按 code 升序）
+     */
+    @Override
+    public List<CtmsProduct> selectProductOptions()
+    {
+        CtmsProduct query = new CtmsProduct();
+        query.setEnableFlag(ENABLE_FLAG_ON);
         return productMapper.selectProductList(query);
     }
 
@@ -526,13 +665,77 @@ public class CtmsProductMasterServiceImpl implements ICtmsProductMasterService
         productMapper.updateProduct(product);
     }
 
+    /**
+     * 删除物料（无引用时物理删除；有结存/流水/单据行项引用时被拒绝）。
+     *
+     * <p> B4 §2.4 的守卫：行项的 {@code product_id} 是 DB 级外键，
+     * 结存/流水也各有两个外键指向物料 —— 不提前拦就是 1451 的 500。 </p>
+     *
+     * @param id 物料ID
+     * @throws ServiceException 物料不存在 / 有引用
+     */
     @Override
     public void deleteProductById(String id)
     {
+        if (ProductMasterRules.isBlank(id))
+        {
+            throw new ServiceException("物料不存在");
+        }
+        if (productMapper.selectProductById(id) == null)
+        {
+            throw new ServiceException("物料不存在");
+        }
+        ErpMasterRefGuards.checkProductDeletable(this, id);
         productMapper.deleteProductById(id);
     }
 
     /* ==================== 内部方法 ==================== */
+
+    /**
+     * <p> 按名称精确查找仓库（含停用行；名称全局唯一，停用项也占名）。 </p>
+     *
+     * <p> <b>为什么用"列表 + Java 精确比对"而不是新建一个 Mapper 方法</b>：
+     * {@code CtmsWarehouseMapper} 是 B3 的产物，B4 只允许引用、不重建 B3 的表与档案接口
+     * （{@code ddl-scope.md} §4）。{@code selectWarehouseList} 的 {@code name} 条件是 {@code like}，
+     * 返回的是<b>超集</b>，在 Java 里做一次精确比对即可得到唯一性判定；
+     * 名称里带 {@code %} / {@code _} 时 like 只会多返回、不会漏返回，因此不会出现"重名没查到"。 </p>
+     *
+     * @param name      仓库名称（空白 → 返回 null，由调用方先报"名称不能为空"）
+     * @param excludeId 需要排除的仓库ID（修改场景排除自身；新增传 null）
+     * @return 命中的同名仓库；无同名返回 null
+     */
+    private CtmsWarehouse findWarehouseByName(String name, String excludeId)
+    {
+        if (ProductMasterRules.isBlank(name))
+        {
+            return null;
+        }
+        String target = name.trim();
+        CtmsWarehouse query = new CtmsWarehouse();
+        query.setName(target);
+        List<CtmsWarehouse> rows = warehouseMapper.selectWarehouseList(query);
+        if (rows == null || rows.isEmpty())
+        {
+            return null;
+        }
+        for (CtmsWarehouse row : rows)
+        {
+            if (row == null || ProductMasterRules.isBlank(row.getName()))
+            {
+                continue;
+            }
+            if (!target.equals(row.getName().trim()))
+            {
+                continue;
+            }
+            if (excludeId != null && excludeId.equals(row.getId()))
+            {
+                continue;
+            }
+            return row;
+        }
+        return null;
+    }
 
     /**
      * 校验物料的类型与单位绑定：类型必须存在、必须是叶子、必须启用；单位必须存在。

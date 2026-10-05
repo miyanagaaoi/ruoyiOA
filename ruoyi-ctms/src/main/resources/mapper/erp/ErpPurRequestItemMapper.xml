@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  采购申请行项（t_ctms_purchase_request_item）的 Mapper（B4 采购线 T4）。
+
+  口径说明：
+    · 写入方式 = 全量替换（deleteItemsByDocId + batchInsertItems），序号由服务层从 1 重排；
+    · remaining_qty 是**派生列**（qty - ordered_qty，不小于 0），只在查询里现算，不落库；
+    · increaseOrderedQty 用**库内自增**（ordered_qty = ordered_qty + #{qty}）：两个下推请求
+      并发时"读出来再写"会互相覆盖（少累加），自增由行锁保证不丢；
+    · 已下单量只能由下推服务写，本层不提供"直接设值"的 update。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.procurement.mapper.ErpPurchaseRequestItemMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.procurement.domain.ErpPurchaseRequestItem"
+               id="ErpPurchaseRequestItemResult">
+        <id     property="id"           column="id"             />
+        <result property="docId"        column="doc_id"         />
+        <result property="seq"          column="seq"            />
+        <result property="productId"    column="product_id"     />
+        <result property="productCode"  column="product_code"   />
+        <result property="productName"  column="product_name"   />
+        <result property="spec"         column="spec"           />
+        <result property="uomName"      column="uom_name"       />
+        <result property="uomDecimals"  column="uom_decimals"   />
+        <result property="qty"          column="qty"            />
+        <result property="unitPrice"    column="unit_price"     />
+        <result property="amount"       column="amount"         />
+        <result property="warehouseId"  column="warehouse_id"   />
+        <result property="warehouseName" column="warehouse_name" />
+        <result property="srcItemId"    column="src_item_id"    />
+        <result property="remark"       column="remark"         />
+        <result property="createTime"   column="create_time"    />
+        <result property="updateTime"   column="update_time"    />
+        <result property="createId"     column="create_id"      />
+        <result property="createBy"     column="create_by"      />
+        <result property="updateId"     column="update_id"      />
+        <result property="updateBy"     column="update_by"      />
+        <result property="orderedQty"   column="ordered_qty"    />
+        <!-- 派生列：剩余可下推量（查询里现算） -->
+        <result property="remainingQty" column="remaining_qty"  />
+    </resultMap>
+
+    <sql id="selectItemVo">
+        select i.id, i.doc_id, i.seq, i.product_id, i.product_code, i.product_name, i.spec,
+               i.uom_name, i.uom_decimals, i.qty, i.unit_price, i.amount,
+               i.warehouse_id, i.warehouse_name, i.src_item_id, i.remark,
+               i.create_time, i.update_time, i.create_id, i.create_by, i.update_id, i.update_by,
+               i.ordered_qty
+          from t_ctms_purchase_request_item i
+    </sql>
+
+    <select id="selectItemsByDocId" parameterType="java.lang.String"
+            resultMap="ErpPurchaseRequestItemResult">
+        <include refid="selectItemVo"/>
+        where i.doc_id = #{docId}
+        order by i.seq asc
+    </select>
+
+    <select id="selectItemsByDocIds" resultMap="ErpPurchaseRequestItemResult">
+        <include refid="selectItemVo"/>
+        where i.doc_id in
+        <foreach collection="docIds" item="docId" open="(" separator="," close=")">
+            #{docId}
+        </foreach>
+        order by i.doc_id asc, i.seq asc
+    </select>
+
+    <!-- 带剩余可下推量派生列（列表/详情直接展示，避免前端再算一遍） -->
+    <select id="selectRemainItemsByDocId" parameterType="java.lang.String"
+            resultMap="ErpPurchaseRequestItemResult">
+        select i.id, i.doc_id, i.seq, i.product_id, i.product_code, i.product_name, i.spec,
+               i.uom_name, i.uom_decimals, i.qty, i.unit_price, i.amount,
+               i.warehouse_id, i.warehouse_name, i.src_item_id, i.remark,
+               i.create_time, i.update_time, i.create_id, i.create_by, i.update_id, i.update_by,
+               i.ordered_qty,
+               greatest(0, i.qty - i.ordered_qty) as remaining_qty
+          from t_ctms_purchase_request_item i
+         where i.doc_id = #{docId}
+         order by i.seq asc
+    </select>
+
+    <select id="selectItemById" parameterType="java.lang.String"
+            resultMap="ErpPurchaseRequestItemResult">
+        <include refid="selectItemVo"/>
+        where i.id = #{id}
+    </select>
+
+    <insert id="batchInsertItems">
+        insert into t_ctms_purchase_request_item(
+            id, doc_id, seq, product_id, product_code, product_name, spec,
+            uom_name, uom_decimals, qty, unit_price, amount,
+            warehouse_id, warehouse_name, src_item_id, remark,
+            create_time, update_time, create_id, create_by, update_id, update_by,
+            ordered_qty
+        )values
+        <foreach collection="items" item="item" separator=",">
+            (
+            #{item.id}, #{item.docId}, #{item.seq}, #{item.productId}, #{item.productCode},
+            #{item.productName}, #{item.spec}, #{item.uomName}, #{item.uomDecimals},
+            #{item.qty}, #{item.unitPrice}, #{item.amount},
+            #{item.warehouseId}, #{item.warehouseName}, #{item.srcItemId}, #{item.remark},
+            sysdate(), sysdate(), #{item.createId}, #{item.createBy}, #{item.updateId},
+            #{item.updateBy}, #{item.orderedQty}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 下推即累加：库内自增，并发安全 -->
+    <update id="increaseOrderedQty">
+        update t_ctms_purchase_request_item
+           set ordered_qty = ordered_qty + #{qty},
+               update_time = sysdate()
+         where id = #{id}
+    </update>
+
+    <update id="updateItemSeq">
+        update t_ctms_purchase_request_item
+           set seq = #{seq},
+               update_time = sysdate()
+         where id = #{id}
+    </update>
+
+    <delete id="deleteItemById" parameterType="java.lang.String">
+        delete from t_ctms_purchase_request_item where id = #{id}
+    </delete>
+
+    <delete id="deleteItemsByDocId" parameterType="java.lang.String">
+        delete from t_ctms_purchase_request_item where doc_id = #{docId}
+    </delete>
+
+</mapper>

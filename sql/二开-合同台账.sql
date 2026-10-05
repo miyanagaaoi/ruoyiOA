@@ -914,8 +914,19 @@ UNION ALL SELECT '⑱ 合同档案引用（客户/供应商）仍可空（应为
  WHERE TABLE_SCHEMA = DATABASE() AND IS_NULLABLE = 'YES'
    AND TABLE_NAME = 't_ctms_contract' AND COLUMN_NAME IN ('customer_id','supplier_id');
 
--- ⑦-3 外键数量与清单（应为 14 条）
-SELECT '⑲ 外键数量（应为14）' AS `检查项`, COUNT(*) AS `结果`
+-- ⑦-3 外键数量与清单（应为 17 条）
+--   2026-10-05 修正（B4 t17，判为「期望值过时」而非 DDL 漂移）：原写 14，但 ⑥-4 段实际落
+--   17 条 ADD CONSTRAINT，与空库实测 17 逐条同名（对象名单见下 17 条，全部属 ⑥-4 的
+--   ③-1~③-7）；3 条差额是清单 §2.8 #15 的「主数据 create_id 加 NOT NULL + FK」那一组：
+--   fk_customer_create_id / fk_supplier_create_id / fk_product_create_id（→ sys_user(user_id)）。
+--   交付期记录亦为 17：oa-contract-ledger/notes/migration-notes.md:268/274/330、
+--   notes/integration-check.md:243（「B3 外键 17 条」）。
+--   17 条名单：fk_contract_customer / fk_contract_supplier / fk_contract_parent / fk_contract_dept /
+--   fk_contract_create_id / fk_contract_item_contract / fk_contract_item_product /
+--   fk_contract_tag_contract / fk_contract_tag_tag / fk_change_log_contract / fk_attachment_contract /
+--   fk_customer_create_id / fk_supplier_create_id / fk_product_type_parent /
+--   fk_product_product_type / fk_product_uom / fk_product_create_id
+SELECT '⑲ 外键数量（应为17）' AS `检查项`, COUNT(*) AS `结果`
   FROM information_schema.TABLE_CONSTRAINTS
  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'FOREIGN KEY'
    AND TABLE_NAME LIKE 't\_ctms\_%'
@@ -923,7 +934,7 @@ UNION ALL SELECT '⑳ 外键里指向 sys_user / sys_dept 的条数（应为5）
   FROM information_schema.KEY_COLUMN_USAGE
  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME LIKE 't\_ctms\_%'
    AND REFERENCED_TABLE_NAME IN ('sys_user','sys_dept')
-UNION ALL SELECT '㉑ ON DELETE CASCADE 的外键条数（应为6：行项1+标签关联2+变更历史1+附件1+合同标签…见 ⑥-4 清单）', COUNT(*)
+UNION ALL SELECT '㉑ ON DELETE CASCADE 的外键条数（应为5：行项1+标签关联2+变更历史1+附件1=5，见 ⑥-4 清单）', COUNT(*)
   FROM information_schema.REFERENTIAL_CONSTRAINTS
  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME LIKE 't\_ctms\_%' AND DELETE_RULE = 'CASCADE'
 UNION ALL SELECT '㉒ ON DELETE SET NULL 的外键条数（应为2：合同→父框架、商品类型→父类型）', COUNT(*)
@@ -932,7 +943,13 @@ UNION ALL SELECT '㉒ ON DELETE SET NULL 的外键条数（应为2：合同→�
 
 -- ⑦-4 唯一索引齐备（应 10 个：contract_no、tag_name、customer_code、customer_name、
 --      supplier_code、supplier_name、uom_code、warehouse_code、product_code、party_draft）
-SELECT '㉓ 唯一索引数量（应为10）' AS `检查项`, COUNT(*) AS `结果`
+--   2026-10-05 修正（B4 t17）：**数字 10 不动，改的是判据**。原 `COUNT(*)` 数的是
+--   information_schema.STATISTICS 的**行**，而该表「一个索引的每一列各占一行」——
+--   uk_party_draft 是 `(party_type, raw_name)` 两列 ⇒ 10 个唯一索引会数出 11 行（空库实测 11）。
+--   改为数**索引个数** `COUNT(DISTINCT INDEX_NAME)`；实测 rows=11 / distinct INDEX_NAME=10 /
+--   distinct (TABLE_NAME, INDEX_NAME)=10 三者对照成立（B3 的 10 个唯一索引名互不相同，
+--   且与 B4 的 uk_*_doc_no / uk_stock_product_warehouse 无重名，distinct 不会丢个数）。
+SELECT '㉓ 唯一索引数量（应为10）' AS `检查项`, COUNT(DISTINCT INDEX_NAME) AS `结果`
   FROM information_schema.STATISTICS
  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 't\_ctms\_%' AND NON_UNIQUE = 0
    AND INDEX_NAME <> 'PRIMARY';
@@ -962,9 +979,16 @@ UNION ALL SELECT '㉗ 13 张表排序规则均为 utf8mb4_0900_ai_ci（应为13�
 --    所以这里不断言，避免"单独跑建表脚本"被误判为失败。整包验收请跑 初始化-全部.sql 的编排自检。）
 
 -- ⑦-7 上游基线未被本文件改动（列数应与上游 table.sql 定义一致）
-SELECT '㉜ sys_user 列数（上游基线，应为18）' AS `检查项`, COUNT(*) AS `结果`
+--   2026-10-05 修正（B4 t17）：原写 18/18，与上游真值不符。上游 `sql/table.sql` 的建表段为
+--   `sys_user` = 21 列（table.sql:1581）、`sys_dept` = 16 列，与空库实测 21/16 **逐列同名**
+--   （sys_user: user_id, dept_id, user_name, nick_name, user_type, email, phonenumber, sex,
+--    avatar, password, status, del_flag, login_ip, login_date, create_by, create_time,
+--    update_by, update_time, pwd_update_date, remark, zh_full_spell；sys_dept 16 列同 table.sql）。
+--   全仓 `sql/` 无任何 `ALTER TABLE sys_user|sys_dept` ⇒ 21/16 是未改动过的基线，不存在"多出来的列"；
+--   原 18 属自 B3 交付起就写错的期望值。B4 自检 ㉒/㉓ 亦独立断言 21/16，可交叉印证。
+SELECT '㉜ sys_user 列数（上游基线，应为21）' AS `检查项`, COUNT(*) AS `结果`
   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_user'
-UNION ALL SELECT '㉝ sys_dept 列数（上游基线，应为18）', COUNT(*)
+UNION ALL SELECT '㉝ sys_dept 列数（上游基线，应为16）', COUNT(*)
   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_dept';
 
 -- ============================================================================

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  出库单表头（t_ctms_stock_out，34 列）的 Mapper（B4 第 3 组：过账与红冲）。
+
+  与 ErpStockInMapper.xml 逐列对称，差异只在 out_type / customer_id / customer_name 三列。
+  口径（快照三列不更新、默认排除作废、dataScopeSql 服务端白名单、doc_no 不可改、
+  update_time 走 sysdate()）与入库单完全一致，理由见 ErpStockInMapper.xml 的头部注释。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.posting.mapper.ErpStockOutMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.posting.domain.ErpStockOut" id="ErpStockOutResult">
+        <id     property="id"            column="id"              />
+        <result property="docNo"         column="doc_no"          />
+        <result property="docDate"       column="doc_date"        />
+        <result property="status"        column="status"          />
+        <result property="deptId"        column="dept_id"         />
+        <result property="createId"      column="create_id"       />
+        <result property="createBy"      column="create_by"       />
+        <result property="handlerUserId" column="handler_user_id" />
+        <result property="handlerName"   column="handler_name"    />
+        <result property="remark"        column="remark"          />
+        <result property="contractId"    column="contract_id"     />
+        <result property="contractNo"    column="contract_no"     />
+        <result property="sourceDocType" column="source_doc_type" />
+        <result property="sourceDocId"   column="source_doc_id"   />
+        <result property="sourceDocNo"   column="source_doc_no"   />
+        <result property="submittedBy"   column="submitted_by"    />
+        <result property="submittedAt"   column="submitted_at"    />
+        <result property="approvedBy"    column="approved_by"     />
+        <result property="approvedAt"    column="approved_at"     />
+        <result property="voidedBy"      column="voided_by"       />
+        <result property="voidedAt"      column="voided_at"       />
+        <result property="voidReason"    column="void_reason"     />
+        <result property="posted"        column="posted"          />
+        <result property="delFlag"       column="del_flag"        />
+        <result property="createTime"    column="create_time"     />
+        <result property="updateTime"    column="update_time"     />
+        <result property="updateId"      column="update_id"       />
+        <result property="updateBy"      column="update_by"       />
+        <result property="warehouseId"   column="warehouse_id"    />
+        <result property="warehouseName" column="warehouse_name"  />
+        <result property="outType"       column="out_type"        />
+        <result property="customerId"    column="customer_id"     />
+        <result property="customerName"  column="customer_name"   />
+        <result property="totalAmount"   column="total_amount"    />
+        <!-- 非持久化字段不在此映射（items / dataScopeSql / 日期区间 / 关键字 / includeVoided）。 -->
+    </resultMap>
+
+    <sql id="selectStockOutVo">
+        select d.id, d.doc_no, d.doc_date, d.status, d.dept_id, d.create_id, d.create_by,
+               d.handler_user_id, d.handler_name, d.remark, d.contract_id, d.contract_no,
+               d.source_doc_type, d.source_doc_id, d.source_doc_no, d.submitted_by, d.submitted_at,
+               d.approved_by, d.approved_at, d.voided_by, d.voided_at, d.void_reason, d.posted,
+               d.del_flag, d.create_time, d.update_time, d.update_id, d.update_by,
+               d.warehouse_id, d.warehouse_name, d.out_type, d.customer_id, d.customer_name, d.total_amount
+          from t_ctms_stock_out d
+    </sql>
+
+    <select id="selectStockOutList" parameterType="com.ruoyi.ctms.erp.posting.domain.ErpStockOut"
+            resultMap="ErpStockOutResult">
+        <include refid="selectStockOutVo"/>
+        <where>
+            d.del_flag = '0'
+            <if test="includeVoided == null or includeVoided == false">
+                and d.status &lt;&gt; 'voided'
+            </if>
+            <if test="status != null and status != ''">
+                and d.status = #{status}
+            </if>
+            <if test="docNo != null and docNo != ''">
+                and d.doc_no like concat('%', #{docNo}, '%')
+            </if>
+            <if test="outType != null and outType != ''">
+                and d.out_type = #{outType}
+            </if>
+            <if test="warehouseId != null and warehouseId != ''">
+                and d.warehouse_id = #{warehouseId}
+            </if>
+            <if test="customerId != null and customerId != ''">
+                and d.customer_id = #{customerId}
+            </if>
+            <if test="beginDocDate != null">
+                and d.doc_date &gt;= #{beginDocDate}
+            </if>
+            <if test="endDocDate != null">
+                and d.doc_date &lt;= #{endDocDate}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (d.doc_no like concat('%', #{keyword}, '%')
+                     or d.remark like concat('%', #{keyword}, '%')
+                     or d.source_doc_no like concat('%', #{keyword}, '%'))
+            </if>
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and ( ${dataScopeSql} )
+            </if>
+        </where>
+        order by d.doc_no desc
+    </select>
+
+    <select id="selectStockOutById" resultMap="ErpStockOutResult">
+        <include refid="selectStockOutVo"/>
+         where d.id = #{id}
+    </select>
+
+    <!--
+      t29：按来源单据查下游出库单（销售订单反审核的"上游守卫"用；**只读**）。
+
+      口径：
+        · 只按 source_doc_id 匹配 + 未删除（del_flag = '0'）；
+        · **不过滤状态**：已作废的下游单同样算"引用过"，否则作废下游后上游就能被反审核，
+          会绕过销售侧的上游守卫；
+        · 排序稳定：create_time 可能同秒，故用 (create_time, id) 兜底；
+        · 复用既有 resultMap 与 selectStockOutVo（列名与表一致，见 notes/03-posting.md §12 的
+          information_schema 核对输出）。
+    -->
+    <select id="selectBySourceDocId" resultMap="ErpStockOutResult">
+        <include refid="selectStockOutVo"/>
+         where d.source_doc_id = #{sourceDocId}
+           and d.del_flag = '0'
+         order by d.create_time, d.id
+    </select>
+
+    <insert id="insertStockOut" parameterType="com.ruoyi.ctms.erp.posting.domain.ErpStockOut">
+        insert into t_ctms_stock_out(
+            id, doc_no, doc_date, status, dept_id, create_id, create_by, handler_user_id, handler_name,
+            remark, contract_id, contract_no, source_doc_type, source_doc_id, source_doc_no,
+            submitted_by, submitted_at, approved_by, approved_at, voided_by, voided_at, void_reason,
+            posted, del_flag, create_time, update_time, update_id, update_by,
+            warehouse_id, warehouse_name, out_type, customer_id, customer_name, total_amount
+        )values(
+            #{id}, #{docNo}, #{docDate}, #{status}, #{deptId}, #{createId}, #{createBy},
+            #{handlerUserId}, #{handlerName}, #{remark}, #{contractId}, #{contractNo},
+            #{sourceDocType}, #{sourceDocId}, #{sourceDocNo}, #{submittedBy}, #{submittedAt},
+            #{approvedBy}, #{approvedAt}, #{voidedBy}, #{voidedAt}, #{voidReason},
+            #{posted}, #{delFlag}, sysdate(), sysdate(), #{updateId}, #{updateBy},
+            #{warehouseId}, #{warehouseName}, #{outType}, #{customerId}, #{customerName}, #{totalAmount}
+        )
+    </insert>
+
+    <update id="updateStockOut" parameterType="com.ruoyi.ctms.erp.posting.domain.ErpStockOut">
+        update t_ctms_stock_out
+        <set>
+            doc_date        = #{docDate},
+            status          = #{status},
+            handler_user_id = #{handlerUserId},
+            handler_name    = #{handlerName},
+            remark          = #{remark},
+            contract_id     = #{contractId},
+            contract_no     = #{contractNo},
+            source_doc_type = #{sourceDocType},
+            source_doc_id   = #{sourceDocId},
+            source_doc_no   = #{sourceDocNo},
+            submitted_by    = #{submittedBy},
+            submitted_at    = #{submittedAt},
+            approved_by     = #{approvedBy},
+            approved_at     = #{approvedAt},
+            voided_by       = #{voidedBy},
+            voided_at       = #{voidedAt},
+            void_reason     = #{voidReason},
+            posted          = #{posted},
+            del_flag        = #{delFlag},
+            warehouse_id    = #{warehouseId},
+            warehouse_name  = #{warehouseName},
+            out_type        = #{outType},
+            customer_id     = #{customerId},
+            customer_name   = #{customerName},
+            total_amount    = #{totalAmount},
+            update_id       = #{updateId},
+            update_by       = #{updateBy},
+            update_time     = sysdate()
+        </set>
+        <!-- dept_id / create_id / create_by / doc_no 刻意不在更新列里（快照与单号不可变） -->
+         where id = #{id}
+    </update>
+
+    <delete id="deleteStockOutByIds">
+        delete from t_ctms_stock_out where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

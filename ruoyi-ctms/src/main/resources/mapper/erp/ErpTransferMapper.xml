@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  调拨单表头（t_ctms_transfer，32 列）的 Mapper（B4 第 6 组：调拨与盘点）。
+
+  口径说明（逐条对应 tasks.md §6.1/§6.2）：
+    · from_warehouse_id / to_warehouse_id 是**表头两仓**（DDL 级 NOT NULL + 外键）；
+      行项**不使用**行级仓库（见 ErpTransferItemMapper.xml）；
+    · dept_id / create_id / create_by 是**创建时快照**（数据范围判定依据），
+      update 刻意不更新这三列：人员调岗不得回溯历史单据的可见范围；
+    · doc_no 在 update 里**不可改**（单号作废/删除占号不复用，与 B3 合同编号同款）；
+    · 列表默认排除已作废（status <> 'voided'）与已删除（del_flag = '0'）；
+      includeVoided 是 Boolean，不用 '1' 字符串比较 —— OGNL 把单引号 '1' 当字符字面量，
+      B3 的 CtmsContractMapper 注释第 1 条记录过这个坑（写成 != '1' 会让条件恒真）；
+    · dataScopeSql 用 ${} 原样拼接：片段只由服务层 ErpDocScope 拼出（服务端白名单），
+      请求参数永远不进入该片段；
+    · update_time 走 sysdate()，不信任应用传入的时间。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.stockops.mapper.ErpTransferMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.stockops.domain.ErpTransfer" id="ErpTransferResult">
+        <id     property="id"                 column="id"                  />
+        <result property="docNo"              column="doc_no"              />
+        <result property="docDate"            column="doc_date"            />
+        <result property="status"             column="status"              />
+        <result property="deptId"             column="dept_id"             />
+        <result property="createId"           column="create_id"           />
+        <result property="createBy"           column="create_by"           />
+        <result property="handlerUserId"      column="handler_user_id"     />
+        <result property="handlerName"        column="handler_name"        />
+        <result property="remark"             column="remark"              />
+        <result property="contractId"         column="contract_id"         />
+        <result property="contractNo"         column="contract_no"         />
+        <result property="sourceDocType"      column="source_doc_type"     />
+        <result property="sourceDocId"        column="source_doc_id"       />
+        <result property="sourceDocNo"        column="source_doc_no"       />
+        <result property="submittedBy"        column="submitted_by"        />
+        <result property="submittedAt"        column="submitted_at"        />
+        <result property="approvedBy"         column="approved_by"         />
+        <result property="approvedAt"         column="approved_at"         />
+        <result property="voidedBy"           column="voided_by"           />
+        <result property="voidedAt"           column="voided_at"           />
+        <result property="voidReason"         column="void_reason"         />
+        <result property="posted"             column="posted"              />
+        <result property="delFlag"            column="del_flag"            />
+        <result property="createTime"         column="create_time"         />
+        <result property="updateTime"         column="update_time"         />
+        <result property="updateId"           column="update_id"           />
+        <result property="updateBy"           column="update_by"           />
+        <result property="fromWarehouseId"    column="from_warehouse_id"   />
+        <result property="fromWarehouseName"  column="from_warehouse_name" />
+        <result property="toWarehouseId"      column="to_warehouse_id"     />
+        <result property="toWarehouseName"    column="to_warehouse_name"   />
+        <!-- 非持久化字段（items / dataScopeSql / 日期区间 / 关键字 / includeVoided）不在此映射 -->
+    </resultMap>
+
+    <sql id="selectTransferVo">
+        select d.id, d.doc_no, d.doc_date, d.status, d.dept_id, d.create_id, d.create_by,
+               d.handler_user_id, d.handler_name, d.remark, d.contract_id, d.contract_no,
+               d.source_doc_type, d.source_doc_id, d.source_doc_no, d.submitted_by, d.submitted_at,
+               d.approved_by, d.approved_at, d.voided_by, d.voided_at, d.void_reason, d.posted,
+               d.del_flag, d.create_time, d.update_time, d.update_id, d.update_by,
+               d.from_warehouse_id, d.from_warehouse_name, d.to_warehouse_id, d.to_warehouse_name
+          from t_ctms_transfer d
+    </sql>
+
+    <select id="selectTransferList" parameterType="com.ruoyi.ctms.erp.stockops.domain.ErpTransfer"
+            resultMap="ErpTransferResult">
+        <include refid="selectTransferVo"/>
+        <where>
+            d.del_flag = '0'
+            <if test="includeVoided == null or includeVoided == false">
+                and d.status &lt;&gt; 'voided'
+            </if>
+            <if test="status != null and status != ''">
+                and d.status = #{status}
+            </if>
+            <if test="docNo != null and docNo != ''">
+                and d.doc_no like concat('%', #{docNo}, '%')
+            </if>
+            <if test="fromWarehouseId != null and fromWarehouseId != ''">
+                and d.from_warehouse_id = #{fromWarehouseId}
+            </if>
+            <if test="toWarehouseId != null and toWarehouseId != ''">
+                and d.to_warehouse_id = #{toWarehouseId}
+            </if>
+            <if test="handlerName != null and handlerName != ''">
+                and d.handler_name like concat('%', #{handlerName}, '%')
+            </if>
+            <if test="beginDocDate != null">
+                and d.doc_date &gt;= #{beginDocDate}
+            </if>
+            <if test="endDocDate != null">
+                and d.doc_date &lt;= #{endDocDate}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (d.doc_no like concat('%', #{keyword}, '%')
+                     or d.remark like concat('%', #{keyword}, '%')
+                     or d.source_doc_no like concat('%', #{keyword}, '%'))
+            </if>
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and ( ${dataScopeSql} )
+            </if>
+        </where>
+        order by d.doc_no desc
+    </select>
+
+    <select id="selectTransferById" resultMap="ErpTransferResult">
+        <include refid="selectTransferVo"/>
+         where d.id = #{id}
+    </select>
+
+    <insert id="insertTransfer" parameterType="com.ruoyi.ctms.erp.stockops.domain.ErpTransfer">
+        insert into t_ctms_transfer(
+            id, doc_no, doc_date, status, dept_id, create_id, create_by, handler_user_id, handler_name,
+            remark, contract_id, contract_no, source_doc_type, source_doc_id, source_doc_no,
+            submitted_by, submitted_at, approved_by, approved_at, voided_by, voided_at, void_reason,
+            posted, del_flag, create_time, update_time, update_id, update_by,
+            from_warehouse_id, from_warehouse_name, to_warehouse_id, to_warehouse_name
+        )values(
+            #{id}, #{docNo}, #{docDate}, #{status}, #{deptId}, #{createId}, #{createBy},
+            #{handlerUserId}, #{handlerName}, #{remark}, #{contractId}, #{contractNo},
+            #{sourceDocType}, #{sourceDocId}, #{sourceDocNo}, #{submittedBy}, #{submittedAt},
+            #{approvedBy}, #{approvedAt}, #{voidedBy}, #{voidedAt}, #{voidReason},
+            #{posted}, #{delFlag}, sysdate(), sysdate(), #{updateId}, #{updateBy},
+            #{fromWarehouseId}, #{fromWarehouseName}, #{toWarehouseId}, #{toWarehouseName}
+        )
+    </insert>
+
+    <update id="updateTransfer" parameterType="com.ruoyi.ctms.erp.stockops.domain.ErpTransfer">
+        update t_ctms_transfer
+        <set>
+            doc_date             = #{docDate},
+            status               = #{status},
+            handler_user_id      = #{handlerUserId},
+            handler_name         = #{handlerName},
+            remark               = #{remark},
+            contract_id          = #{contractId},
+            contract_no          = #{contractNo},
+            source_doc_type      = #{sourceDocType},
+            source_doc_id        = #{sourceDocId},
+            source_doc_no        = #{sourceDocNo},
+            submitted_by         = #{submittedBy},
+            submitted_at         = #{submittedAt},
+            approved_by          = #{approvedBy},
+            approved_at          = #{approvedAt},
+            voided_by            = #{voidedBy},
+            voided_at            = #{voidedAt},
+            void_reason          = #{voidReason},
+            posted               = #{posted},
+            del_flag             = #{delFlag},
+            from_warehouse_id    = #{fromWarehouseId},
+            from_warehouse_name  = #{fromWarehouseName},
+            to_warehouse_id      = #{toWarehouseId},
+            to_warehouse_name    = #{toWarehouseName},
+            update_id            = #{updateId},
+            update_by            = #{updateBy},
+            update_time          = sysdate()
+        </set>
+        <!-- dept_id / create_id / create_by / doc_no 刻意不在更新列里（快照与单号不可变） -->
+         where id = #{id}
+    </update>
+
+    <!-- 物理删除：仅草稿可删（状态守卫在服务层）；行项由外键 ON DELETE CASCADE 一并删除 -->
+    <delete id="deleteTransferByIds">
+        delete from t_ctms_transfer where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

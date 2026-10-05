@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  库存明细（结存 t_ctms_stock 的只读投影 + 联表展示字段）的 Mapper（B4 第 7 组：库存账）。
+
+  口径说明：
+    · 本文件**只有 select**：结存的写入侧在 posting 包（ErpStockJournalServiceImpl 过账/红冲），
+      运维修复复用 T3 的 ErpStockMapper.updateStockQty —— 这里再开 update 就是第二个写入口（D2）。
+    · 「货品总额度」按（物料, 仓库）聚合 t_ctms_stock_ledger：
+        业务类型子串匹配「入库」且排除「调拨入库」（含其红冲）→ Σ round(qty_change × unit_price, 2)。
+      ⚠ 关键字与 Java 侧 ErpLedgerRules.QUOTA_INCLUDE_KEYWORD / QUOTA_EXCLUDE_KEYWORD 必须一致，
+        由 ErpLedgerAppendOnlyTest 做源码级一致性断言（改一处必须改两处）。
+      ⚠ 逐行 round 后再 sum（不是先高精度 sum 再 round）：与 AC-78 的"各行舍入后之和"同源。
+    · 数据范围：结存表**没有** dept_id / create_id 列（D10 的判定字段只在流水上），
+      所以范围片段用 exists 关联到流水子查询，片段里的别名必须是 `l`（ErpLedgerRules.ALIAS_LEDGER），
+      由服务层用 ErpDocScope.buildDataScopeSql("l") 生成；请求参数永远不进这个片段。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.ledger.mapper.ErpStockBalanceMapper">
+
+    <resultMap type="com.ruoyi.ctms.erp.ledger.domain.ErpStockBalance" id="ErpStockBalanceResult">
+        <id     property="id"              column="id"                />
+        <result property="productId"       column="product_id"        />
+        <result property="warehouseId"     column="warehouse_id"      />
+        <result property="qty"             column="qty"               />
+        <result property="productCode"     column="product_code"      />
+        <result property="productName"     column="product_name"      />
+        <result property="spec"            column="spec"              />
+        <result property="uomId"           column="uom_id"            />
+        <result property="uomName"         column="uom_name"          />
+        <result property="productTypeId"   column="product_type_id"   />
+        <result property="productTypeName" column="product_type_name" />
+        <result property="safetyStock"     column="safety_stock"      />
+        <result property="warehouseCode"   column="warehouse_code"    />
+        <result property="warehouseName"   column="warehouse_name"    />
+        <result property="goodsQuota"      column="goods_quota"       />
+        <result property="createTime"      column="create_time"       />
+        <result property="updateTime"      column="update_time"       />
+        <!-- 非持久化字段（keyword / productTypeIds / 数量区间 / belowSafetyOnly / hideZero /
+             dataScopeSql）由服务层装配，不在此映射；displayName 与 belowSafetyStock 由 Java 派生。 -->
+    </resultMap>
+
+    <sql id="selectBalanceVo">
+        select s.id, s.product_id, s.warehouse_id, s.qty, s.create_time, s.update_time,
+               p.code  as product_code,
+               p.name  as product_name,
+               p.spec  as spec,
+               p.uom_id as uom_id,
+               u.name  as uom_name,
+               p.product_type_id as product_type_id,
+               pt.name as product_type_name,
+               p.safety_stock as safety_stock,
+               w.code  as warehouse_code,
+               w.name  as warehouse_name,
+               (select coalesce(sum(case when l2.biz_type like '%入库%'
+                                          and l2.biz_type not like '%调拨入库%'
+                                         then round(l2.qty_change * coalesce(l2.unit_price, 0), 2)
+                                         else 0 end), 0)
+                  from t_ctms_stock_ledger l2
+                 where l2.product_id   = s.product_id
+                   and l2.warehouse_id = s.warehouse_id) as goods_quota
+          from t_ctms_stock s
+          left join t_ctms_product      p  on p.id  = s.product_id
+          left join t_ctms_product_type pt on pt.id = p.product_type_id
+          left join t_ctms_uom          u  on u.id  = p.uom_id
+          left join t_ctms_warehouse    w  on w.id  = s.warehouse_id
+    </sql>
+
+    <select id="selectBalanceList" parameterType="com.ruoyi.ctms.erp.ledger.domain.ErpStockBalance"
+            resultMap="ErpStockBalanceResult">
+        <include refid="selectBalanceVo"/>
+        <where>
+            <if test="productId != null and productId != ''">
+                and s.product_id = #{productId}
+            </if>
+            <if test="warehouseId != null and warehouseId != ''">
+                and s.warehouse_id = #{warehouseId}
+            </if>
+            <if test="productTypeIds != null and productTypeIds.size() &gt; 0">
+                and p.product_type_id in
+                <foreach collection="productTypeIds" item="typeId" open="(" separator="," close=")">
+                    #{typeId}
+                </foreach>
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (p.code like concat('%', #{keyword}, '%')
+                     or p.name like concat('%', #{keyword}, '%')
+                     or p.spec like concat('%', #{keyword}, '%'))
+            </if>
+            <if test="beginQty != null">
+                and s.qty &gt;= #{beginQty}
+            </if>
+            <if test="endQty != null">
+                and s.qty &lt;= #{endQty}
+            </if>
+            <if test="belowSafetyOnly != null and belowSafetyOnly">
+                and s.qty &lt; coalesce(p.safety_stock, 0)
+            </if>
+            <if test="hideZero != null and hideZero">
+                and s.qty &lt;&gt; 0
+            </if>
+            <if test="dataScopeSql != null and dataScopeSql != ''">
+                and exists (select 1
+                              from t_ctms_stock_ledger l
+                             where l.product_id   = s.product_id
+                               and l.warehouse_id = s.warehouse_id
+                               and ( ${dataScopeSql} ))
+            </if>
+        </where>
+        order by w.code asc, p.code asc, s.product_id asc
+    </select>
+
+    <select id="selectBalanceByKey" resultMap="ErpStockBalanceResult">
+        <include refid="selectBalanceVo"/>
+         where s.product_id = #{productId}
+           and s.warehouse_id = #{warehouseId}
+    </select>
+
+    <select id="countBalance" resultType="int">
+        select count(1) from t_ctms_stock
+    </select>
+</mapper>

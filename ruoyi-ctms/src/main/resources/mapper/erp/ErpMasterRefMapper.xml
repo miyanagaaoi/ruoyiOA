@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  主数据引用统计（B4 §2.3/§2.4）——只读 count，供"仓库/物料能否物理删除"的判断使用。
+
+  口径说明：
+    · 本文件只统计 B4 的 18 张表里指向物料/仓库的列，**不统计** B3 的合同行项
+      （合同行项的 product_id 是 B3 自己的引用保护，见 B3 的 countProductsByType 等）。
+    · 全部是字面量表名 + #{} 占位，没有一处 ${}。
+    · warehouseId / productId 至少传一个；条件列用 <if> 保护。
+    · 删除守卫只关心"有没有"，因此 count 到 1 行即可，但这里仍用 count(*)：
+      count 与 exists 在本表规模下无差别，而 count 的返回值便于日志/断言打印具体条数。
+
+  命名硬规则：文件名以 Mapper.xml 结尾，namespace 与接口全限定名一致。
+-->
+<mapper namespace="com.ruoyi.ctms.erp.master.mapper.ErpMasterRefMapper">
+
+    <!-- 结存引用（(物料,仓库) 唯一表的两个 FK 列） -->
+    <select id="countStockRefs" resultType="int">
+        select count(*) from t_ctms_stock
+        <where>
+            <if test="warehouseId != null and warehouseId != ''">
+                and warehouse_id = #{warehouseId}
+            </if>
+            <if test="productId != null and productId != ''">
+                and product_id = #{productId}
+            </if>
+        </where>
+    </select>
+
+    <!-- 库存流水引用（只增不改的流水表；有历史流水也不允许删仓库/物料） -->
+    <select id="countLedgerRefs" resultType="int">
+        select count(*) from t_ctms_stock_ledger
+        <where>
+            <if test="warehouseId != null and warehouseId != ''">
+                and warehouse_id = #{warehouseId}
+            </if>
+            <if test="productId != null and productId != ''">
+                and product_id = #{productId}
+            </if>
+        </where>
+    </select>
+
+    <!--
+      单据对仓库的引用：4 张表头的仓库列（调拨两列）+ 4 张行项的 warehouse_id。
+      ⚠ 8 张行项表里，调拨与盘点**不使用**行级仓库列（见 sql/二开-进销存.sql 的列注释），
+        但列存在且可能被历史数据写过，因此这里照样统计 —— 宁可多拦一次，也不要出现孤儿引用。
+    -->
+    <select id="countDocRefsByWarehouse" resultType="int">
+        select
+              (select count(*) from t_ctms_stock_in   where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_stock_out  where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_stocktake  where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_transfer   where from_warehouse_id = #{warehouseId}
+                                                         or to_warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_purchase_request_item where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_purchase_order_item   where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_sales_request_item    where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_sales_order_item      where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_stock_in_item         where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_stock_out_item        where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_stocktake_item        where warehouse_id = #{warehouseId})
+            + (select count(*) from t_ctms_transfer_item         where warehouse_id = #{warehouseId})
+    </select>
+
+    <!-- 单据行项对物料的引用：8 张行项表的 product_id（该列是 DB 级 NOT NULL + 外键） -->
+    <select id="countDocRefsByProduct" resultType="int">
+        select
+              (select count(*) from t_ctms_purchase_request_item where product_id = #{productId})
+            + (select count(*) from t_ctms_purchase_order_item   where product_id = #{productId})
+            + (select count(*) from t_ctms_sales_request_item    where product_id = #{productId})
+            + (select count(*) from t_ctms_sales_order_item      where product_id = #{productId})
+            + (select count(*) from t_ctms_stock_in_item         where product_id = #{productId})
+            + (select count(*) from t_ctms_stock_out_item        where product_id = #{productId})
+            + (select count(*) from t_ctms_stocktake_item        where product_id = #{productId})
+            + (select count(*) from t_ctms_transfer_item         where product_id = #{productId})
+    </select>
+
+</mapper>

@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +24,7 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.ctms.domain.CtmsAttachment;
 import com.ruoyi.ctms.domain.CtmsChangeLog;
 import com.ruoyi.ctms.domain.CtmsContract;
+import com.ruoyi.ctms.erp.base.service.IErpDocObjectAccess;
 import com.ruoyi.ctms.mapper.CtmsAttachmentMapper;
 import com.ruoyi.ctms.mapper.CtmsChangeLogMapper;
 import com.ruoyi.ctms.service.ICtmsContractService;
@@ -62,6 +64,15 @@ public class CtmsAttachmentServiceImplTest
     /** 一个"存在但不在当前用户范围内"的合同ID */
     private static final String FOREIGN_CONTRACT_ID = "ATTC0000000000000000000000000002";
 
+    /** 夹具采购申请单ID（t19：新登记的对象类型之一） */
+    private static final String PURCHASE_REQUEST_ID = "ATTD0000000000000000000000000001";
+
+    /** 夹具销售申请单ID（t19：新登记的对象类型之二） */
+    private static final String SALES_REQUEST_ID = "ATTD0000000000000000000000000002";
+
+    /** 一个"存在但不在当前用户范围内"的采购申请单ID */
+    private static final String FOREIGN_PURCHASE_REQUEST_ID = "ATTD0000000000000000000000000003";
+
     private static Path profileRoot;
 
     private static String originalProfile;
@@ -71,6 +82,8 @@ public class CtmsAttachmentServiceImplTest
     private final StubChangeLogMapper changeLogMapper = new StubChangeLogMapper();
 
     private final StubContractService contractService = new StubContractService();
+
+    private final StubDocObjectAccess docObjectAccess = new StubDocObjectAccess();
 
     private final CtmsAttachmentServiceImpl service = new TestAttachmentService();
 
@@ -101,9 +114,17 @@ public class CtmsAttachmentServiceImplTest
         contractService.existing.add(CONTRACT_ID);
         contractService.existing.add(FOREIGN_CONTRACT_ID);
         contractService.accessible.add(CONTRACT_ID);
+        docObjectAccess.existing.clear();
+        docObjectAccess.accessible.clear();
+        docObjectAccess.existing.add(PURCHASE_REQUEST_ID);
+        docObjectAccess.existing.add(SALES_REQUEST_ID);
+        docObjectAccess.existing.add(FOREIGN_PURCHASE_REQUEST_ID);
+        docObjectAccess.accessible.add(PURCHASE_REQUEST_ID);
+        docObjectAccess.accessible.add(SALES_REQUEST_ID);
         inject(service, "attachmentMapper", attachmentMapper);
         inject(service, "contractService", contractService);
         inject(service, "changeLogMapper", changeLogMapper);
+        inject(service, "erpDocObjectAccess", docObjectAccess);
     }
 
     /* ==================== 6.1 对象挂载层 ==================== */
@@ -214,6 +235,177 @@ public class CtmsAttachmentServiceImplTest
                 service.selectAttachmentList(CtmsAttachmentObjectTypes.CONTRACT, "");
             }
         });
+    }
+
+    /* ==================== 6.4 B4 单据对象类型（t19 补登记两个申请单） ==================== */
+
+    @Test
+    public void 两个申请单对象类型可上传下载删除且不写合同ID()
+    {
+        String[] types = { CtmsAttachmentObjectTypes.PURCHASE_REQUEST,
+                CtmsAttachmentObjectTypes.SALES_REQUEST };
+        String[] objectIds = { PURCHASE_REQUEST_ID, SALES_REQUEST_ID };
+
+        for (int i = 0; i < types.length; i++)
+        {
+            String type = types[i];
+            String objectId = objectIds[i];
+
+            CtmsAttachment saved = service.uploadAttachment(type, objectId,
+                    new FakeMultipartFile("申请单附件.pdf", "doc-object".getBytes(), "application/pdf"));
+
+            assertEquals("对象类型应原样落库：" + type, type, saved.getObjectType());
+            assertEquals("对象标识应原样落库：" + objectId, objectId, saved.getObjectId());
+            assertNull("单据附件不得写 contract_id（数据范围走对象本身）：" + type, saved.getContractId());
+
+            // 物理文件真的落盘（与合同附件同一条上传链路）
+            File stored = new File(profileRoot
+                    + saved.getStoredPath().substring(Constants.RESOURCE_PREFIX.length()));
+            assertTrue("物理文件应存在：" + stored.getAbsolutePath(), stored.isFile());
+
+            // 列表 + 下载（requireDownloadable 就是下载接口的鉴权入口）
+            List<CtmsAttachment> list = service.selectAttachmentList(type, objectId);
+            assertEquals("列表应含刚上传的一条：" + type, 1, list.size());
+            assertEquals(saved.getId(), list.get(0).getId());
+            CtmsAttachment downloadable = service.requireDownloadable(saved.getId());
+            assertEquals(saved.getId(), downloadable.getId());
+            assertTrue("下载路径应指向真实文件：" + type,
+                    new File(service.localPathOf(downloadable)).isFile());
+
+            // 删除：软删除 + 留痕，删除后列表不再出现
+            service.deleteAttachment(saved.getId());
+            assertEquals("软删除应生效：" + type,
+                    CtmsAttachment.DEL_FLAG_DELETED, attachmentMapper.store.get(saved.getId()).getDelFlag());
+            assertTrue("删除后列表应为空：" + type,
+                    service.selectAttachmentList(type, objectId).isEmpty());
+        }
+
+        // 两条变更历史：字段名「附件」、按 (object_type, object_id) 多态定位、contract_id 为空
+        assertEquals("两个申请单各删一个附件应写两条变更历史", 2, changeLogMapper.store.size());
+        for (CtmsChangeLog log : changeLogMapper.store)
+        {
+            assertEquals("附件", log.getFieldName());
+            assertNull("单据附件的变更历史不得写 contract_id", log.getContractId());
+            assertTrue("对象类型应是本次的两种之一：" + log.getObjectType(),
+                    CtmsAttachmentObjectTypes.PURCHASE_REQUEST.equals(log.getObjectType())
+                            || CtmsAttachmentObjectTypes.SALES_REQUEST.equals(log.getObjectType()));
+            assertTrue("旧值应含被删文件名：" + log.getOldValue(),
+                    log.getOldValue() != null && log.getOldValue().contains("申请单附件.pdf"));
+        }
+        assertEquals("软删除保留物理文件（2 个）", 2, countFiles(profileRoot.toFile()));
+    }
+
+    @Test
+    public void 申请单对象不存在时被拒且提示单据名()
+    {
+        assertRejected("采购申请单不存在", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.uploadAttachment(CtmsAttachmentObjectTypes.PURCHASE_REQUEST,
+                        "ATTD00000000000000000000000000FF",
+                        new FakeMultipartFile("x.pdf", "x".getBytes(), "application/pdf"));
+            }
+        });
+        assertRejected("销售申请单不存在", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.uploadAttachment(CtmsAttachmentObjectTypes.SALES_REQUEST,
+                        "ATTD00000000000000000000000000FE",
+                        new FakeMultipartFile("x.pdf", "x".getBytes(), "application/pdf"));
+            }
+        });
+        assertEquals("被拒时不得落库", 0, attachmentMapper.store.size());
+        assertEquals("被拒时不得落盘", 0, countFiles(profileRoot.toFile()));
+    }
+
+    @Test
+    public void 申请单对象范围外上传列表下载删除均为403且不返回文件内容()
+    {
+        // ① 上传：范围外被拒，且不落库不落盘
+        try
+        {
+            service.uploadAttachment(CtmsAttachmentObjectTypes.PURCHASE_REQUEST, FOREIGN_PURCHASE_REQUEST_ID,
+                    new FakeMultipartFile("越权.pdf", "x".getBytes(), "application/pdf"));
+            fail("范围外的申请单应被拒绝");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals("范围外应返回业务码 403", Integer.valueOf(403), e.getCode());
+            assertTrue("文案应指明对象：" + e.getMessage(),
+                    e.getMessage().contains("无权访问该采购申请单"));
+        }
+        assertEquals("被拒时不得落库", 0, attachmentMapper.store.size());
+        assertEquals("被拒时不得落盘", 0, countFiles(profileRoot.toFile()));
+
+        // ② 列表/下载/删除：直接造一条"属于别人申请单"的附件行
+        CtmsAttachment foreign = new CtmsAttachment();
+        foreign.setId("ATTA00000000000000000000000000FD");
+        foreign.setObjectType(CtmsAttachmentObjectTypes.PURCHASE_REQUEST);
+        foreign.setObjectId(FOREIGN_PURCHASE_REQUEST_ID);
+        foreign.setFileName("别人的申请单附件.pdf");
+        foreign.setStoredPath("/profile/upload/2026/10/05/foreign-doc.pdf");
+        foreign.setSizeBytes(10L);
+        foreign.setDelFlag(CtmsAttachment.DEL_FLAG_NORMAL);
+        attachmentMapper.store.put(foreign.getId(), foreign);
+
+        // 列表：越权必须是 403（返回空列表会把"越权"伪装成"没有附件"）
+        try
+        {
+            service.selectAttachmentList(CtmsAttachmentObjectTypes.PURCHASE_REQUEST,
+                    FOREIGN_PURCHASE_REQUEST_ID);
+            fail("范围外的申请单附件列表应返回 403");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(Integer.valueOf(403), e.getCode());
+        }
+        // 下载：鉴权在返回字节之前，抛出即"不会吐文件内容"
+        try
+        {
+            service.requireDownloadable(foreign.getId());
+            fail("范围外的申请单附件下载应返回 403");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(Integer.valueOf(403), e.getCode());
+            assertTrue("不得返回任何文件内容（异常即未进入取字节分支）",
+                    e.getMessage().contains("无权访问该采购申请单"));
+        }
+        // 删除：同样按对象鉴权
+        try
+        {
+            service.deleteAttachment(foreign.getId());
+            fail("范围外的申请单附件删除应返回 403");
+        }
+        catch (ServiceException e)
+        {
+            assertEquals(Integer.valueOf(403), e.getCode());
+        }
+        assertEquals("越权被拒不得软删除该行", CtmsAttachment.DEL_FLAG_NORMAL,
+                attachmentMapper.store.get(foreign.getId()).getDelFlag());
+        assertEquals("越权被拒不得写变更历史", 0, changeLogMapper.store.size());
+    }
+
+    @Test
+    public void 未装配B4对象访问实现时单据对象类型被明确拒绝而不是静默放过()
+    {
+        // 模拟"容器里没有 IErpDocObjectAccess 实现"（B3 单测的历史场景）：
+        // 已登记的类型若无校验分支，必须明确失败，否则会产生指向不存在对象的孤儿附件
+        inject(service, "erpDocObjectAccess", null);
+        assertRejected("未注册的对象类型", new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                service.uploadAttachment(CtmsAttachmentObjectTypes.PURCHASE_REQUEST, PURCHASE_REQUEST_ID,
+                        new FakeMultipartFile("x.pdf", "x".getBytes(), "application/pdf"));
+            }
+        });
+        assertEquals("被拒时不得落库", 0, attachmentMapper.store.size());
     }
 
     /* ==================== 6.2 白名单 / 大小 / 半成品 ==================== */
@@ -448,7 +640,34 @@ public class CtmsAttachmentServiceImplTest
                 new FakeMultipartFile("大写类型.pdf", "x".getBytes(), "application/pdf"));
         assertEquals("对象类型应归一为小写", CtmsAttachmentObjectTypes.CONTRACT, saved.getObjectType());
         assertTrue(service.isRegisteredObjectType("CONTRACT"));
-        assertFalse(service.isRegisteredObjectType("purchase_order"));
+        // B4 接入（2026-10-05 口径变更）+ t19 补登记两个申请单：
+        //   注册清单必须**恰为** 9 项 = 合同 + 8 类单据，且恒等于 [contract] + docObjectTypes()。
+        //   旧断言是 `assertFalse(isRegisteredObjectType("purchase_order"))`（B3 刻意的"待补"）；
+        //   现在逐项锁住：清单长度、恒等式、两个申请单（参考仓库 OBJECT_PERMS 口径）、计划清单清空。
+        List<String> expected = new ArrayList<>();
+        expected.add(CtmsAttachmentObjectTypes.CONTRACT);
+        expected.addAll(CtmsAttachmentObjectTypes.docObjectTypes());
+        assertEquals("已注册对象类型应恰为 9 项（合同 + 8 类单据）",
+                9, CtmsAttachmentObjectTypes.registered().size());
+        assertEquals("单据对象类型应恰为 8 项", 8, CtmsAttachmentObjectTypes.docObjectTypes().size());
+        assertEquals("registered 必须恰为 [contract] + docObjectTypes（不得两处清单漂移）",
+                expected, new ArrayList<>(CtmsAttachmentObjectTypes.registered()));
+        assertEquals("规则层的注册表必须与常量清单同源",
+                new LinkedHashSet<>(expected), CtmsAttachmentRules.registeredObjectTypes());
+        assertTrue("参考仓库 OBJECT_PERMS 含采购申请单（t19 补登记）",
+                CtmsAttachmentObjectTypes.registered().contains(CtmsAttachmentObjectTypes.PURCHASE_REQUEST));
+        assertTrue("参考仓库 OBJECT_PERMS 含销售申请单（t19 补登记）",
+                CtmsAttachmentObjectTypes.registered().contains(CtmsAttachmentObjectTypes.SALES_REQUEST));
+        for (String docType : CtmsAttachmentObjectTypes.docObjectTypes())
+        {
+            assertTrue("B4 单据对象类型应在册：" + docType, service.isRegisteredObjectType(docType));
+            assertTrue("B4 单据对象类型应在 registered 清单里：" + docType,
+                    CtmsAttachmentObjectTypes.registered().contains(docType));
+        }
+        assertTrue("B4 交付后 plannedB4 应为空",
+                CtmsAttachmentObjectTypes.plannedB4().isEmpty());
+        assertFalse("未注册类型仍必须被拒",
+                service.isRegisteredObjectType("ctms_unknown_object"));
     }
 
     /* ==================== 桩与小工具 ==================== */
@@ -726,6 +945,58 @@ public class CtmsAttachmentServiceImplTest
         {
             store.add(log);
             return 1;
+        }
+    }
+
+    /**
+     * B4 单据对象访问桩（{@code IErpDocObjectAccess}）：把"存在"与"可见"分开维护。
+     *
+     * <p> 与 {@code StubContractService} 同款思路：<b>不在附件侧实现范围算法</b>，
+     * 只验证"附件服务确实把单据对象的存在性与范围判定委托给了 B4 的公共实现"这一条契约。 </p>
+     *
+     * <p> {@code supports()} 的取值口径与生产实现一致（{@code ErpDocType.ofCode != null}），
+     * 因此本桩只认 8 类单据对象类型；请求参数类型不在列表里时返回 false，
+     * 让"注册了类型却没有校验分支"的路径退化成明确的拒绝。 </p>
+     */
+    private static class StubDocObjectAccess implements IErpDocObjectAccess
+    {
+        /** 库里存在的单据对象 */
+        private final List<String> existing = new ArrayList<>();
+
+        /** 当前用户范围内的单据对象（与 existing 的交集语义由用例控制） */
+        private final List<String> accessible = new ArrayList<>();
+
+        @Override
+        public boolean supports(String objectType)
+        {
+            return CtmsAttachmentObjectTypes.docObjectTypes().contains(objectType);
+        }
+
+        @Override
+        public void checkObjectAccess(String objectType, String objectId)
+        {
+            // 文案与生产实现同构：<单据名>不存在：<id> / 无权访问该<单据名>（业务码 403）
+            String label;
+            if (CtmsAttachmentObjectTypes.PURCHASE_REQUEST.equals(objectType))
+            {
+                label = "采购申请单";
+            }
+            else if (CtmsAttachmentObjectTypes.SALES_REQUEST.equals(objectType))
+            {
+                label = "销售申请单";
+            }
+            else
+            {
+                label = "单据";
+            }
+            if (!existing.contains(objectId))
+            {
+                throw new ServiceException(label + "不存在：" + objectId);
+            }
+            if (!accessible.contains(objectId))
+            {
+                throw new ServiceException("无权访问该" + label, Integer.valueOf(403));
+            }
         }
     }
 
