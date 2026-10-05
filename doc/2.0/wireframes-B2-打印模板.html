@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>OA 2.0 · B2 低保真原型：内置打印模板（4 套版式）与打印链路</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font:13px/1.55 "Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;color:#333}
+.screen{width:1280px;height:820px;overflow:hidden;position:relative;background:#fff}
+.cap{height:34px;background:#2f2f2f;color:#fff;font-size:12px;display:flex;align-items:center;padding:0 22px 0 12px;gap:10px}
+.cap span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap .spacer{flex:1;min-width:0}
+.cap .tag{background:#fff;color:#222;border-radius:2px;padding:0 6px;font-weight:700}
+.app{height:786px;display:flex;flex-direction:column;border:1px solid #ccc;border-top:0}
+.topbar{height:56px;border-bottom:1px solid #e3e3e3;display:flex;align-items:center;padding:0 14px;gap:10px;background:#fafafa;flex:none}
+.logo{width:26px;height:26px;border:1px solid #999;border-radius:4px;background:#eee;flex:none}
+.title{font-weight:700;font-size:14px}
+.pill{border:1px solid #bbb;border-radius:12px;padding:1px 10px;font-size:12px;background:#fff;color:#666}
+.spacer{flex:1}
+.body{flex:1;display:flex;overflow:hidden}
+.main{flex:1;padding:14px;overflow:hidden;position:relative}
+.side{width:250px;border-right:1px solid #e3e3e3;padding:10px;background:#fcfcfc;overflow:hidden;flex:none}
+.panel{width:340px;border-left:1px solid #d8d8d8;background:#fbfbfb;padding:12px;overflow:hidden;flex:none}
+.inp{height:28px;border:1px solid #c4c4c4;border-radius:3px;background:#fafafa;color:#aaa;font-size:12px;display:flex;align-items:center;padding:0 8px}
+.btn{border:1px solid #a8a8a8;border-radius:4px;background:#f2f2f2;font-size:12px;padding:3px 10px;display:inline-flex;align-items:center;white-space:nowrap}
+.btn.pri{background:#d5d5d5;border-color:#8a8a8a;font-weight:700}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.lbl{width:104px;color:#555;font-size:12.5px;flex:none}
+.chip{border:1px dashed #b5b5b5;border-radius:4px;background:#fdfdfd;color:#555;font-size:12px;padding:5px 6px;text-align:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px}
+.sec{font-size:11.5px;color:#8a8a8a;margin:10px 0 6px;letter-spacing:.5px}
+.note{background:#fff8d6;border:1px dashed #c9a227;color:#6b5410;font-size:12px;padding:5px 8px;border-radius:4px}
+.note.g{background:#eef4ee;border-color:#8aa88a;color:#3d5a3d}
+.note.r{background:#fdecec;border-color:#c98a8a;color:#7a2e2e}
+.radio{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#444;margin-right:14px;white-space:nowrap}
+.radio i{width:12px;height:12px;border:1px solid #999;border-radius:50%;display:inline-block;flex:none}
+.radio i.on{background:#555;box-shadow:inset 0 0 0 2px #fff}
+.sw{width:34px;height:18px;border-radius:9px;background:#ccc;position:relative;display:inline-block;flex:none}
+.sw:after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:1px;left:2px;border:1px solid #aaa}
+.sw.on{background:#8f8f8f}
+.sw.on:after{left:auto;right:2px}
+.list-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid #eee;font-size:12.5px}
+.tag2{font-size:11px;border:1px solid #aaa;border-radius:3px;padding:0 5px;color:#666}
+.tag2.act{background:#333;color:#fff;border-color:#333}
+.small{font-size:11.5px;color:#999}
+.cbox{border:1px solid #c4c4c4;border-radius:4px;background:#fff;padding:10px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th,.tbl td{border:1px solid #ddd;padding:5px 7px;text-align:left}
+.tbl th{background:#f6f6f6;font-weight:700;color:#555}
+.tabbar{display:flex;gap:0;border-bottom:1px solid #ddd;margin-bottom:10px}
+.tabbar span{font-size:12.5px;color:#8a8a8a;padding:7px 14px;border:1px solid transparent;border-bottom:0;margin-bottom:-1px}
+.tabbar span.on{color:#111;font-weight:700;background:#fff;border-color:#ddd;border-radius:4px 4px 0 0}
+.catalog{width:1280px;padding:14px 18px;background:#fff;border-bottom:2px solid #333}
+.catalog h1{font-size:16px;margin:0 0 8px}
+.catalog table{width:100%;border-collapse:collapse;font-size:12px}
+.catalog th,.catalog td{border:1px solid #ddd;padding:4px 8px;text-align:left}
+.catalog th{background:#f6f6f6}
+.cat2{font-size:11.5px;color:#999}
+/* ---- 打印纸面：模拟 A4 纵向 ---- */
+.a4{width:760px;background:#fff;border:1px solid #999;padding:18px 20px;font-size:12px;margin:0 auto}
+.a4 h2{text-align:center;font-size:17px;letter-spacing:3px;margin:0 0 12px;font-weight:700}
+.a4 .doc-no{display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:8px}
+.form-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.form-tbl th,.form-tbl td{border:1px solid #666;padding:4px 6px;vertical-align:top}
+.form-tbl th{background:#f2f2f2;font-weight:700;white-space:nowrap;text-align:center;width:92px}
+.form-tbl td.sig{height:52px}
+.form-tbl td.sig-blank{height:52px;color:#bbb}
+.ck{color:#333;letter-spacing:1px}
+.wm{position:absolute;right:26px;top:70px;color:#ddd;font-size:12px;transform:rotate(-18deg);letter-spacing:2px;pointer-events:none}
+.pagefoot{display:flex;justify-content:space-between;font-size:10.5px;color:#777;margin-top:8px;border-top:1px dashed #bbb;padding-top:5px}
+</style>
+</head>
+<body>
+
+<!-- ================= 目录 ================= -->
+<div class="catalog">
+  <h1>OA 2.0 · B2 低保真原型 —— 内置打印模板（4 套版式）与打印链路补全</h1>
+  <div class="cat2">对应变更集 <b>oa-print-builtin-templates</b>（2.1 交付）；口径依据 <code>doc/2.0/2.0-PRD-OA升级开发.md</code> 第 6 章与附录 A、验收 AC-61~AC-67。
+  四套版式逐格取自 <code>doc/参考文档/请示审批单模版.xlsx</code>（合同 / 事项 / 资金 / 付款单）。纸面仅为版式示意，非最终像素稿。</div>
+  <table style="margin-top:10px">
+    <tr><th style="width:70px">编号</th><th style="width:330px">画面</th><th>看什么</th></tr>
+    <tr><td>S40</td><td>单据模板 → 打印模板：选内置 / 选自定义</td><td>内置模板按单据类型选用（4 套）；「同一单据模板只保留一套启用」保持</td></tr>
+    <tr><td>S41</td><td>内置版式 A：集团合同类文件流转审批单</td><td>沿用已实现的 13 行映射（零回归锚点），此处仅示意</td></tr>
+    <tr><td>S42</td><td>内置版式 C：集团资金审批单 <span class="req">★本批第一验收项</span></td><td><b>内置模板也能出签批栏</b>：集团职能部门 / 分管领导 / 董事长三栏签名区</td></tr>
+    <tr><td>S43</td><td>内置版式 B：集团事项类打印审批单（默认取请示文件版式）</td><td>公文来源 / 文件类型 / 加急程度 / 文件概要 + 接收处理 + 领导意见 + 回传归档</td></tr>
+    <tr><td>S44</td><td>内置版式 D：付款申请单</td><td>收款信息 / 付款信息（含一级二级分类、结算方式、金额大写）/ 六栏签批</td></tr>
+    <tr><td>S45</td><td>打印页设置：纸张 / 方向 / 页脚 / 水印 / 抄送栏 / Logo</td><td>四处「存了不用」的链路补全：paper、orientation、show_cc_node、logo_file_id</td></tr>
+    <tr><td>S46</td><td>待办列表行的打印入口 + 留痕改为先写后打</td><td>入口从 3 个补到 4 个；写日志失败即阻断打印</td></tr>
+  </table>
+</div>
+
+<!-- ============ S40 选择内置模板 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S40</span><span>单据模板 → 打印模板 · 内置模板按单据类型选用</span><span class="spacer"></span><span>REQ-PRINT-011 / AC-61</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">打印模板配置</div>
+      <div class="spacer"></div>
+      <span class="btn">帮助</span><span class="btn pri">新增自定义模板</span>
+    </div>
+    <div class="body">
+      <div class="main">
+        <div class="row">
+          <span class="lbl" style="width:90px">单据模板</span>
+          <span class="inp" style="width:280px">资金审批 ▾</span>
+          <span class="small">内置模板按该单据模板上的 <code>builtin_print_key</code> 选用</span>
+        </div>
+        <div class="sec">内置模板（系统自带 · 版式不可改 · 可另存 PDF）</div>
+        <div class="grid4">
+          <div class="card" style="border-color:#333;box-shadow:0 0 0 2px #eee">
+            <div style="font-weight:700">集团合同类文件流转审批单</div>
+            <div class="small" style="margin:4px 0">key = contract</div>
+            <div class="small">A4 纵向 · 13 行映射 · 签批栏按流程节点</div>
+          </div>
+          <div class="card" style="border-color:#333;box-shadow:0 0 0 2px #eee">
+            <div style="font-weight:700">集团资金审批单</div>
+            <div class="small" style="margin:4px 0">key = fund ← 当前选中</div>
+            <div class="small">A4 纵向 · 4 行表单 + <b>3 栏签名区</b></div>
+          </div>
+          <div class="card">
+            <div style="font-weight:700">集团事项类打印审批单</div>
+            <div class="small" style="margin:4px 0">key = matter</div>
+            <div class="small">默认取「集团请示文件流转审批单」版式</div>
+          </div>
+          <div class="card">
+            <div style="font-weight:700">付款申请单</div>
+            <div class="small" style="margin:4px 0">key = payment</div>
+            <div class="small">收款/付款信息 + 六栏签批</div>
+          </div>
+        </div>
+        <div class="note g" style="margin-top:10px">优先级链保持现状不变：<b>显式指定的 printTplId &gt; 该单据模板下的启用自定义模板 &gt; 内置模板</b>。</div>
+
+        <div class="sec">该单据模板下的自定义模板（沿用 V1 已交付能力）</div>
+        <table class="tbl">
+          <tr><th>名称</th><th style="width:70px">纸张</th><th style="width:90px">方向</th><th style="width:70px">签批栏</th><th style="width:70px">意见</th><th style="width:80px">附件清单</th><th style="width:70px">水印</th><th style="width:70px">状态</th><th style="width:130px">操作</th></tr>
+          <tr><td>资金审批 A4 正式版</td><td>A4</td><td>纵向</td><td>开</td><td>开</td><td>关</td><td>开</td><td><span class="tag2 act">启用</span></td><td>编辑 / 停用 / 删除</td></tr>
+          <tr><td>资金审批 A3 横向（内部）</td><td>A3</td><td>横向</td><td>关</td><td>开</td><td>开</td><td>关</td><td><span class="tag2">停用</span></td><td>编辑 / 启用 / 删除</td></tr>
+        </table>
+        <div class="note" style="margin-top:8px">「同一单据模板只保留一套启用」的规则不变：启用一套时其余自动停用。</div>
+      </div>
+      <div class="panel">
+        <div class="sec">本批次要修的四条链路</div>
+        <div class="grid2" style="font-size:11.5px">
+          <span class="radio"><i class="on"></i>paper 生效</span>
+          <span class="radio"><i class="on"></i>orientation 生效</span>
+          <span class="radio"><i class="on"></i>show_cc_node 出栏</span>
+          <span class="radio"><i class="on"></i>logo_file_id 有 UI</span>
+        </div>
+        <div class="note" style="margin-top:8px">这四项现状是「存了不用」或「无 UI 无代码」。</div>
+        <div class="sec">还要清掉的债</div>
+        <div class="note">① 前后端各一份重复的 <code>DEFAULT_FIELD_MAP</code> → 改为后端唯一真源，前端拉取；<br>② <code>PrintData.formSchema</code> 是永不赋值的死字段 → 删除。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S41 版式 A：合同 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S41</span><span>内置版式 A · 集团合同类文件流转审批单（key=contract）</span><span class="spacer"></span><span>零回归锚点：沿用已实现的 13 行映射</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">打印预览 · 合同审批（含用印）</div>
+      <span class="pill">纸张 A4 纵向</span>
+      <div class="spacer"></div>
+      <span class="btn">另存 PDF</span><span class="btn">打印</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto;background:#f4f4f4">
+        <div class="a4" style="position:relative">
+          <div class="wm">郑妍 2026-04-15 14:02 打印，仅供内部使用</div>
+          <h2>集团合同类文件流转审批单</h2>
+          <div class="doc-no"><span>合同编号：HT202604150001</span><span>第 1 页 / 共 1 页</span></div>
+          <table class="form-tbl">
+            <tr>
+              <th>提报单位</th><td>智澈公司</td>
+              <th>责任部门</th><td>经发部</td>
+              <th>报送时间</th><td>2026-04-15</td>
+            </tr>
+            <tr>
+              <th>合同全称</th><td colspan="5">创新创业孵化服务合作协议</td>
+            </tr>
+            <tr>
+              <th>合同签订主体<br>(全称)</th><td colspan="5">甲方：忻州澜蓝汇智创城科技发展有限公司<br>乙方：云羲（山西）数字科技有限公司</td>
+            </tr>
+            <tr>
+              <th>合同金额</th><td>36524.10 元<br><span class="small">叁万陆仟伍佰贰拾肆元壹角</span></td>
+              <th>履约期限</th><td>一年</td>
+              <th>合同签订时间</th><td>2026-04-15</td>
+            </tr>
+            <tr><th>相关说明</th><td colspan="5">根据业务发展需要，租赁忻州市经济开发区站前街大学生创业园二层 243 号作为办公场所……现申请使用云羲（山西）数字科技有限公司公章 4 枚（含骑缝章 2 枚）。</td></tr>
+            <tr><th>其他会审部门</th><td colspan="5" class="ck">□ 经营　□ 经济　□ 人力　□ 行政　□ 法务</td></tr>
+            <tr>
+              <th rowspan="2">公文接收<br>及处理</th>
+              <td colspan="5">接收单位：经发部　　接收人：李玥洋　　签收时间：2026-04-15 11:20</td>
+            </tr>
+            <tr><td colspan="5" class="sig">处理意见：合同条款已核对，同意报送。</td></tr>
+            <tr>
+              <th rowspan="2">集团领导意见</th>
+              <td colspan="5">集团分管领导意见：同意。<span class="small">（签名）</span></td>
+            </tr>
+            <tr><td colspan="5" class="sig">集团董事长意见：同意。<span class="small">（签名）</span></td></tr>
+            <tr><th>公文回传</th><td colspan="5">回传部门：公文管理岗　　回传时间：—　　回传人：—</td></tr>
+            <tr><th>印鉴证照<br>管理部门</th><td colspan="5">（用印办理节点到达时生成）</td></tr>
+          </table>
+          <div class="pagefoot"><span>打印人：郑妍</span><span>打印时间：2026-04-15 14:02</span><span>第 1 页 / 共 1 页</span></div>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">本版式不动</div>
+        <div class="note g">contract 的 13 行映射已在 V1 交付，本批次<b>保持原样</b>，作为「存量打印件不回归」的对照锚点。</div>
+        <div class="sec">与纸质件对齐</div>
+        <div class="note">未填写字段该行<b>不打印</b>（不留空行、不出现 null）；签批栏按流程节点生成，会签同栏按人分行。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S42 版式 C：资金审批单（第一验收项） ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S42</span><span>内置版式 C · 集团资金审批单（key=fund）★ 本批第一验收项</span><span class="spacer"></span><span>AC-62：内置模板不再强制关闭签批栏</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">打印预览 · 资金审批</div>
+      <span class="pill">内置模板 · A4 纵向</span>
+      <div class="spacer"></div>
+      <span class="btn">另存 PDF</span><span class="btn">打印</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto;background:#f4f4f4">
+        <div class="a4" style="position:relative">
+          <div class="wm">郑妍 2026-04-15 14:02 打印，仅供内部使用</div>
+          <h2>资 金 审 批 单</h2>
+          <div class="doc-no"><span>单据编号：ZJ202604150003</span><span>第 1 页 / 共 1 页</span></div>
+          <table class="form-tbl">
+            <tr><th>审批单位</th><td colspan="3">太原智澈节能科技有限公司</td></tr>
+            <tr><th>事项分类</th><td colspan="3" class="ck">经营 √　　经济 □　　行政 □　　人力 □　　投资 □</td></tr>
+            <tr><th>计划类别</th><td colspan="3" class="ck">计划内 √　　　　　　　　　　　　计划外 □</td></tr>
+            <tr><th>付款归属期</th><td colspan="3" class="ck">（√）月　　　　本年度 □　　　　以前年度 □</td></tr>
+            <tr>
+              <th style="width:92px">资金审批内容</th>
+              <td colspan="3" style="height:74px">4 月 24 日，热力支付钉钉卡机采购款项 399 元，经双方沟通，热力自主购买，故申请退款。<br><br>妥否，请审批！</td>
+            </tr>
+            <tr><th>金额</th><td colspan="3">¥ 399.00　<span class="small">叁佰玖拾玖元整</span></td></tr>
+            <!-- 签批栏：本批次必须打得出来 -->
+            <tr>
+              <th style="background:#eaeaea">集团职能部门</th>
+              <td colspan="3" class="sig" style="background:#fcfcfc">签名：<span class="small">李玥洋</span>　　　2026 年 04 月 15 日</td>
+            </tr>
+            <tr>
+              <th style="background:#eaeaea">集团分管领导</th>
+              <td colspan="3" class="sig" style="background:#fcfcfc">签名：<span class="small">王佳琦</span>　　　2026 年 04 月 15 日</td>
+            </tr>
+            <tr>
+              <th style="background:#eaeaea">集团董事长</th>
+              <td colspan="3" class="sig-blank" style="background:#fcfcfc">签名：＿＿＿＿＿＿＿　　　年　　月　　日　<span class="small">（未到达节点，留空供手写）</span></td>
+            </tr>
+          </table>
+          <div class="pagefoot"><span>打印人：郑妍</span><span>打印时间：2026-04-15 14:02</span><span>第 1 页 / 共 1 页</span></div>
+        </div>
+      </div>
+      <div class="panel" style="width:320px">
+        <div class="sec" style="color:#7a2e2e">为什么这是第一验收项</div>
+        <div class="note r">现状：前端 <code>isBuiltinTpl = !tpl.id</code> 时把 <code>showSignature</code> / <code>showAttachment</code> <b>强制置 false</b>。结果就是：资金审批单"看着配好了，打出来没有签名区"。</div>
+        <div class="sec">2.0 的处理</div>
+        <div class="note g">内置模板也允许带 <code>showSignature='1'</code>；同步修正 <code>fillDefaults</code> 的默认值分歧（DDL 默认 <code>'1'</code> vs 代码空值填 <code>'0'</code>）。</div>
+        <div class="sec">字段映射要点</div>
+        <div class="note">fund 的字段名与合同<b>完全不同</b>（审批单位 / 事项分类 / 计划类别 / 付款归属期 / 资金审批内容），必须新定义一套 field_map，不能复用 contract 的。</div>
+        <div class="sec">未到达节点</div>
+        <div class="note">按模板配置：留空供手写（上图）或打印"未到达"。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S43 版式 B：事项类 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S43</span><span>内置版式 B · 集团事项类打印审批单（key=matter）</span><span class="spacer"></span><span>默认取 xlsx「集团请示文件流转审批单」版式</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">打印预览 · 事项/请示</div>
+      <span class="pill">内置模板 · A4 纵向</span>
+      <div class="spacer"></div>
+      <span class="btn">另存 PDF</span><span class="btn">打印</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto;background:#f4f4f4">
+        <div class="a4" style="position:relative">
+          <div class="wm">郑妍 2026-05-26 09:40 打印，仅供内部使用</div>
+          <h2>集团请示文件流转审批单</h2>
+          <div class="doc-no"><span>文件编号：QS202605260001</span><span>第 1 页 / 共 1 页</span></div>
+          <table class="form-tbl">
+            <tr>
+              <th style="width:92px">公文来源</th>
+              <td colspan="5">报送单位：智澈公司　　报送人：郑妍　　报送时间：2026-05-26</td>
+            </tr>
+            <tr><th>文件编号</th><td style="width:150px">QS202605260001</td><th style="width:92px">信息名称</th><td colspan="3">关于百脉泉球阀订货单 1-1 用印的申请</td></tr>
+            <tr><th>文件类型</th><td colspan="5" class="ck">√ 经营　　□ 经济　　□ 人力　　□ 行政</td></tr>
+            <tr><th>加急程度</th><td colspan="5" class="ck">□ 普通　　√ 紧急　　□ 特急</td></tr>
+            <tr><th>文件概要</th><td colspan="5" style="height:70px">户端智能管控项目百脉泉球阀合同采取按订货单分批采购分批付款模式，订货单一式两份，现申请使用云羲（山西）数字科技有限公司公章 4 枚（含骑缝章 2 枚）。具体用印以实际为准。资料附后。</td></tr>
+            <tr>
+              <th rowspan="2">公文接收<br>及处理</th>
+              <td colspan="5">接收单位：综合办　　接收人：李玥洋　　签收时间：2026-05-26 10:05</td>
+            </tr>
+            <tr><td colspan="5" class="sig">处理意见：同意，转法务与用印管理岗。</td></tr>
+            <tr>
+              <th rowspan="2">公文关联<br>单位处理</th>
+              <td colspan="5">接收单位：法务　　接收人：王佳琦　　签收时间：2026-05-26 11:10</td>
+            </tr>
+            <tr><td colspan="5" class="sig">处理意见：无法律风险，同意用印。</td></tr>
+            <tr>
+              <th rowspan="3">集团领导<br>意见</th>
+              <td colspan="5">集团分管领导意见：同意。<span class="small">（签名）</span></td>
+            </tr>
+            <tr><td colspan="5" class="sig">集团总经理意见：同意。<span class="small">（签名）</span></td></tr>
+            <tr><td colspan="5" class="sig-blank">集团董事长意见：＿＿＿＿＿＿＿＿＿　<span class="small">（未到达）</span></td></tr>
+            <tr><th>印鉴证照<br>管理部门</th><td colspan="5">用印 4 枚（公章，含骑缝章 2 枚）· 办理人：郑妍 · 2026-05-26</td></tr>
+            <tr><th>公文回传<br>及归档</th><td colspan="5">回传及归档单位：综合办　　回传人：郑妍 时间：2026-05-26 16:30　　归档人：李玥洋 时间：2026-05-27 09:00</td></tr>
+          </table>
+          <div class="pagefoot"><span>打印人：郑妍</span><span>打印时间：2026-05-26 09:40</span><span>第 1 页 / 共 1 页</span></div>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">命名口径（已确认 Q-B1）</div>
+        <div class="note">用户原文的《集团事项类打印审批单》在 xlsx 中对应的是《集团请示文件流转审批单》——按同一套落地，key = <code>matter</code>，默认取本版式。</div>
+        <div class="sec">签批栏 vs 表单信息 的划分</div>
+        <div class="note g">划入<b>签批栏</b>（按流程节点生成）：公文接收及处理、公文关联单位处理、集团领导意见、印鉴证照管理部门、公文回传及归档。<br>其余（公文来源 / 文件编号 / 信息名称 / 文件类型 / 加急程度 / 文件概要）为表单信息。</div>
+        <div class="note" style="margin-top:8px">该划分属实现期可调项，已登记在 <code>oa-print-builtin-templates/design.md</code> 的 Open Questions。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S44 版式 D：付款申请单 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S44</span><span>内置版式 D · 付款申请单（key=payment）</span><span class="spacer"></span><span>资金审批的下游单据</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">打印预览 · 付款申请</div>
+      <span class="pill">内置模板 · A4 纵向</span>
+      <div class="spacer"></div>
+      <span class="btn">另存 PDF</span><span class="btn">打印</span>
+    </div>
+    <div class="body">
+      <div class="main" style="overflow:auto;background:#f4f4f4">
+        <div class="a4" style="position:relative">
+          <h2>付 款 申 请 单</h2>
+          <div class="doc-no"><span>2026/04/24　　计划内 √　　计划外 □</span><span>第 1 页 / 共 1 页</span></div>
+          <table class="form-tbl">
+            <tr>
+              <th rowspan="3" style="width:56px">收款<br>信息</th>
+              <th style="width:92px">收款单位名称</th><td colspan="3">北京华信泓安工程有限公司山西分公司</td>
+            </tr>
+            <tr><th>开户银行</th><td colspan="3">中国建设银行股份有限公司太原市漪汾街支行</td></tr>
+            <tr><th>账号</th><td colspan="3">1405 0183 6108 0000 0435</td></tr>
+            <tr>
+              <th rowspan="6">付款<br>信息</th>
+              <th>付款单位名称</th><td colspan="3">云羲（山西）数字科技有限公司</td>
+            </tr>
+            <tr><th>开户行</th><td colspan="3">中国银行股份有限公司太原综改区支行</td></tr>
+            <tr><th>分类</th><td colspan="3" class="ck">一级：经营 √ 经济 □ 行政 □ 人力 □ 投资 □　　｜　　二级：物联网及硬件成本</td></tr>
+            <tr><th>付款归属期</th><td colspan="3" class="ck">（√）月　　本年度 □　　以前年度 □　　回单 √</td></tr>
+            <tr><th>结算方式 / 用途</th><td colspan="3" class="ck">银行 √　现金 □　　｜　银行付款用途：预付款　　付款事由：施工预付款</td></tr>
+            <tr><th>金额 / 备注</th><td colspan="3">金额：¥ 50,000.00　金额（大写）人民币：伍拾万元整　　｜　备注：—</td></tr>
+            <tr>
+              <th rowspan="2">签批</th>
+              <th>经理 / 部门负责人</th><td colspan="3" class="sig">经理：<span class="small">（签名）</span>　　部门负责人：<span class="small">（签名）</span>　　制单人：郑妍</td>
+            </tr>
+            <tr><th>财务 / 领款人</th><td colspan="3" class="sig-blank">财务：＿＿＿＿　财务负责人：＿＿＿＿　领款人：＿＿＿＿</td></tr>
+          </table>
+          <div class="pagefoot"><span>打印人：郑妍</span><span>打印时间：2026-04-24 15:10</span><span>第 1 页 / 共 1 页</span></div>
+        </div>
+      </div>
+      <div class="panel" style="width:300px">
+        <div class="sec">来源</div>
+        <div class="note">xlsx 里有两张付款单实例（北京华信泓安 / 浙江京衡律所），栏目一致，本版式取并集。</div>
+        <div class="sec">金额大写</div>
+        <div class="note g">由「金额」控件提供（V1 已交付金额控件，自带千分位 / 小数位 / 大写）。若控件未开启大写，则在版式内兜底转换。</div>
+        <div class="sec">签批栏来源</div>
+        <div class="note">六栏（经理 / 部门负责人 / 财务 / 财务负责人 / 制单人 / 领款人）按流程节点生成；<b>制单人取发起人</b>。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S45 打印页设置 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S45</span><span>打印模板设置 · 四处「存了不用」的链路补全</span><span class="spacer"></span><span>REQ-PRINT-014 / 015</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">打印模板配置 · 编辑</div>
+      <div class="spacer"></div>
+      <span class="btn">返回</span><span class="btn pri">保存</span>
+    </div>
+    <div class="body">
+      <div class="main" style="padding:16px 20px">
+        <div class="grid2">
+          <div class="cbox">
+            <div class="sec" style="margin-top:0">版面</div>
+            <div class="row"><div class="lbl" style="width:90px">名称</div><div class="inp" style="flex:1">资金审批 A4 正式版</div></div>
+            <div class="row"><div class="lbl" style="width:90px">单据标题</div><div class="inp" style="flex:1">集团资金审批单</div></div>
+            <div class="row"><div class="lbl" style="width:90px">纸张</div>
+              <span class="radio"><i class="on"></i>A4</span><span class="radio"><i></i>A3</span>
+              <span class="small" style="color:#c00">← 现状只存不用</span></div>
+            <div class="row"><div class="lbl" style="width:90px">方向</div>
+              <span class="radio"><i class="on"></i>纵向</span><span class="radio"><i></i>横向</span>
+              <span class="small" style="color:#c00">← 现状只存不用</span></div>
+            <div class="row"><div class="lbl" style="width:90px">Logo</div>
+              <span class="btn">上传图片</span><span class="small">现状无 UI 无代码；未配置时不出现空白占位</span></div>
+            <div class="row" style="margin-bottom:0"><div class="lbl" style="width:90px">页脚备注</div><div class="inp" style="flex:1">本件仅供内部使用</div></div>
+          </div>
+          <div class="cbox">
+            <div class="sec" style="margin-top:0">打印内容开关</div>
+            <div class="row"><div class="lbl" style="width:110px">签批栏</div><span class="sw on"></span><span class="small">内置模板也允许开（本批次修复点）</span></div>
+            <div class="row"><div class="lbl" style="width:110px">处理意见</div><span class="sw on"></span></div>
+            <div class="row"><div class="lbl" style="width:110px">抄送节点出栏</div><span class="sw"></span><span class="small" style="color:#c00">← 现状存了前端不读</span></div>
+            <div class="row"><div class="lbl" style="width:110px">附件清单</div><span class="sw on"></span><span class="small">只出序号/名称/上传人/时间，不出文件内容</span></div>
+            <div class="row"><div class="lbl" style="width:110px">签名图片</div><span class="sw on"></span></div>
+            <div class="row"><div class="lbl" style="width:110px">水印</div><span class="sw on"></span><span class="small">「XXX 于 yyyy-MM-dd HH:mm 打印，仅供内部使用」</span></div>
+            <div class="row" style="margin-bottom:0"><div class="lbl" style="width:110px">状态</div>
+              <span class="radio"><i class="on"></i>启用</span><span class="radio"><i></i>停用</span>
+              <span class="small">启用一套时其余自动停用</span></div>
+          </div>
+        </div>
+
+        <div class="sec">字段映射（留空 = 按表单 schema 自动排版）</div>
+        <div class="cbox" style="padding:8px">
+          <div class="row" style="margin:0 0 8px"><span class="small">内置版式以后端为唯一真源</span><span class="spacer"></span>
+            <span class="btn">从后端拉取内置版式</span><span class="btn">填入内置版式（只读参考）</span></div>
+          <div class="dash" style="height:110px">行 × 列 的字段映射编辑区（V1 已交付）：左列 = 表单字段树 + 内置变量（$submitter / $submitTime / $businessNo …），右列 = 版式行；支持增删行、跨列数、字段选择</div>
+        </div>
+
+        <div class="sec">实时预览</div>
+        <div class="cbox" style="padding:8px;text-align:center">
+          <div class="a4" style="width:420px;font-size:9px;padding:10px">
+            <h2 style="font-size:12px;letter-spacing:2px;margin-bottom:6px">资 金 审 批 单</h2>
+            <table class="form-tbl" style="font-size:8.5px">
+              <tr><th style="width:60px">审批单位</th><td>太原智澈节能科技有限公司</td></tr>
+              <tr><th>事项分类</th><td>经营 √　经济 □　行政 □　人力 □　投资 □</td></tr>
+              <tr><th>资金审批内容</th><td style="height:26px">（样例文本）</td></tr>
+              <tr><th>集团职能部门</th><td class="sig" style="height:22px">签名：</td></tr>
+              <tr><th>集团分管领导</th><td class="sig" style="height:22px">签名：</td></tr>
+            </table>
+          </div>
+          <div class="small" style="margin-top:6px">改纸张/方向/开关后立即重渲染（A3 与横向的页数测算随之参数化）</div>
+        </div>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">补链路的四条</div>
+        <div class="note">① <code>paper</code> 读值生效（A4/A3）；② <code>orientation</code> 读值生效；③ <code>show_cc_node</code> 抄送节点出栏；④ <code>logo_file_id</code> 提供 UI 与抬头输出。</div>
+        <div class="sec">A3/横向的连带</div>
+        <div class="note r">现状页数与版心是硬编码常量，支持 A3/横向必须把页数测算参数化，否则会出现"纸换了但分页没变"。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S46 入口与留痕 ============ -->
+<section class="screen">
+  <div class="cap"><span class="tag">S46</span><span>打印入口补到 4 个 + 留痕改为「先写日志后打印」</span><span class="spacer"></span><span>AC-66 / AC-67</span></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="logo"></div><div class="title">待办任务</div>
+      <div class="spacer"></div>
+      <span class="inp" style="width:200px">搜索单据号 / 名称</span>
+    </div>
+    <div class="body">
+      <div class="main">
+        <div class="sec" style="margin-top:0">待办（本批次新增行内打印入口）</div>
+        <table class="tbl">
+          <tr><th style="width:150px">单据号</th><th>标题</th><th style="width:120px">单据类型</th><th style="width:110px">当前节点</th><th style="width:150px">到达时间</th><th style="width:190px">操作</th></tr>
+          <tr>
+            <td>ZJ202604150003</td><td>4 月热力退款申请</td><td>资金审批</td><td>集团职能部门</td><td>2026-04-15 09:20</td>
+            <td><span class="btn">处理</span> <span class="btn" style="border-color:#333;font-weight:700">打印</span> <span class="small">← 新增</span></td>
+          </tr>
+          <tr>
+            <td>HT202604150001</td><td>创新创业孵化服务合作协议</td><td>合同审批</td><td>法务</td><td>2026-04-15 11:25</td>
+            <td><span class="btn">处理</span> <span class="btn" style="border-color:#333;font-weight:700">打印</span></td>
+          </tr>
+        </table>
+
+        <div class="sec">四个入口（本批次补齐第 4 个）</div>
+        <div class="grid4">
+          <div class="card"><div style="font-weight:700">详情页</div><div class="small" style="margin-top:4px">V1 已交付</div></div>
+          <div class="card"><div style="font-weight:700">已办列表行</div><div class="small" style="margin-top:4px">V1 已交付</div></div>
+          <div class="card"><div style="font-weight:700">我起草列表行</div><div class="small" style="margin-top:4px">V1 已交付</div></div>
+          <div class="card" style="border-color:#333;box-shadow:0 0 0 2px #eee"><div style="font-weight:700">待办列表行 ★</div><div class="small" style="margin-top:4px">2.0 新增</div></div>
+        </div>
+
+        <div class="sec">留痕：从「尽力而为」改成硬门禁</div>
+        <div class="grid2">
+          <div class="cbox" style="border-color:#c98a8a">
+            <div style="font-weight:700;color:#7a2e2e">现状</div>
+            <div class="note r" style="margin-top:6px">先渲染打印、再尽力写 <code>t_print_log</code>；写日志失败只 <code>warning</code>，用户已经拿到纸了。</div>
+          </div>
+          <div class="cbox" style="border-color:#8aa88a">
+            <div style="font-weight:700;color:#3d5a3d">2.0</div>
+            <div class="note g" style="margin-top:6px">先写日志 → 写成功才渲染打印；写日志失败则<b>阻断打印</b>并提示「打印留痕失败，请重试」。</div>
+          </div>
+        </div>
+        <div class="note" style="margin-top:8px">打印日志字段不变（人 / 时间 / IP / 页数），详情页的「打印记录」照旧可见。</div>
+      </div>
+      <div class="panel" style="width:290px">
+        <div class="sec">为什么留痕要变硬</div>
+        <div class="note">审计要求"打印必留痕"。现状的 catch-only 写法在并发或库抖动时会静默漏记。</div>
+        <div class="sec">不改的部分</div>
+        <div class="note g">打印日志表结构、详情页打印记录区块、水印文案、页脚「第 X 页 / 共 Y 页」全部沿用 V1。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

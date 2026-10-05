@@ -1,0 +1,16 @@
+{
+  "updatedAt": "2026-10-05T06:54:20.245Z",
+  "src": "F:/dsh/ruoyiOA/ruoyi-vue-oa-ui-master/src",
+  "counts": {
+    "audit-then-loaders.js": 0,
+    "audit-async-loaders.js": 0,
+    "audit-silent-catch.js": 71,
+    "audit-loading-pairs.js": 3,
+    "audit-undeclared-writes.js": 0,
+    "audit-template-refs.js": 1,
+    "audit-flow-template-binding.js": 0,
+    "audit-template-tabs.js": 0,
+    "audit-print-builtin-templates.js": 0,
+    "audit-theme-tokens.js": 0
+  }
+}
