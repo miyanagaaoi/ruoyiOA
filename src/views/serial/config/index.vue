@@ -181,12 +181,16 @@ export default {
         0: "请输入内容",
         1: "格式：yyyyMMddHHmmss",
         2: "流水号长度",
+        3: "参数名，如 typeCode",
       },
       // 提示内容
       tooltipMap: {
         0: "固定值，直接拼接，不会进行额外处理",
         1: "yyyy：年，MM：月，dd：日，HH：时，mm：分，ss：秒，例如：20250101，则填写：yyyyMMdd",
         2: "设置流水号长度，最大不超过10位，例如：输入5，则最大为99999，最小为1",
+        3: "业务参数：调取号接口时由调用方传入的键名（如 typeCode / subjectCode）。" +
+           "适合「同一套编号规则服务多种类型」的场景；传了业务参数还会按参数分桶计数，" +
+           "因此不同类型/主体各自从 1 开始。调用方不传该参数时取号会明确报错。",
       },
       // 规则示例
       example: "",
@@ -195,6 +199,8 @@ export default {
         { label: "固定值", value: "0" },
         { label: "日期", value: "1" },
         { label: "流水号", value: "2" },
+        // 2.0 B3 §1.3：业务参数（ruleValue = 参数名，取值由调用方通过 CodeGenContext 传入）
+        { label: "业务参数", value: "3" },
       ],
       // 重置方式
       resetTypes: [
@@ -286,6 +292,9 @@ export default {
               exampleDesc += "1";
             }
           }
+        } else if (item.type == "3") {
+          // 业务参数：示例里无法预知取值，用 <参数名> 占位（与后端 CodeGenContext.params 对应）
+          exampleDesc += item.value ? `<${item.value}>` : "<参数名>";
         }
       });
       this.example = exampleDesc;

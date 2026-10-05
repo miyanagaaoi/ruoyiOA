@@ -731,6 +731,28 @@ export const serialNoComponents = [
 export const formOaComponents = [
   {
     __config__: {
+      label: '关联审批',
+      tag: 'design-related-approval',
+      tagIcon: 'link',
+      defaultValue: [],
+      layout: 'colFormItem',
+      span: 24,
+      showLabel: true,
+      required: false,
+      regList: []
+    },
+    /**
+     * 候选模板（管理员在右侧属性面板多选，只列已启用模板）。
+     * 真正的过滤在服务端：候选模板 ∩ 与宿主同分组 ∩ 本人发起。
+     */
+    allowTemplates: [],
+    multiple: true,
+    placeholder: '搜索并选择要关联的单据',
+    tooltip: '可关联的单据范围由「候选模板 + 同一分组 + 本人发起」共同决定',
+    style: { width: '100%' }
+  },
+  {
+    __config__: {
       label: '金额',
       tag: 'design-amount',
       tagIcon: 'money',

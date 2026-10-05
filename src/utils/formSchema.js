@@ -15,6 +15,9 @@ const NON_CONDITION_TAGS = [
   'design-section',
   'design-text',
   'design-signature',
+  // 关联审批（2.0 B1 §7）：值是"单据ID数组"，不是可比较的标量，
+  // 拿来当流程条件只会写出永远不成立的分支
+  'design-related-approval',
   'SerialNo' // 流水号：生成后才可搜索，设计期无值
 ]
 

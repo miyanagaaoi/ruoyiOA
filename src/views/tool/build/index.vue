@@ -514,7 +514,17 @@ export default {
         if (valid) {
           if (this.form.id != null) {
             updateDynamicForm(this.form).then((response) => {
-              this.$modal.msgSuccess("修改成功");
+              // 2.0（B1 §7.10）动态表单是**版本化**保存（停用旧版 + 插入新版），
+              // 模板上的 form_id 已被后端显式改指到新版本 —— 必须把影响面说清楚，
+              // 否则管理员会以为"表单改了但单据没变"。
+              const affected = response && response.affectedTemplates;
+              if (affected > 0) {
+                this.$modal.msgSuccess(
+                  "修改成功：表单已存为新版本，并已把 " + affected + " 个模板指向新版本"
+                );
+              } else {
+                this.$modal.msgSuccess("修改成功");
+              }
             });
           } else {
             addDynamicForm(this.form).then((response) => {

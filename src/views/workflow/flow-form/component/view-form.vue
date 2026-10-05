@@ -57,11 +57,56 @@
               </span>
             </div>
           </span>
+          <span v-else-if="item.tag === 'design-related-approval'">
+            <!--
+              关联审批（2.0 B1 §7.5）：只读展示"当时关联了哪几张单"。
+              单据号取的是**落库快照**（related_business_no），不随后续改名变化；
+              点开浮窗看详情 —— 越权校验在服务端（无查看权返回 403）。
+            -->
+            <span v-if="relatedItems(item).length" class="ra-links">
+              <el-tag
+                v-for="r in relatedItems(item)"
+                :key="r.businessId"
+                size="small"
+                class="ra-link"
+                @click="openRelated(r)"
+              >
+                {{ r.businessNo || r.businessId }}
+              </el-tag>
+            </span>
+            <span v-else class="text-content ra-empty">未关联单据</span>
+          </span>
           <span v-else-if="item.tag === 'tinymce'" class="tinymce-content" v-html="item.value"></span>
           <div v-else class="text-content">{{ item.value }}</div>
         </el-form-item>
       </el-col>
     </el-form>
+
+    <!-- 关联单据浮窗：只读详情（表单数据 + 审批状态） -->
+    <el-dialog
+      :title="relatedDialog.title"
+      :visible.sync="relatedDialog.visible"
+      width="620px"
+      append-to-body
+    >
+      <div v-loading="relatedDialog.loading">
+        <el-descriptions :column="1" border size="small">
+          <el-descriptions-item label="单据号">{{ relatedDialog.businessNo || relatedDialog.businessId }}</el-descriptions-item>
+          <el-descriptions-item label="单据类型">{{ relatedDialog.templateName || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="审批状态">{{ relatedDialog.statusText || "-" }}</el-descriptions-item>
+        </el-descriptions>
+        <el-table :data="relatedDialog.fields" size="mini" border style="margin-top: 10px">
+          <el-table-column prop="label" label="字段" width="150" />
+          <el-table-column prop="value" label="值" show-overflow-tooltip />
+        </el-table>
+        <div v-if="relatedDialog.error" class="ra-error">
+          <i class="el-icon-warning-outline" /> {{ relatedDialog.error }}
+        </div>
+      </div>
+      <div slot="footer">
+        <el-button size="mini" @click="relatedDialog.visible = false">关 闭</el-button>
+      </div>
+    </el-dialog>
   </el-row>
 </template>
 
@@ -69,6 +114,11 @@
 import { deepClone } from "@/utils/index";
 import { StrUtil } from "@/utils/StrUtil";
 import { amountWithUpper } from "@/utils/money";
+import {
+  getRelatedApprovalDetail,
+  listRelatedApprovalByHost
+} from "@/api/workflow/relatedApproval";
+import { describeError } from "@/utils/errorMessage";
 
 export default {
   name: "ViewForm",
@@ -79,6 +129,19 @@ export default {
       // 表单数据集
       formViewList: [],
       baseApi: process.env.VUE_APP_BASE_API,
+      /** 关联审批：宿主单据已落库的关联关系（按控件 __vModel__ 分组） */
+      relatedMap: {},
+      relatedDialog: {
+        visible: false,
+        loading: false,
+        title: "关联单据",
+        businessId: "",
+        businessNo: "",
+        templateName: "",
+        statusText: "",
+        fields: [],
+        error: ""
+      },
     };
   },
   props: {
@@ -91,6 +154,11 @@ export default {
     formData: {
       type: Object,
       default: () => {},
+    },
+    // 宿主单据ID（只读视图取"关联了哪些单"用；不传就不发请求，退化成展示原始值）
+    businessId: {
+      type: String,
+      default: "",
     },
   },
   watch: {
@@ -105,8 +173,63 @@ export default {
   },
   mounted() {
     this.init();
+    this.loadRelatedMap();
   },
   methods: {
+    /** 取宿主单据已落库的关联关系（按控件分组）；无 businessId 时不发请求 */
+    loadRelatedMap() {
+      if (!this.businessId) return;
+      listRelatedApprovalByHost(this.businessId)
+        .then((res) => {
+          this.relatedMap = res.data || {};
+        })
+        .catch(() => {
+          // 拉不到就退回展示原始值，不假装"没有关联"
+          this.relatedMap = {};
+        });
+    },
+    /** 某控件下已关联的单据清单（没有关系数据时退回展示原始值里的ID） */
+    relatedItems(item) {
+      const rows = this.relatedMap[item.vModel];
+      if (rows && rows.length) return rows;
+      const raw = item.value;
+      if (!raw) return [];
+      const ids = Array.isArray(raw) ? raw : String(raw).split(",");
+      return ids
+        .map((id) => String(id).trim())
+        .filter((id) => !!id)
+        .map((id) => ({ businessId: id, businessNo: "" }));
+    },
+    /** 打开浮窗（服务端会再判一次查看权，无权限时给出明确提示而不是空弹窗） */
+    openRelated(row) {
+      if (!row || !row.businessId) return;
+      this.relatedDialog = {
+        visible: true,
+        loading: true,
+        title: "关联单据详情",
+        businessId: row.businessId,
+        businessNo: row.businessNo || "",
+        templateName: "",
+        statusText: "",
+        fields: [],
+        error: ""
+      };
+      getRelatedApprovalDetail(row.businessId)
+        .then((res) => {
+          const data = res.data || {};
+          this.relatedDialog.businessNo = data.businessNo || row.businessNo || row.businessId;
+          this.relatedDialog.fields = data.fields || [];
+          const approval = data.approval || {};
+          this.relatedDialog.templateName = approval.templateName || "";
+          this.relatedDialog.statusText = approval.statusText || "";
+        })
+        .catch((err) => {
+          this.relatedDialog.error = describeError(err).text;
+        })
+        .finally(() => {
+          this.relatedDialog.loading = false;
+        });
+    },
     /** 初始化 */
     init() {
       // 深拷贝
@@ -122,6 +245,8 @@ export default {
         const _config = item.__config__;
         let field = {
           prop: item.__vModel__,
+          // 关联审批控件用它去 relatedMap 里取"已落库的关联关系"（§7.5）
+          vModel: item.__vModel__,
           label: _config.label + "：",
           tag: _config.tag,
           key: _config.renderKey,
@@ -356,6 +481,22 @@ export default {
   color: #606266;
 }
 .disabCheck >>> .el-checkbox__label {
+  font-size: 12px;
+}
+.ra-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ra-link {
+  cursor: pointer;
+}
+.ra-empty {
+  color: #c0c4cc;
+}
+.ra-error {
+  margin-top: 8px;
+  color: #f56c6c;
   font-size: 12px;
 }
 .tinymce-content >>> p:first-child {

@@ -50,6 +50,17 @@
           <span>{{ parseTime(scope.row.sendTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
         </template>
       </el-table-column>
+      <!--
+        行内打印入口（2.0 B2 §5.3 / REQ-PRINT-016）：第 4 个打印入口。
+        写法照抄已办列表行（done/index.vue）——同样"页内浮层 + 不跳转"，
+        同样只传单据ID，因此四次打印件的标题与栏目必然一致（AC-66）。
+        ⚠ `.stop` 必须有：整行有点击进详情的处理，不加会连带跳走。
+      -->
+      <el-table-column label="操作" align="center" width="90" fixed="right">
+        <template slot-scope="scope">
+          <el-button size="mini" type="text" icon="el-icon-printer" @click.stop="printRow(scope.row)">打印</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <pagination v-show="total>0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize" @pagination="getList" />
@@ -131,6 +142,22 @@ export default {
     },
     handleGroupModelChange(label) {
       this.groupLable = label;
+    },
+    /**
+     * 列表行打印（2.0 B2 §5.3，PRD 7.2 的第 4 个入口）。
+     *
+     * 与已办/我起草两处**同一个口径**：只把 businessId 交给页内浮层，
+     * 不传任何入口专属参数 —— 这样同一张单据从哪个入口打开，打印件都一样（AC-66）。
+     * 原实现缺这个入口，待办里的人要打印只能先进详情页。
+     */
+    printRow(row) {
+      const businessId = row.businessId;
+      if (!businessId) {
+        this.$modal.msgWarning("该记录没有业务ID，无法打印");
+        return;
+      }
+      // 页内浮层打开（不跳转、不开新窗口）
+      this.$openPrintPreview(businessId);
     },
     /** 行点击 */
     handleRowClick(row, column, event) {

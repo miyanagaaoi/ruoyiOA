@@ -6,6 +6,7 @@ import DesignSection from "@/components/form/design/DesignSection"
 import DesignText from "@/components/form/design/DesignText"
 import DesignAmount from "@/components/form/design/DesignAmount"
 import DesignCalc from "@/components/form/design/DesignCalc"
+import DesignRelatedApproval from "@/components/form/design/DesignRelatedApproval"
 
 const componentChild = {}
 /**
@@ -141,7 +142,8 @@ export default {
     //   1. 这里（运行时渲染 + 设计器画布共用同一个 render 组件）
     //   2. utils/generator/config.js 的组件清单（左侧可拖拽列表）
     //   3. 后端 ComponentTypeEnum（值转换时的类型判定，否则落 UNKNOWN 并打告警）
-    DesignDeptSelect, DesignUserSelect, DesignSerialNo, DesignSection, DesignText, DesignAmount, DesignCalc
+    DesignDeptSelect, DesignUserSelect, DesignSerialNo, DesignSection, DesignText, DesignAmount, DesignCalc,
+    DesignRelatedApproval
   },
   render(h) {
     const dataObject = makeDataObject()
@@ -156,6 +158,13 @@ export default {
 
     // 将json表单配置转化为vue render可以识别的 “数据对象（dataObject）”
     buildDataObject.call(this, confClone, dataObject)
+
+    // 关联审批控件（2.0 B1 §7.1）：它要拿"字段名"去服务端取候选单据，
+    // 而 __vModel__ 在上面被当作**取值绑定**处理掉了、不会进 attrs ——
+    // 不透传的话组件只能拿到空字段名，候选列表永远是空的（实测踩过：下拉显示"无数据"）。
+    if (confClone.__config__ && confClone.__config__.tag === 'design-related-approval') {
+      dataObject.props.vModel = confClone.__vModel__
+    }
 
     return h(this.conf.__config__.tag, dataObject, children)
   }

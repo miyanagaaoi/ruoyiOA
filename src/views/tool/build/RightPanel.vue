@@ -467,6 +467,40 @@
             <el-switch v-model="activeData.readonly" />
           </el-form-item>
 
+          <!--
+            关联审批（2.0 B1 §7.4）：候选模板多选（**只列已启用模板**）。
+            这里是"允许被关联的模板"白名单，不是数据范围 ——
+            最终的候选还要叠加"与宿主同分组 + 本人发起"，由服务端判定。
+          -->
+          <el-form-item
+            v-if="activeData.__config__.tag === 'design-related-approval'"
+            label="候选模板"
+          >
+            <el-select
+              v-model="activeData.allowTemplates"
+              multiple
+              filterable
+              placeholder="请选择允许被关联的模板（仅已启用）"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in enableTemplateOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </el-select>
+            <div class="ra-tip">
+              实际可选单据 = 候选模板 ∩ 与宿主模板同分组 ∩ 本人发起；越界选择会被服务端拒绝。
+            </div>
+          </el-form-item>
+          <el-form-item
+            v-if="activeData.__config__.tag === 'design-related-approval'"
+            label="未选提示"
+          >
+            <el-input v-model="activeData.placeholder" placeholder="请输入未选择时的提示" />
+          </el-form-item>
+
           <template v-if="['design-user-select'].includes(activeData.__config__.tag)">
             <el-form-item label="默认值">
               <el-select v-model="activeData.initUser" placeholder="请选择默认值" :style="{width: '100%'}" @change="initUserChange">
@@ -585,6 +619,7 @@ import { isNumberStr } from "@/utils";
 import IconsDialog from "./IconsDialog";
 import { inputComponents, selectComponents, layoutComponents } from "@/utils/generator/config";
 import { saveFormConf } from "@/utils/db";
+import { listTemplate } from "@/api/workflow/template";
 
 const dateTimeFormat = {
   date: "yyyy-MM-dd",
@@ -616,6 +651,8 @@ export default {
       dialogVisible: false,
       iconsVisible: false,
       currentIconModel: null,
+      /** 关联审批控件的候选模板下拉（只列已启用模板，2.0 B1 §7.4） */
+      enableTemplateOptions: [],
       dateTypeOptions: [
         {
           label: "日(date)",
@@ -774,6 +811,15 @@ export default {
     },
   },
   watch: {
+    /** 选中「关联审批」控件时才去拉模板清单（不必让每次打开右侧面板都请求一次） */
+    "activeData.__config__.tag": {
+      handler(tag) {
+        if (tag === "design-related-approval") {
+          this.loadEnableTemplates();
+        }
+      },
+      immediate: true,
+    },
     formConf: {
       handler(val) {
         saveFormConf(val);
@@ -782,6 +828,22 @@ export default {
     },
   },
   methods: {
+    /**
+     * 关联审批控件（2.0 B1 §7.4）：候选模板清单。
+     *
+     * 只列**已启用**模板 —— 停用/已删模板本身就发起不了，列出来只会让管理员配出一个
+     * "永远没有候选"的控件。模板列表拉取失败时保持空表并给出原因（不静默空下拉）。
+     */
+    loadEnableTemplates() {
+      if (this.enableTemplateOptions.length) return;
+      listTemplate({ pageNum: 1, pageSize: 500, enableFlag: "1" }).then((res) => {
+        this.enableTemplateOptions = (res.rows || res.data || []).filter(
+          (item) => item.enableFlag === "1" || item.enableFlag === 1
+        );
+      }).catch(() => {
+        this.enableTemplateOptions = [];
+      });
+    },
     addReg() {
       this.activeData.__config__.regList.push({
         pattern: "",
@@ -925,6 +987,13 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/* 关联审批：候选模板说明（明确"配了白名单 ≠ 一定有候选"） */
+.ra-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
+}
 .right-board {
   width: 350px;
   position: absolute;

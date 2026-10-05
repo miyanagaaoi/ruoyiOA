@@ -76,3 +76,11 @@ export function delSimpleFlow(id) {
     method: 'delete'
   })
 }
+
+// 2.0（B1 §4.1）：按模板取用或创建流程草稿（已绑定则返回原草稿，幂等）
+export function getOrCreateByTemplate(templateId) {
+  return request({
+    url: '/workflow/simple-flow/by-template/' + templateId,
+    method: 'get'
+  })
+}

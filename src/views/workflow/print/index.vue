@@ -2,9 +2,15 @@
   <div class="print-page" :class="{ 'is-embedded': embedded }">
     <!-- 屏幕上的工具条：打印时整条隐藏（.no-print）。
          在浮层 iframe 里打开（embedded=1）时隐藏「关闭」——关闭由浮层的 × 负责。 -->
+    <!-- 屏幕上的工具条：打印时整条隐藏（.no-print）。
+         在浮层 iframe 里打开（embedded=1）时隐藏「关闭」——关闭由浮层的 × 负责。
+         ⚠ 这里**刻意不绑定 `paperBoxStyle`**：那个对象带 `minHeight: 297mm`（纸样高度），
+           绑到工具条上会让工具条变成一个 297mm 高的白色 sticky 块，
+           z-index 10 直接盖住纸面 —— 现象是"打印预览只剩左边一条、大片空白、按钮跑到底部"（踩过）。
+           纸样尺寸只给 `.print-paper`。 -->
     <div class="print-toolbar no-print">
       <span class="tb-title">{{ title }}</span>
-      <span class="tb-hint">A4 纵向 · 仅表单信息 · 共 {{ pageCount }} 页</span>
+      <span class="tb-hint">{{ paperHint }} · {{ contentHint }} · 共 {{ pageCount }} 页</span>
       <el-button type="primary" size="mini" icon="el-icon-printer" :loading="printing" @click="doPrint">打印</el-button>
       <el-button size="mini" icon="el-icon-refresh" @click="load">刷新数据</el-button>
       <el-button v-if="!embedded" size="mini" @click="closeWin">关闭</el-button>
@@ -20,60 +26,125 @@
       empty-desc="单据可能已被删除，或流程实例尚未建立。"
       @retry="load"
     >
-      <div v-if="data" class="print-paper">
+      <div v-if="data" class="print-paper" :style="paperBoxStyle">
         <!-- 水印（打印件防伪） -->
         <div v-if="data.watermarkText" class="p-watermark no-print-none">{{ data.watermarkText }}</div>
 
         <!-- A. 抬头区 -->
         <div class="p-title">{{ title }}</div>
-        <!-- 抬头：只保留表单侧信息（不打印模板名等内部元数据） -->
+        <!-- 抬头：只保留表单侧信息（不打印模板名等内部元数据）
+             Logo 在左侧；**未配置时整个元素不渲染**（不出空白占位、不出破图图标） -->
         <div class="p-headline">
-          <div class="p-hl-left"></div>
+          <div class="p-hl-left">
+            <img v-if="logoUrl" class="p-logo" :src="logoUrl" alt="Logo" />
+          </div>
           <div class="p-hl-right">单据编号：{{ data.businessNo || '—' }}</div>
         </div>
 
-        <!-- B. 基本信息区（由 field_map 决定行列） -->
-        <table class="p-base">
-          <tbody>
-            <tr v-for="(row, ri) in baseRows" :key="'r' + ri">
-              <template v-for="(cell, ci) in row.cells">
-                <th :key="'h' + ri + '-' + ci">{{ cell.label }}</th>
-                <td :key="'d' + ri + '-' + ci" :colspan="cellSpan(cell)">{{ valueOf(cell.field) }}</td>
-              </template>
-            </tr>
-          </tbody>
-        </table>
+        <!-- B. 字段区（由 field_map 决定行列；带标题的区输出区标题） -->
+        <div v-for="(sec, si) in fieldSections" :key="'sec' + si" class="p-field-section">
+          <div v-if="sec.title" class="p-section-title">{{ sec.title }}</div>
+          <table class="p-base">
+            <tbody>
+              <tr v-for="(row, ri) in sec.rows" :key="'r' + si + '-' + ri">
+                <template v-for="(cell, ci) in row.cells">
+                  <th :key="'h' + si + '-' + ri + '-' + ci">{{ cell.label }}</th>
+                  <td :key="'d' + si + '-' + ri + '-' + ci" :colspan="cellSpan(cell)">{{ cellValue(cell) }}</td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-        <!-- C. 签批栏区（默认不打印；模板 showSignature='1' 才输出） -->
+        <!-- C. 签批栏区（模板 showSignature='1' 才输出；与"是否内置"无关 —— AC-62） -->
         <!--
           AC-17：签批栏数量与顺序 == 流程节点顺序
           AC-18：会签节点多人时，**同栏内按人分行**展示，不串行
 
-          所以这里按 `nodeIndex`（后端给的"节点序号"，同节点的多人共用一个序号）分组：
-          一个节点一栏，栏内每人一行。
+          两条渲染路径：
+            · 版式里声明了固定栏目（`sign.columns`，fund / matter / payment 三套内置版式）
+              → 一栏一个签名区，按**节点名**匹配流程节点；匹配不到也出栏（留空供手写）。
+              纸质表单上那几栏是印好的，不出栏才是错的。
+            · 没有固定栏目（contract 与自定义模板）
+              → 按 `nodeIndex`（后端给的"节点序号"，同节点多人共用一个序号）分组，
+                一个节点一栏、栏内每人一行 —— 与升级前逐字一致。
         -->
         <template v-if="showSignature">
-          <div class="p-section-title">公文接收及处理</div>
-          <div v-if="!signBlocks.length" class="p-empty-tip">（暂无办理记录）</div>
-          <div v-for="(blk, i) in signBlocks" :key="'n' + i" class="sign-block">
-            <div class="sb-head">{{ cn(i + 1) }} {{ blk.nodeName || '（未命名节点）' }}</div>
-            <table class="sb-table">
-              <tbody>
-                <tr v-for="(p, pi) in blk.people" :key="'p' + pi">
-                  <td class="sb-c-dept"><span class="sb-label">接收单位：</span>{{ p.deptName || '—' }}</td>
-                  <td class="sb-c-user"><span class="sb-label">接收人：</span>{{ p.assigneeName || '—' }}</td>
-                  <td class="sb-c-time"><span class="sb-label">签收时间：</span>{{ fmt(p.receiveTime) }}</td>
-                  <td v-if="showComment" class="sb-c-cmt">
-                    <span class="sb-label">处理意见：</span>{{ p.comment || '' }}
-                  </td>
-                  <td class="sb-c-sign">
-                    <img v-if="signUrls[p.taskId]" :src="signUrls[p.taskId]" alt="签名" />
-                    <span v-else class="sb-sign-empty">（签名）</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <template v-if="signColumnList.length">
+            <div class="p-section-title">{{ signTitle }}</div>
+            <div v-for="(col, i) in signColumnList" :key="'sc' + i" class="sign-block">
+              <div class="sb-head">{{ cn(i + 1) }} {{ col.label }}</div>
+              <table class="sb-table">
+                <tbody>
+                  <!-- 由内置变量直接取值的栏（如 payment 的「制单人 = 发起人」） -->
+                  <tr v-if="col.field">
+                    <td class="sb-c-user" colspan="4">{{ valueOf(col.field) || '—' }}</td>
+                  </tr>
+                  <tr v-for="(p, pi) in col.nodes" :key="'p' + pi">
+                    <td class="sb-c-dept"><span class="sb-label">接收单位：</span>{{ p.deptName || '—' }}</td>
+                    <td class="sb-c-user"><span class="sb-label">接收人：</span>{{ p.assigneeName || '—' }}</td>
+                    <td class="sb-c-time"><span class="sb-label">签收时间：</span>{{ fmt(p.receiveTime) }}</td>
+                    <td v-if="showComment" class="sb-c-cmt">
+                      <span class="sb-label">处理意见：</span>{{ p.comment || '' }}
+                    </td>
+                    <td class="sb-c-sign">
+                      <img v-if="signUrls[p.taskId]" :src="signUrls[p.taskId]" alt="签名" />
+                      <span v-else class="sb-sign-empty">（签名）</span>
+                    </td>
+                  </tr>
+                  <tr v-if="!col.field && !col.nodes.length">
+                    <td colspan="4" class="sb-empty">（本栏暂无办理记录，供手写签名）</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+          <template v-else>
+            <div class="p-section-title">{{ signTitle }}</div>
+            <div v-if="!signBlocks.length" class="p-empty-tip">（暂无办理记录）</div>
+            <div v-for="(blk, i) in signBlocks" :key="'n' + i" class="sign-block">
+              <div class="sb-head">{{ cn(i + 1) }} {{ blk.nodeName || '（未命名节点）' }}</div>
+              <table class="sb-table">
+                <tbody>
+                  <tr v-for="(p, pi) in blk.people" :key="'p' + pi">
+                    <td class="sb-c-dept"><span class="sb-label">接收单位：</span>{{ p.deptName || '—' }}</td>
+                    <td class="sb-c-user"><span class="sb-label">接收人：</span>{{ p.assigneeName || '—' }}</td>
+                    <td class="sb-c-time"><span class="sb-label">签收时间：</span>{{ fmt(p.receiveTime) }}</td>
+                    <td v-if="showComment" class="sb-c-cmt">
+                      <span class="sb-label">处理意见：</span>{{ p.comment || '' }}
+                    </td>
+                    <td class="sb-c-sign">
+                      <img v-if="signUrls[p.taskId]" :src="signUrls[p.taskId]" alt="签名" />
+                      <span v-else class="sb-sign-empty">（签名）</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </template>
+
+        <!-- C2. 抄送栏（模板 showCcNode='1' 且流程存在抄送节点才输出 —— REQ-PRINT-014） -->
+        <template v-if="showCcNode && ccRows.length">
+          <div class="p-section-title">抄送</div>
+          <table class="p-base p-cc">
+            <thead>
+              <tr>
+                <th style="width: 40mm">抄送节点</th>
+                <th style="width: 30mm">抄送人</th>
+                <th style="width: 40mm">抄送时间</th>
+                <th>阅办状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(cc, i) in ccRows" :key="'cc' + i">
+                <td>{{ cc.nodeName || '—' }}</td>
+                <td>{{ cc.handlerName || '—' }}</td>
+                <td>{{ fmt(cc.sendTime) }}</td>
+                <td>{{ cc.readFlag === '1' ? '已阅' : '未阅' }}</td>
+              </tr>
+            </tbody>
+          </table>
         </template>
 
         <!-- D. 附件清单区（只打印清单，不打印文件内容） -->
@@ -116,11 +187,13 @@
 <script>
 import StateBlock from '@/components/StateBlock'
 import { getPrintData, addPrintLog, getFileBlob } from '@/api/workflow/print'
-import { amountWithUpper, formatAmount } from '@/utils/money'
+import { amountWithUpper, formatAmount, toChineseUpper } from '@/utils/money'
 import { describeError } from '@/utils/errorMessage'
+import printLayout from './printLayout'
+import printGate from './printGate'
 
-/** A4 版心高度（297mm - 上下各 12mm）换算成 96dpi 下的像素，用于估算页数 */
-const A4_CONTENT_PX = ((297 - 24) / 25.4) * 96
+/** 运行时注入的 @page 规则的元素 id（见 applyPageRule） */
+const PRINT_PAGE_RULE_ID = 'oa-print-page-rule'
 
 export default {
   name: 'WorkflowPrint',
@@ -137,7 +210,7 @@ export default {
       formValues: {},
       /** 表单字段中文标签：字段 __vModel__ -> label */
       formLabels: {},
-      /** 表单 schema 的字段顺序（内置系统模板据此自动排版） */
+      /** 表单 schema 的字段顺序（内置 contract 版式据此自动排版） */
       schemaFields: [],
       /**
        * 选项翻译表：字段 -> { 值: 中文标签 }。
@@ -175,53 +248,99 @@ export default {
       return (this.data && this.data.printTemplate) || {}
     },
     /**
-     * 是否为**内置系统模板**（库中无对应记录时后端返回 id=null 的兜底模板）。
-     * 内置模板的 showSignature / showAttachment 是服务端硬编码的默认值，
-     * 并非管理员的显式选择 —— 因此内置模板**永远只打印表单信息**。
+     * 是否为**内置版式**（库中无对应记录时后端返回 id=null 的兜底模板）。
+     * 注意：它只用于"排版路径"的判断（见 useBuiltinLabelLayout），
+     * **不再**用于决定签批栏/附件清单是否出栏 —— 那两件事只看配置值（AC-62）。
      */
     isBuiltinTpl() {
       return !this.tpl.id
     },
     /**
-     * 签批栏 / 附件清单：**默认不打印**。
-     * 打印件定位是「表单信息」——签批与附件属流程侧数据。
-     *  - 内置系统模板：一律不打印（见 isBuiltinTpl）
-     *  - 管理员自建模板：需显式打开（showSignature='1' / showAttachment='1'）
-     * 注：原先 showAttachment 用 `!== '0'`（默认打印），与「只打印表单信息」相反，已翻转。
+     * 签批栏 / 附件清单 / 抄送栏：**一律读生效模板的配置值**，与"是否内置"解耦。
+     * （升级前是 `!isBuiltinTpl && showSignature === '1'`：内置模板被强制关掉签批栏，
+     *   而《集团资金审批单》的版式核心恰恰就是签批栏 —— PRD 风险 R-3。）
      */
     showSignature() {
-      return !this.isBuiltinTpl && this.tpl.showSignature === '1'
+      return printLayout.shouldShowSignature(this.tpl)
     },
     showComment() {
-      return this.tpl.showComment !== '0'
+      return printLayout.shouldShowComment(this.tpl)
     },
     showAttachment() {
-      return !this.isBuiltinTpl && this.tpl.showAttachment === '1'
+      return printLayout.shouldShowAttachment(this.tpl)
+    },
+    showCcNode() {
+      return printLayout.shouldShowCcNode(this.tpl)
     },
     footerNote() {
       return this.tpl.footerNote || ''
     },
+    /** 排版参数（纸张 / 方向 / 版心高度），页数测算与提示都用它 */
+    metrics() {
+      return printLayout.layoutMetrics(this.tpl)
+    },
+    /** 工具条提示：纸张与方向（原先硬编码 "A4 纵向"） */
+    paperHint() {
+      return this.metrics.paper + (this.metrics.landscape ? ' 横向' : ' 纵向')
+    },
+    /** 工具条提示：这一张实际会打出哪些区（让"配置是否生效"一眼可见） */
+    contentHint() {
+      const parts = ['表单信息']
+      if (this.showSignature) parts.push('签批栏')
+      if (this.showCcNode && this.ccRows.length) parts.push('抄送栏')
+      if (this.showAttachment) parts.push('附件清单')
+      return parts.join(' + ')
+    },
     /**
-     * 基本信息区的行。优先级：
-     *   1. 管理员配置过的打印模板（tpl.id 有值）→ 用它的 field_map，版式完全可控；
-     *   2. 内置系统模板（tpl.id 为空）→ **按表单 schema 自动排版**，
-     *      这样任意单据都能打印，不必为每张表单单独配一套映射；
-     *   3. 连 schema 都没有 → 退回模板里的内置 field_map。
+     * 屏幕上的纸样尺寸（宽 × 最小高）。**跟着生效模板的纸张与方向走**（REQ-PRINT-014）：
+     * 升级前 `.print-paper` 的 `width: 210mm; min-height: 297mm` 是写死的 A4 纵向，
+     * 于是"配了 A3 横向"只改了页数测算、纸样还是 A4 —— 打印出来仍被 @page 裁成 A4。
+     * 这里用行内样式覆盖，`print-a4.scss` 里的那两个值退化为"未配置时的默认"。
+     *
+     * ⚠ **只绑给 `.print-paper`**：里面的 `minHeight` 是纸样高度，
+     *   绑到工具条上会把工具条撑成一张纸那么高并盖住纸面（踩过，见模板里的注释）。
      */
-    baseRows() {
-      const isBuiltin = !this.tpl.id
-      if (isBuiltin && this.schemaFields.length) return this.rowsFromSchema()
-      const map = this.parseFieldMap(this.tpl.fieldMap)
-      if (!map) return this.rowsFromSchema()
-      const sec = (map.sections || []).find(s => !s.type || s.id === 'base')
-      const rows = (sec && sec.rows) || []
-      return rows.length ? rows : this.rowsFromSchema()
+    paperBoxStyle() {
+      return printLayout.paperBoxStyle(this.tpl)
+    },
+    /** 抬头左侧的 Logo（未配置为空串 → 元素不渲染） */
+    logoUrl() {
+      return printLayout.logoUrl(this.tpl.logoFileId, process.env.VUE_APP_BASE_API)
+    },
+    /**
+     * 字段区。三条路径（顺序即优先级）：
+     *   1. 新增的 fund / matter / payment 内置版式 → **以版式常量为准**（为固定纸质表单定制的栏目）；
+     *   2. 内置 contract 版式（存量模板的默认值）→ 保持升级前的行为：
+     *      有表单 schema 就**按 schema 自动排版**（否则自定义字段会整片消失），否则用版式常量；
+     *   3. 自定义模板 → 用它的 field_map，没有就按 schema 排版。
+     * 全部走 `printLayout.fieldSections`，与前端用例共用同一份判定。
+     */
+    fieldSections() {
+      const layoutSections = printLayout.fieldSections(this.tpl.fieldMap)
+      if (printLayout.useBuiltinLabelLayout(this.tpl)) {
+        return layoutSections.length ? layoutSections : this.schemaSection()
+      }
+      if (this.isBuiltinTpl && this.schemaFields.length) {
+        return this.schemaSection()
+      }
+      return layoutSections.length ? layoutSections : this.schemaSection()
+    },
+    /** 签批栏的固定栏目（含按节点名匹配出的节点）；没有固定栏目时为空表 → 走动态出栏 */
+    signColumnList() {
+      return printLayout.signColumns(this.tpl.fieldMap).map(col => {
+        return Object.assign({}, col, { nodes: printLayout.matchNodesForColumn(this.nodes, col) })
+      })
+    },
+    /** 签批栏区标题（版式没写就用升级前的固定标题，保持零回归） */
+    signTitle() {
+      const sec = printLayout.signSection(this.tpl.fieldMap)
+      return (sec && sec.title) || '公文接收及处理'
     },
     nodes() {
       return (this.data && this.data.nodes) || []
     },
     /**
-     * 签批栏：一个**流程节点**一栏，栏内每人一行（AC-17 / AC-18）。
+     * 签批栏（动态出栏）：一个**流程节点**一栏，栏内每人一行（AC-17 / AC-18）。
      *
      * 后端给每个任务记录都带 `nodeIndex`（同节点的多人共用一个序号），这里按它分组。
      * 兼容没有 nodeIndex 的旧数据：退化为"相邻同名节点合并"。
@@ -241,6 +360,9 @@ export default {
         cur.people.push(n)
       })
       return blocks
+    },
+    ccRows() {
+      return (this.data && this.data.ccNodes) || []
     },
     attachRows() {
       return (this.data && this.data.attachments) || []
@@ -269,6 +391,7 @@ export default {
           this.applyFormData(d.formData)
           this.loadSignImages(d.nodes)
           this.$nextTick(() => {
+            this.applyPageRule()
             this.measurePages()
             this.state = 'ready'
           })
@@ -281,46 +404,90 @@ export default {
         })
     },
 
-    /** 打印：先测页数，再调浏览器打印，最后落打印留痕 */
+    /**
+     * 打印：先测页数 → **先写留痕** → 成功才调起打印（AC-67 的硬门禁）。
+     *
+     * 升级前是先 `window.print()` 再补写留痕、写失败只 warning 一下 ——
+     * 打印动作一旦发生就物理上无法回滚，审计要求的"必留痕"因此形同虚设。
+     * 现在留痕失败时**不打印**并给出明确提示（提示里说明联系管理员）。
+     * 门禁逻辑抽在 `printGate.js` 里，因此"失败路径不得调起打印"是可断言的。
+     */
     doPrint() {
       this.measurePages()
       this.printing = true
-      // window.print() 在多数浏览器是阻塞的，返回时对话框已关闭
-      window.print()
-      this.writeLog()
-      this.printing = false
+      printGate.printAfterLogging({
+        writeLog: () => this.writeLog(),
+        // window.print() 在多数浏览器是阻塞的，返回时对话框已关闭
+        print: () => window.print()
+      }).then(r => {
+        this.printing = false
+        if (!r.printed) {
+          const msg = printGate.logFailureMessage()
+          if (this.$modal && this.$modal.msgError) {
+            this.$modal.msgError(msg)
+          } else {
+            window.alert(msg)
+          }
+        }
+      })
     },
 
-    /** 打印留痕：只传业务信息与页数，打印人与时间由服务端决定 */
+    /**
+     * 打印留痕：只传业务信息与页数，打印人与时间由服务端决定。
+     *
+     * ⚠ **必须把失败抛出去**：这个 Promise 的 reject 是"阻断打印"的唯一信号，
+     * 在这里 catch 掉就等于把硬门禁改回"尽力而为"了（升级前的问题就在这里）。
+     */
     writeLog() {
-      if (!this.businessId) return
-      addPrintLog({
+      if (!this.businessId) return Promise.resolve()
+      return addPrintLog({
         businessId: this.businessId,
         procInsId: this.data ? this.data.procInsId : null,
         templateId: this.data ? this.data.templateId : null,
         printTplId: this.tpl.id || null,
         pageCount: this.pageCount,
         watermarkText: this.data ? this.data.watermarkText : null
-      }).catch(() => {
-        // 留痕失败不应影响打印本身：已经打出去了，这里只提示
-        this.$modal && this.$modal.msgWarning && this.$modal.msgWarning('打印留痕写入失败，请联系管理员')
       })
     },
 
-    /** 预分页测算（PRD 7.5：不依赖 CSS counter(pages)，避免浏览器差异） */
+    /**
+     * 预分页测算（PRD 7.5：不依赖 CSS counter(pages)，避免浏览器差异）。
+     *
+     * 沿用"按像素测算"的既有路线，只把原先硬编码的 A4 版心高度换成按**生效模板的
+     * 纸张与方向**算出来的值（REQ-PRINT-014）—— 所以 A3 横向的页数不会再按 A4 算。
+     */
     measurePages() {
-      const el = this.$el && this.$el.querySelector('.p-base')
-      if (!el) {
-        this.pageCount = 1
-        return
-      }
-      const paper = this.$el.querySelector('.print-paper')
+      const paper = this.$el && this.$el.querySelector('.print-paper')
       if (!paper) {
         this.pageCount = 1
         return
       }
-      const h = paper.scrollHeight
-      this.pageCount = Math.max(1, Math.ceil(h / A4_CONTENT_PX))
+      this.pageCount = printLayout.measurePageCount(paper.scrollHeight, this.tpl)
+    },
+
+    /**
+     * 把生效模板的**纸张与方向**真正交给浏览器（REQ-PRINT-014 / AC-64）。
+     *
+     * SFC 里 `print-a4.scss` 的 `@page { size: A4 portrait }` 是**静态**的（编译期），
+     * 而 `scoped` 样式也没法按运行时取值改写 —— 所以在 head 里维护一个专用 `<style>`，
+     * 每次打印都按生效模板重写它。销毁时移除，避免这条全局 @page 影响别的页面。
+     */
+    applyPageRule() {
+      const rule = printLayout.pageRuleCss(this.tpl)
+      let el = document.getElementById(PRINT_PAGE_RULE_ID)
+      if (!el) {
+        el = document.createElement('style')
+        el.id = PRINT_PAGE_RULE_ID
+        document.head.appendChild(el)
+      }
+      el.textContent = rule
+    },
+
+    removePageRule() {
+      const el = document.getElementById(PRINT_PAGE_RULE_ID)
+      if (el && el.parentNode) {
+        el.parentNode.removeChild(el)
+      }
     },
 
     closeWin() {
@@ -378,13 +545,7 @@ export default {
 
     /* ---------- field_map ---------- */
     parseFieldMap(raw) {
-      if (!raw) return null
-      if (typeof raw === 'object') return raw
-      try {
-        return JSON.parse(raw)
-      } catch (e) {
-        return null
-      }
+      return printLayout.parseFieldMap(raw)
     },
 
     /** 一个 cell 占 span 个"列单位"，每个单位 = th + td 两列 */
@@ -395,6 +556,22 @@ export default {
     },
 
     /* ---------- 取值 ---------- */
+    /**
+     * 一个单元格的显示值。
+     *
+     * `format: 'amountUpper'` 的单元格只输出**金额大写**（付款申请单的「金额大写」是独立栏目，
+     * 而 design-amount 的常规渲染是"数字（人民币大写）"两者合一）。两者用同一个
+     * `utils/money.toChineseUpper`，所以打印件上的数字与大写永远一致（AC-36）。
+     */
+    cellValue(cell) {
+      if (cell && cell.format === 'amountUpper') {
+        const raw = this.formValues[cell.field]
+        if (raw === null || raw === undefined || raw === '') return ''
+        return toChineseUpper(raw) || ''
+      }
+      return this.valueOf(cell && cell.field)
+    },
+
     /**
      * 取字段值。
      * `$` 开头的是内置变量；其余从表单数据里按字段名取。
@@ -456,18 +633,9 @@ export default {
       return formatAmount(n, { decimals: 2 }) || String(n)
     },
 
+    /** 内置变量：口径统一在 printLayout.builtinValue（含新增的 $submitterCompany） */
     builtin(name) {
-      const d = this.data || {}
-      switch (name) {
-        case '$submitter': return d.submitter || ''
-        case '$submitterDept': return d.submitterDept || ''
-        case '$submitTime': return this.fmt(d.submitTime)
-        case '$finishTime': return this.fmt(d.finishTime)
-        case '$businessNo': return d.businessNo || ''
-        case '$templateName': return d.printTemplate ? d.printTemplate.name || '' : ''
-        case '$instanceStatus': return d.instanceStatus || ''
-        default: return ''
-      }
+      return printLayout.builtinValue(name, this.data, t => this.fmt(t))
     },
 
     /**
@@ -586,7 +754,7 @@ export default {
       return ['design-section', 'design-text', 'el-button', 'el-divider'].indexOf(tag) >= 0
     },
 
-    /** 内置系统模板：按表单 schema 自动排行（每行 3 个列单位） */
+    /** 按表单 schema 自动排版（每行 3 个列单位）—— 内置 contract 版式与"没配版式"时的路径 */
     rowsFromSchema() {
       const rows = []
       let cur = { cells: [], used: 0 }
@@ -606,6 +774,12 @@ export default {
       })
       if (cur.cells.length) rows.push(cur)
       return rows
+    },
+
+    /** 自动排版结果包装成一个无标题的字段区（与 field_map 的 sections 同构） */
+    schemaSection() {
+      const rows = this.rowsFromSchema()
+      return rows.length ? [{ id: 'schema', title: '', rows: rows }] : []
     },
 
     /** 字段中文标签（配置了 field_map 时用 label 已够，这里作为兜底展示用） */
@@ -639,6 +813,7 @@ export default {
   },
   beforeDestroy() {
     this.releaseSignUrls()
+    this.removePageRule()
   }
 }
 </script>

@@ -92,6 +92,17 @@
   text-align: right;
 }
 
+/*
+ * 抬头左侧的 Logo（2.0 B2 §4.4 / REQ-PRINT-015）。
+ * 未配置时元素**根本不渲染**（v-if），所以这里不需要"隐藏占位"的规则，
+ * 抬头其余内容的位置在两种情况下完全一致（两个 table-cell 的布局不变）。
+ */
+.p-headline > .p-hl-left > .p-logo {
+  display: block;
+  max-height: 14mm;
+  max-width: 60mm;
+}
+
 /* B. 基本信息区：用 table，表头跨页可重复 */
 table.p-base {
   width: 100%;
@@ -197,6 +208,17 @@ table.p-base thead {
   padding: 1.5mm 2mm;
   color: #767676;
   font-size: 9pt;
+}
+
+/* D2. 抄送栏（模板 showCcNode='1' 且流程存在抄送记录才输出） */
+table.p-cc {
+  margin-top: 2mm;
+}
+table.p-cc th {
+  width: auto;
+}
+table.p-cc td {
+  text-align: left;
 }
 
 /* D. 附件清单 */
