@@ -135,6 +135,7 @@ import { getDrawingList, saveDrawingList, getIdGlobal, saveIdGlobal, getFormConf
 import loadBeautifier from "@/utils/loadBeautifier";
 import { getDynamicForm, addDynamicForm, updateDynamicForm } from "@/api/workflow/dynamicForm";
 import request from "@/utils/request";
+import { buildFormSaveMessage } from "./saveResultText";
 
 let beautifier;
 const emptyActiveData = { style: {}, autosize: {} };
@@ -517,13 +518,13 @@ export default {
               // 2.0（B1 §7.10）动态表单是**版本化**保存（停用旧版 + 插入新版），
               // 模板上的 form_id 已被后端显式改指到新版本 —— 必须把影响面说清楚，
               // 否则管理员会以为"表单改了但单据没变"。
-              const affected = response && response.affectedTemplates;
-              if (affected > 0) {
-                this.$modal.msgSuccess(
-                  "修改成功：表单已存为新版本，并已把 " + affected + " 个模板指向新版本"
-                );
+              // PRD V-8 反向校验还会回 `formFlowWarnings`：仍指向旧版本表单的**流程**清单，
+              // 这类错位不提示的话，要等到发起单据（条件字段取不到）才发现。
+              const r = buildFormSaveMessage(response);
+              if (r.type === "warning") {
+                this.$modal.msgWarning(r.message);
               } else {
-                this.$modal.msgSuccess("修改成功");
+                this.$modal.msgSuccess(r.message);
               }
             });
           } else {

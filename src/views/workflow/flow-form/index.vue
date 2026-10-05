@@ -33,12 +33,16 @@
                   <svg-icon icon-class="flow" class="flow-svg"></svg-icon>
                   <span class="ml5">流程审批</span>
                 </div>
-                <div class="flow-c">
+                <!-- 纯拟稿阶段没有审批动作，屏蔽审批意见区（判定见 computed.isDraftStage）。
+                     ⚠ 不能连整栏一起屏蔽 —— 提交/签名按钮就在本栏内，屏蔽了就没法提交。 -->
+                <div class="flow-c" v-if="!isDraftStage">
                   <span v-if="requiredCmt" class="cmt-require mr5">*</span>
                   <span>审批意见</span>
                   <i class="el-icon-edit-outline ml2"></i>
                 </div>
               </div>
+              <!-- 纯拟稿阶段屏蔽：意见输入框 + 常用意见列表（提交按钮在下方，不在此块内） -->
+              <template v-if="!isDraftStage">
               <el-input v-model="comment" type="textarea" :rows="8" placeholder="请选择或输入意见..." maxlength="500" show-word-limit></el-input>
               <div class="mt10 mb10">
                 <div class="mb5 comment">
@@ -60,6 +64,7 @@
                   </div>
                 </div>
               </div>
+              </template>
               <!-- 流程操作按钮 -->
               <div class="mb10 pull-right">
                 <!-- 手写签名（PRD 8.2/8.6）：有实际任务时才可签；已签则显示状态并可重签。
@@ -576,20 +581,34 @@ export default {
     },
     /** 获取表单标题 */
     getTitle(form) {
-      let title = "";
       if (this.isCustomForm) {
         return form.title;
       }
-      form.formData.fields.some((field) => {
-        if (field.__config__) {
-          let __config__ = field.__config__;
-          if (__config__.label.indexOf("标题") != -1 || field.__vModel__.indexOf("title") != -1) {
-            title = form.valData[field.__vModel__];
-            return true;
-          }
-        }
-      });
-      return title;
+      const fields = (form && form.formData && form.formData.fields) || [];
+      const valData = (form && form.valData) || {};
+      const text = (v) => (v === undefined || v === null || v === '' ? '' : String(v));
+
+      // 1) 精确口径：字段 __vModel__ 就叫 title —— 这是系统硬要求
+      //    （待办/已办/详情页/正文书签都读它），优先且唯一可靠。
+      const byModel = fields.find((f) => f && f.__vModel__ === 'title');
+      if (byModel) {
+        const v = text(valData[byModel.__vModel__]);
+        if (v) return v;
+      }
+
+      // 2) 兜底：label 含「标题」的**有值字段**。
+      //    ⚠ 必须要求 __vModel__ 存在：纯排版控件（design-section「分组标题」/ design-text「说明文字」）
+      //      没有 __vModel__，而「分组标题」这个 label 本身含"标题"二字。
+      //      原实现只判 label，于是第 0 个分组控件就被命中，取 valData[undefined] 得到 undefined，
+      //      再被 JSON.stringify 丢掉 title 键 —— 后端 Form.title / TodoVO.title 全为 NULL，
+      //      表现为「待办标题为空」+ 路由拼出 `?title&`。2026-10-05 实测定位。
+      const byLabel = fields.find(
+        (f) => f && f.__vModel__ && f.__config__ && String(f.__config__.label || '').indexOf('标题') !== -1
+      );
+      if (byLabel) {
+        return text(valData[byLabel.__vModel__]);
+      }
+      return '';
     },
     /** 获取表单字段数据 */
     getFormConf(formConf) {
@@ -899,6 +918,18 @@ export default {
   computed: {
     isCustomForm() {
       return this.formType === "3";
+    },
+    /**
+     * 是否处于「纯拟稿」阶段（没有审批动作，因而不需要审批意见）。
+     *
+     * 判定条件必须与 created() 里把 requiredCmt 置 false 的那个分支**完全一致**
+     * （pageType === '0' && 没有 todoId）——不能用裸 pageType：
+     * 「待办」里打开的草稿单也是 pageType=0，但它走的是 else 分支、requiredCmt 仍为真，
+     * completeBtn 会强制校验意见（:770）。若按裸 pageType 隐藏意见框，
+     * 这类草稿单就会永远提交不了（报「请填写审批意见」却无处可填）。
+     */
+    isDraftStage() {
+      return this.pageType === "0" && !(this.$route.query && this.$route.query.todoId);
     },
   },
 };

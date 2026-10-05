@@ -9,6 +9,12 @@ var h = require('./harness')
 
 require('./print-layout.test.js')
 require('./print-entries.test.js')
+require('./condition-text.test.js')
+require('./assignee-mapping.test.js')
+require('./flow-key.test.js')
+require('./form-save-message.test.js')
+require('./erp-shell.test.js')
+require('./erp-pages.test.js')
 
 console.log('════════ 前端用例（tools 无关，纯 Node） ════════\n')
 

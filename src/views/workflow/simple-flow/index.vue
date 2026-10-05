@@ -77,16 +77,51 @@
         <el-form-item label="流程名称" prop="name">
           <el-input v-model="addForm.name" placeholder="如：合同审批（含用印）" />
         </el-form-item>
-        <el-form-item label="流程标识" prop="defKey">
-          <el-input v-model="addForm.defKey" placeholder="英文标识，如 contractApproval" />
+        <!--
+          「流程标识」默认收进「高级选项」：
+          它在模板链路里本来就不该让用户填（B1 spec「流程标识由系统生成」：`tpl_` + 模板ID前8位），
+          而独立新建这条链路又必须有一个**全局唯一**的 key。所以这里改成
+          「按流程名称自动生成建议 → 用户可改 → 实时校验格式与撞名」，
+          默认折叠，需要时展开（详见 flowKey.js 顶部注释）。
+        -->
+        <el-form-item>
+          <el-button type="text" class="adv-toggle" @click="onAdvancedToggle">
+            {{ advancedOpen ? '收起高级选项' : '高级选项（流程标识 / 分类）' }}
+            <i :class="advancedOpen ? 'el-icon-arrow-up' : 'el-icon-arrow-down'" />
+          </el-button>
         </el-form-item>
-        <el-form-item label="分类" prop="category">
-          <el-input v-model="addForm.category" placeholder="如：contract" />
-        </el-form-item>
+        <template v-if="advancedOpen">
+          <el-form-item label="流程标识" prop="defKey">
+            <el-input v-model="addForm.defKey" placeholder="留空则按流程名称自动生成" @input="onDefKeyInput">
+              <template slot="append">
+                <el-button :loading="checkingKey" @click="refreshSuggestedKey">重新生成</el-button>
+              </template>
+            </el-input>
+            <div v-if="checkingKey" class="adv-tip">正在检查是否已被占用…</div>
+            <div v-else-if="keyTaken" class="adv-warn">
+              <i class="el-icon-warning-outline" /> 「{{ addForm.defKey }}」已被占用
+              <el-button type="text" size="mini" @click="useAlternativeKey">改用 {{ alternativeKey }}</el-button>
+            </div>
+            <div v-else-if="keyFormatError" class="adv-warn">
+              <i class="el-icon-warning-outline" /> {{ keyFormatError }}
+            </div>
+            <div v-else class="adv-tip">
+              <i class="el-icon-success" /> 可用（按名称生成，可自行修改）
+            </div>
+            <div class="adv-tip">
+              作为 Flowable 流程定义 key 写进 BPMN：只能字母/数字/下划线/中划线、不能数字开头、全局唯一，
+              <b>发布后不可修改</b>。
+            </div>
+          </el-form-item>
+          <el-form-item label="分类" prop="category">
+            <el-input v-model="addForm.category" placeholder="如：contract" />
+          </el-form-item>
+        </template>
       </el-form>
       <el-alert type="info" :closable="false">
         <div slot="title">
-          新建后进入设计器；流程标识会作为 Flowable 的流程定义 key，<b>发布后不可修改</b>。
+          新建后进入设计器，可继续配审批链路。流程标识会作为 Flowable 的流程定义 key，<b>发布后不可修改</b>；
+          从「模板配置 → 流程设计」进入时由系统自动生成，无需手工填写。
         </div>
       </el-alert>
       <div slot="footer" class="dialog-footer">
@@ -119,6 +154,7 @@ import {
 } from '@/api/workflow/simpleFlow'
 import StateBlock from '@/components/StateBlock'
 import { describeError } from '@/utils/errorMessage'
+import { suggestFlowKey, validateFlowKey, suggestAlternativeKey } from './flowKey'
 
 export default {
   name: 'SimpleFlowList',
@@ -133,11 +169,23 @@ export default {
       addVisible: false,
       creating: false,
       addForm: { name: '', defKey: '', category: '' },
+      /** 高级选项（流程标识 / 分类）默认折叠：名称会自动带出标识，多数人不需要填 */
+      advancedOpen: false,
+      /** 用户是否手工改过流程标识 —— 改过之后就不再被"按名称生成"覆盖 */
+      defKeyEdited: false,
+      /** 服务端查回来的"已被占用"，以及给出的备选标识 */
+      keyTaken: false,
+      alternativeKey: '',
+      checkingKey: false,
+      /** 发起查重时的名称/标识快照，用于丢弃过期响应（快速输入时后发先至会错报） */
+      checkedFor: { name: '', key: '' },
+      /** 待发起的查重定时器（防抖） */
+      keyTimer: null,
       addRules: {
         name: [{ required: true, message: '流程名称不能为空', trigger: 'blur' }],
         defKey: [
-          { required: true, message: '流程标识不能为空', trigger: 'blur' },
-          { pattern: /^[A-Za-z_][A-Za-z0-9_-]*$/, message: '仅允许字母/数字/下划线/中划线，且不以数字开头', trigger: 'blur' }
+          // 只在"展开高级选项并手工清空"时才报错；格式与撞名由下面实时提示 + submitAdd 兜底
+          { validator: (rule, value, cb) => (String(value || '').trim() ? cb() : cb(new Error('流程标识不能为空'))), trigger: 'blur' }
         ]
       },
       historyVisible: false,
@@ -153,10 +201,36 @@ export default {
       if (this.loading) return 'loading'
       if (this.listError) return 'error'
       return this.list.length ? 'ready' : 'empty'
+    },
+    /** 流程标识的**格式**问题（空串 = 合法）；唯一性另算（见 `keyTaken`） */
+    defKeyFormatError() {
+      return validateFlowKey(this.addForm.defKey)
     }
   },
   created() {
     this.getList()
+  },
+  beforeDestroy() {
+    // 防抖定时器必须在销毁时清掉，否则弹窗关掉后仍会发一次查重请求（并可能写已销毁的 vm）
+    if (this.keyTimer) {
+      clearTimeout(this.keyTimer)
+      this.keyTimer = null
+    }
+  },
+  watch: {
+    /**
+     * 流程名称 → 自动带出流程标识（**只在用户没手工改过时**覆盖）。
+     *
+     * 为什么不直接放在输入框的 @input 上：名称也可能被"清空重填"，watcher 覆盖这两种路径更省心；
+     * 防抖 300ms 是为了不在每个字符上打一次接口。
+     */
+    'addForm.name'(val) {
+      if (!this.advancedOpen) return
+      if (!this.defKeyEdited) {
+        this.addForm.defKey = suggestFlowKey(val)
+      }
+      this.scheduleKeyCheck()
+    }
   },
   methods: {
     getList() {
@@ -188,9 +262,117 @@ export default {
     },
     handleAdd() {
       this.addForm = { name: '', defKey: '', category: '' }
+      this.advancedOpen = false
+      this.defKeyEdited = false
+      this.keyTaken = false
+      this.alternativeKey = ''
+      this.checkingKey = false
+      this.checkedFor = { name: '', key: '' }
       this.addVisible = true
     },
+    /* ---------------- 流程标识：建议生成 + 实时校验 ---------------- */
+
+    /** 展开/收起高级选项；展开时补一个建议标识并查重 */
+    onAdvancedToggle() {
+      this.advancedOpen = !this.advancedOpen
+      if (this.advancedOpen) this.ensureSuggestedKey()
+    },
+
+    /** 用户手工改了标识 —— 此后不再被"按名称生成"覆盖 */
+    onDefKeyInput() {
+      this.defKeyEdited = true
+      this.scheduleKeyCheck()
+    },
+
+    /** 展开高级选项时若还没有标识，就先生成一个（含"名称已填、直接点高级选项"的路径） */
+    ensureSuggestedKey() {
+      if (!this.addForm.defKey && !this.defKeyEdited) {
+        this.addForm.defKey = suggestFlowKey(this.addForm.name)
+      }
+      this.scheduleKeyCheck()
+    },
+
+    /** 点「重新生成」：按当前名称重算（即使之前手工改过也重算 —— 这是显式动作） */
+    refreshSuggestedKey() {
+      this.defKeyEdited = false
+      this.addForm.defKey = suggestFlowKey(this.addForm.name)
+      this.scheduleKeyCheck()
+    },
+
+    /** 采用备选标识（如 htsp → htsp_2） */
+    useAlternativeKey() {
+      if (!this.alternativeKey) return
+      this.addForm.defKey = this.alternativeKey
+      this.defKeyEdited = true
+      // 立刻清掉"已被占用"的结论：否则在重新查重的这段时间里，
+      // 界面会挂着「_2 已被占用、改用 _2」这种自相矛盾的话（实测踩到）
+      this.keyTaken = false
+      this.alternativeKey = ''
+      this.scheduleKeyCheck()
+    },
+
+    /** 防抖 300ms 后发起查重（格式不合法时不必打接口） */
+    scheduleKeyCheck() {
+      if (this.keyTimer) clearTimeout(this.keyTimer)
+      // 提问期间先把**上一次的结论**清掉并置成"检查中"，避免显示过期结论
+      this.keyTaken = false
+      this.alternativeKey = ''
+      this.checkingKey = true
+      this.keyTimer = setTimeout(() => {
+        this.keyTimer = null
+        this.checkDefKey()
+      }, 300)
+    },
+
+    /**
+     * 查重：**只查"未删除范围内"是否已存在**（服务端 `selectList` 支持 defKey 精确匹配）。
+     * 这是**体验优化**，不是权威判定 —— 真正拦截仍在 `saveDraft`；
+     * 所以接口失败时**不报错、不阻断**（可能只是没有列表权限），安静地放过让服务端去判。
+     */
+    checkDefKey() {
+      const key = String(this.addForm.defKey || '').trim()
+      this.keyTaken = false
+      this.alternativeKey = ''
+      this.checkingKey = false
+
+      if (!key) return
+      // 格式不合法时不必问服务端（提示已经在模板里显示）
+      if (this.defKeyFormatError) return
+
+      const token = { name: this.addForm.name, key: key }
+      this.checkedFor = token
+      this.checkingKey = true
+      listSimpleFlow({ pageNum: 1, pageSize: 1, defKey: key }).then(res => {
+        // 快速输入时响应可能乱序：**只认最后一次提问的结果**，否则会把"旧 key 的结论"贴到新 key 上
+        if (this.checkedFor !== token) return
+        this.checkingKey = false
+        const total = Number((res && res.total) || 0)
+        this.keyTaken = total > 0
+        this.alternativeKey = this.keyTaken ? suggestAlternativeKey(key, []) : ''
+      }).catch(() => {
+        if (this.checkedFor !== token) return
+        this.checkingKey = false
+        // 静默放过：查重失败不该拦住用户（服务端仍会校验并给出错误）
+      })
+    },
     submitAdd() {
+      // ① 还没生成标识就先按名称生成一次（用户可能全程没展开高级选项）
+      if (!this.addForm.defKey) {
+        this.addForm.defKey = suggestFlowKey(this.addForm.name)
+      }
+      // ② 提交前把**格式**问题挡在本地（服务端 V-0 的口径完全相同）
+      const fmt = this.defKeyFormatError
+      if (fmt) {
+        this.advancedOpen = true
+        this.$modal.msgError('流程标识不可用：' + fmt)
+        return
+      }
+      // ③ 已知撞名就不再白跑一趟服务端（后端仍会再判一次，这里只是省一次失败往返）
+      if (this.keyTaken) {
+        this.advancedOpen = true
+        this.$modal.msgError('流程标识「' + this.addForm.defKey + '」已被占用，请点「重新生成」或改用 ' + this.alternativeKey)
+        return
+      }
       this.$refs.addForm.validate(valid => {
         if (!valid) return
         this.creating = true
@@ -280,3 +462,26 @@ export default {
   }
 }
 </script>
+
+<style lang="scss" scoped>
+/* 高级选项里流程标识的实时校验提示（这一页原来没有样式块，为它新增） */
+.adv-toggle {
+  padding: 0;
+  font-size: 12px;
+}
+.adv-tip {
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.6;
+  .el-icon-success {
+    color: #67c23a;
+  }
+}
+.adv-warn {
+  margin-top: 4px;
+  color: #e6a23c;
+  font-size: 12px;
+  line-height: 1.6;
+}
+</style>

@@ -8,6 +8,8 @@ yarn-error.log*
 
 tests/**/coverage/
 tests/e2e/reports
+# 浏览器 E2E 的登录态：里面是**真实 token**，绝不能入库（泄漏一个等于泄漏一个会话）
+tests/e2e/.auth/
 selenium-debug.log
 
 # Editor directories and files

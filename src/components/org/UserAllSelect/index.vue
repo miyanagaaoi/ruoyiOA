@@ -80,13 +80,17 @@
                     @change="handleCheckedUsersChange"
                     :max="type == 'single' ? 1 : 999999"
                   >
-                    <el-checkbox v-for="item in userList" :label="item.userId" :key="item.userId" class="user-card">
+                    <el-checkbox v-for="item in showUserList" :label="item.userId" :key="item.userId" class="user-card">
                       <div class="user-card-content">
                         <div class="avatar">
                           <image-preview :src="item.avatar" :width="32" :height="32" />
                         </div>
                         <div class="user-info">
-                          <div class="user-name">{{ item.nickName }}</div>
+                          <div class="user-name">
+                            {{ item.nickName }}
+                            <!-- 钉住的人不在部门树里（超管挂在公司根节点），标一下免得以为是数据错乱 -->
+                            <el-tag v-if="isPinned(item.userId)" size="mini" type="warning">常驻</el-tag>
+                          </div>
                           <div class="user-detail">
                             <span class="dept-name">{{ userDeptName(item.dept) }}</span>
                           </div>
@@ -180,6 +184,22 @@ export default {
       type: String,
       default: "corp",
     },
+    /**
+     * **常驻候选人**（2026-10-05 二开追加）：无论当前选中哪个部门，都固定显示在「用户列表」最前面。
+     *
+     * 为什么需要它：`/system/user/listDeptUser` 的 SQL 里**硬排除了超管**
+     * （`sys_user` 那句 `u.user_id != 'superAdmin'`），而超管恰好挂在公司根节点上 ——
+     * 于是流程设计器的「指定人员」**永远选不到超管账号**，而超管恰恰是最常用的流程测试账号。
+     *(另一条路是改那个共享 SQL：影响面覆盖日程/知识库授权/流程转办等所有选人入口，
+     * 还要重建后端并重启；本 prop 让"需要常驻候选"的调用方自己声明，互不影响。)*
+     *
+     * 传对象数组（与 `selectedUsers` 同形：`{ userId, nickName, dept }`）；
+     * 已选中且在该数组里的人，即使没进过部门列表也能保持勾选。
+     */
+    pinnedUsers: {
+      type: Array,
+      default: () => [],
+    },
   },
   data() {
     return {
@@ -221,6 +241,11 @@ export default {
   watch: {
     open(newVal) {
       this.dialogVisible = newVal;
+      if (newVal) {
+        // 常驻候选人先入 map：「已选择用户」是按 allUserMap 反查对象的，
+        // 少了这一步，钉住的人一旦被勾上就会从右侧列表里凭空消失
+        this.mergePinnedUsers();
+      }
       if (newVal && this.selectedUsers && this.selectedUsers.length > 0) {
         this.checkedUsers = this.selectedUsers.map((user) => user.userId);
         this.selectedUsers.forEach((user) => {
@@ -250,12 +275,34 @@ export default {
         return dept ? dept.deptName : "";
       };
     },
+    /**
+     * 「用户列表」实际渲染的内容 = **常驻候选人**（去重后置顶）+ 当前部门的用户。
+     * 去重按 userId：钉住的人如果也出现在部门结果里，只显示一次（以钉住的那条为准）。
+     */
+    showUserList() {
+      const pinned = this.pinnedUsers || [];
+      const ids = pinned.map((u) => u && u.userId).filter(Boolean);
+      const rest = (this.userList || []).filter((u) => u && ids.indexOf(u.userId) < 0);
+      return pinned.filter((u) => u && u.userId).concat(rest);
+    },
   },
   created() {
+    // 常驻候选人要在**任何一次**取部门用户之前进 map：否则它们永远无法被勾选/回显
+    this.mergePinnedUsers();
     this.getTree();
     this.initDeptId();
   },
   methods: {
+    /** 把「常驻候选人」并进 allUserMap（幂等；同名 id 以传入的那条为准） */
+    mergePinnedUsers() {
+      (this.pinnedUsers || []).forEach((u) => {
+        if (u && u.userId) this.$set(this.allUserMap, u.userId, u);
+      });
+    },
+    /** 该 userId 是不是常驻候选人（模板里打个"常驻"标记，免得被当成脏数据） */
+    isPinned(userId) {
+      return (this.pinnedUsers || []).some((u) => u && u.userId === userId);
+    },
     /** 获取组织树 */
     async getTree() {
       try {

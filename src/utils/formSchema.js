@@ -4,6 +4,11 @@
  * 设计器需要"从表单直接提取字段"，而不是让管理员手敲字段名。
  * 表单内容形如：{ formRef, formModel, ..., fields: [ { __config__: {...}, __vModel__ } ] }
  * 行容器（layout=rowFormItem）的子控件在 __config__.children 里，需要递归。
+ *
+ * 写法：**CommonJS**（`require` / `module.exports`）—— 与 `printLayout.js` 同口径，
+ * 这样纯逻辑能被 `tests/*.test.js` 用 Node 直接 require 跑，不必引入 jest。
+ *
+ * @author 二开
  */
 
 /** 多选控件的 tag */
@@ -27,7 +32,7 @@ const NON_CONDITION_TAGS = [
  * @param {string|object} content 表单 JSON（t_template_dynamic_form.content）
  * @returns {Array<{vModel:string,label:string,tag:string,required:boolean,multi:boolean,conditionable:boolean}>}
  */
-export function extractFormFields(content) {
+function extractFormFields(content) {
   const out = []
   let schema = content
   if (typeof content === 'string') {
@@ -69,18 +74,72 @@ export function extractFormFields(content) {
 }
 
 /** 可作为条件的字段（且按 PRD 6.3.1：必须已设为必填） */
-export function conditionableFields(fields) {
+function conditionableFields(fields) {
   return (fields || []).filter(f => f.conditionable).map(f => {
     return Object.assign({}, f, { disabled: !f.required })
   })
 }
 
 /** 必填字段的 __vModel__ 列表 */
-export function requiredFieldNames(fields) {
+function requiredFieldNames(fields) {
   return (fields || []).filter(f => f.required).map(f => f.vModel)
 }
 
 /** 多选字段的 __vModel__ 列表 */
-export function multiFieldNames(fields) {
+function multiFieldNames(fields) {
   return (fields || []).filter(f => f.multi).map(f => f.vModel)
+}
+
+/**
+ * 提取"字段名 → 选项清单"，用于把条件里的**值**也显示成人话。
+ *
+ * 表单里单/多选/下拉控件的选项形如 `__slot__.options = [{label:'经营', value:1}]`；
+ * 而提交落库写的是 **label**（见 `DynamicFormDataImpl`），所以显示时优先回显 label。
+ *
+ * @param {string|object} content 表单 JSON
+ * @returns {Object} { [vModel]: [{label, value}] }
+ */
+function extractFieldOptions(content) {
+  const out = {}
+  let schema = content
+  if (typeof content === 'string') {
+    try {
+      schema = JSON.parse(content)
+    } catch (e) {
+      return out
+    }
+  }
+  if (!schema || !schema.fields) {
+    return out
+  }
+
+  const walk = arr => {
+    (arr || []).forEach(f => {
+      const cfg = f.__config__ || {}
+      if (cfg.children && cfg.children.length) {
+        walk(cfg.children)
+        return
+      }
+      const vModel = f.__vModel__
+      const options = f.__slot__ && f.__slot__.options
+      if (!vModel || !options || !options.length) {
+        return
+      }
+      out[vModel] = options
+        .filter(o => o && o.label !== undefined)
+        .map(o => ({ label: o.label, value: o.value }))
+    })
+  }
+  walk(schema.fields)
+  return out
+}
+
+module.exports = {
+  MULTI_TAGS: MULTI_TAGS,
+  NON_CONDITION_TAGS: NON_CONDITION_TAGS,
+  extractFormFields: extractFormFields,
+  conditionableFields: conditionableFields,
+  requiredFieldNames: requiredFieldNames,
+  multiFieldNames: multiFieldNames,
+  extractFieldOptions: extractFieldOptions
 }

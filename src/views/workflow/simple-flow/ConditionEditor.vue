@@ -27,7 +27,6 @@
           size="small"
           class="fld"
           filterable
-          allow-create
           default-first-option
         >
           <el-option
@@ -44,7 +43,24 @@
         <el-select v-model="row.op" placeholder="比较符" size="small" class="op">
           <el-option v-for="op in opOptions" :key="op.value" :label="op.label" :value="op.value" />
         </el-select>
+        <el-select
+          v-if="usePicker(row)"
+          v-model="row.value"
+          placeholder="选择值"
+          size="small"
+          class="val"
+          filterable
+          :disabled="!needsValue(row)"
+        >
+          <el-option
+            v-for="o in pickerOptionsOf(row)"
+            :key="String(o.value)"
+            :label="String(o.label)"
+            :value="o.value"
+          />
+        </el-select>
         <el-input
+          v-else
           v-model="row.value"
           placeholder="值"
           size="small"
@@ -68,7 +84,9 @@
     <el-alert v-else type="warning" :closable="false" class="mt10">
       <div slot="title">
         字段已从表单自动提取，<b>只能选择已设为「必填」的字段</b>（未设必填的置灰）；
-        比较值按<b>选项中文名</b>比较（提交时写入的是中文标签）。
+        单选/下拉类字段的值<b>从候选项里选</b>，其余字段手填；
+        <b>比较值按选项的码值（value）比较</b>——表单提交写入流程变量的就是码值
+        （如「合同类型」经营=1、合同类别 采购=purchase），下拉里显示的是中文名。
         整句会被包进一对 <code>${ }</code>（写成 <code>${A} == 'B'</code> 运行期会报 non-Boolean）。
       </div>
     </el-alert>
@@ -86,13 +104,19 @@
  * 与抽屉内其它字段一样即时编辑（branch.groups 直接改，引用即生效）。
  * 空行在提交前由 designer 的 pruneConditions() 清理，不在这里拦截。
  */
+import { formatConditionText, pickerOptions, useValuePicker, needsValue } from './conditionText'
+
 export default {
   name: 'ConditionEditor',
   props: {
     /** 分支（泳道）对象；组件直接读写它的 groups */
     branch: { type: Object, default: null },
     /** 从表单提取出来的字段清单（{vModel,label,required,disabled}） */
-    fieldOptions: { type: Array, default: () => [] }
+    fieldOptions: { type: Array, default: () => [] },
+    /** vModel → label：条件文字只显示 label（与画布/节点摘要同一真源） */
+    fieldLabelMap: { type: Object, default: () => ({}) },
+    /** vModel → 选项清单：把条件里的值显示成选项名（如 1 → 经营） */
+    fieldOptionsMap: { type: Object, default: () => ({}) }
   },
   data() {
     return {
@@ -115,25 +139,13 @@ export default {
       return (this.branch && this.branch.groups) || []
     },
     sentence() {
-      const parts = []
-      ;(this.groups || []).forEach(g => {
-        const rows = (g.rows || [])
-          .filter(r => r.field)
-          .map(r => {
-            const opLabel = (this.opOptions.find(o => o.value === r.op) || {}).label || r.op
-            if (r.op === 'EMPTY' || r.op === 'NOT_EMPTY') {
-              return `${r.field} ${opLabel}`
-            }
-            return `${r.field} ${opLabel} ${r.value === undefined || r.value === '' ? '？' : r.value}`
-          })
-        if (rows.length) {
-          parts.push(rows.length > 1 ? `(${rows.join(' 且 ')})` : rows[0])
-        }
-      })
-      if (!parts.length) {
+      // 与画布分支文字走**同一个**格式化真源（conditionText.js），避免两处口径漂移
+      const body = formatConditionText(this.groups.length ? { groups: this.groups } : null,
+        this.fieldLabelMap, this.fieldOptionsMap, { inline: true })
+      if (body === '未设置条件') {
         return '尚未设置条件'
       }
-      return '当 ' + parts.join(' 或 ') + ' 时，进入本分支'
+      return '当 ' + body + ' 时，进入本分支'
     }
   },
   watch: {
@@ -162,6 +174,24 @@ export default {
     },
     addRow(gi) {
       this.groups[gi].rows.push({ field: '', op: 'EQ', value: '' })
+    },
+    /**
+     * 该行的值是否用**选择器**。
+     *
+     * 单选组 / 下拉这类"枚举"字段，值只能从候选里挑 —— 手打的值运行期不会命中：
+     * 后端提交时会把选项 value **翻译成 label** 之后才写进流程变量
+     * （`BizFormServiceImpl#convertValueToLabel`），所以这里候选值就是 **选项 label**。
+     */
+    usePicker(row) {
+      return useValuePicker(row && row.field, this.fieldOptions, this.fieldOptionsMap)
+    },
+    /** 该行可选的值（= 选项 label） */
+    pickerOptionsOf(row) {
+      return pickerOptions(row && row.field, this.fieldOptions, this.fieldOptionsMap)
+    },
+    /** EMPTY / NOT_EMPTY 不需要值 */
+    needsValue(row) {
+      return needsValue(row && row.op)
     },
     removeRow(gi, ri) {
       this.groups[gi].rows.splice(ri, 1)
@@ -217,6 +247,10 @@ export default {
 .cond-row .val {
   flex: 1 1 90px;
   min-width: 0;
+}
+/* 值控件无论是输入框还是选择器，都在同一格、同样的自适应宽度 */
+.cond-row .val.el-select {
+  display: block;
 }
 .opt-tail {
   float: right;

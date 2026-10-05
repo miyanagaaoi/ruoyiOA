@@ -35,6 +35,16 @@
         placeholder="如 contractApproval"
         :disabled="flow.status === '1'"
       />
+      <!--
+        标识格式实时提示（与新建弹窗、后端 V-0 同口径）。
+        原来这里**没有任何校验**：敲了中文要等保存/发布被服务端打回来才知道错。
+      -->
+      <span v-if="keyFormatError" class="tip warn" :title="keyFormatError">
+        <i class="el-icon-warning-outline" /> 标识不可用
+      </span>
+      <span v-else class="tip" title="作为 Flowable 流程定义 key 写进 BPMN；发布后不可修改">
+        发布后不可改
+      </span>
       <span class="lbl">分类</span>
       <el-input v-model="flow.category" size="small" style="width:100px" placeholder="分类" />
       <span class="lbl">关联表单</span>
@@ -126,23 +136,97 @@
                     首个审批节点不支持「角色 / 发起人自选」：引擎在发起时解析不到该变量，流程会一发起就报错（校验规则 V-3）
                   </div>
                 </el-form-item>
+                <!--
+                  指定人员：自绘 chip + 受控弹窗（§3.3 方案 A）。
+                  为什么不用 `form/FormUserSelect`：它没有 `value` prop（v-model 是空操作），
+                  内部 id 数组 / 对象数组两套语义混用，且触发区是 `<div @click>`
+                  （既改不动共享契约，也无法自动化验证）。这里父组件的 id 数组是唯一真源，
+                  弹窗只负责"选"，触发按钮是 `<el-button>`（可被自动化点击）。
+                -->
                 <el-form-item v-if="currentNode.assignee.source === 'USER'" label="指定人员">
-                  <el-input v-model="userIdsText" placeholder="用户ID，多个用英文逗号分隔" />
+                  <div class="assignee-picker">
+                    <span
+                      v-for="u in assigneeUserChips"
+                      :key="u.userId"
+                      class="assignee-chip"
+                      :title="u.userId"
+                    >
+                      <el-avatar v-if="avatarUrl(u.avatar)" :size="20" :src="avatarUrl(u.avatar)" />
+                      <span class="chip-name">{{ u.nickName }}</span>
+                      <el-button
+                        type="text"
+                        size="mini"
+                        class="chip-remove"
+                        :title="'移除 ' + u.nickName"
+                        @click="removeAssigneeUser(u.userId)"
+                      >×</el-button>
+                    </span>
+                    <span v-if="!assigneeUserChips.length" class="assignee-empty">未选择人员</span>
+                    <el-button size="mini" icon="el-icon-user" class="assignee-pick" @click="openUserPicker">选择人员</el-button>
+                  </div>
+                  <div v-if="isSingleMode" class="tip">
+                    当前「多人方式」是<b>单人</b>：指定人员只能选 <b>1 个人</b>；在弹窗里多勾的人不会被保存（只留第 1 个）。
+                  </div>
+                  <div v-else class="tip">当前「多人方式」是<b>会签 / 或签 / 依次</b>：可以指定多人。</div>
+                  <div class="tip">
+                    弹窗「用户列表」最前面固定有<b>超级管理员</b>（标记「常驻」）——
+                    它不在部门树里、平台选人接口也默认排除它，这里专门放出来方便测试。
+                  </div>
+                  <div v-if="userListLoading" class="tip">正在加载用户清单…</div>
+                  <div v-if="userListError" class="tip warn">
+                    <i class="el-icon-warning-outline" /> 用户清单加载失败：{{ userListError }}
+                    <el-button type="text" size="mini" @click="loadUserList">重试</el-button>
+                  </div>
+                  <div v-else-if="usersNotFound.length" class="tip warn">
+                    <i class="el-icon-warning-outline" /> 这些已选人员查不到（id 原样保留，不会被丢掉）：
+                    {{ usersNotFound.join('、') }}
+                    <el-button type="text" size="mini" @click="loadUserList">重试</el-button>
+                  </div>
                 </el-form-item>
+                <!--
+                  角色：改成**角色列表多选**。存的仍是 `role_id`（不是 roleKey）——
+                  实测运行期 `FlowCommonService#getRoleUserIds` 拿编译出的 expId（= roleIds）
+                  去 `sys_user_role.role_id` 关联用户，写 roleKey 会一个人都选不出来。
+                -->
                 <el-form-item v-if="currentNode.assignee.source === 'ROLE'" label="角色">
-                  <el-input v-model="roleIdsText" placeholder="角色ID，多个用英文逗号分隔" />
+                  <el-select
+                    v-model="assigneeRoleIds"
+                    multiple
+                    filterable
+                    collapse-tags
+                    style="width:100%"
+                    placeholder="从角色列表中选择（可多选）"
+                    :loading="roleListLoading"
+                  >
+                    <el-option v-for="r in roleOptions" :key="r.roleId" :label="r.roleName" :value="r.roleId" />
+                  </el-select>
+                  <div v-if="roleListLoading" class="tip">正在加载角色列表…</div>
+                  <div v-else-if="roleListError" class="tip warn">
+                    <i class="el-icon-warning-outline" /> 角色列表加载失败：{{ roleListError }}
+                    <el-button type="text" size="mini" @click="loadRoleList">重试</el-button>
+                  </div>
+                  <div v-else-if="unknownRoleIds.length" class="tip warn">
+                    已存角色在当前系统里查不到（原值保留、不会被丢掉）：{{ unknownRoleIds.join('、') }}
+                  </div>
                 </el-form-item>
                 <el-form-item v-if="needLevel(currentNode)" label="层级">
                   <el-input-number v-model="currentNode.assignee.level" :min="1" :max="5" />
                 </el-form-item>
 
                 <el-form-item label="多人方式">
-                  <el-radio-group v-model="currentNode.multiMode">
+                  <el-radio-group v-model="currentNode.multiMode" @change="onMultiModeChange">
                     <el-radio label="SINGLE">单人</el-radio>
                     <el-radio label="AND">会签（全部同意）</el-radio>
                     <el-radio label="OR">或签（一人同意）</el-radio>
                     <el-radio label="SEQ">依次审批</el-radio>
                   </el-radio-group>
+                  <div v-if="isSingleMode" class="tip">
+                    单人：任务直接派给<b>一个人</b>；指定人员只能留 1 个（多勾的会被收敛为第 1 个）。
+                  </div>
+                  <div v-else class="tip">
+                    会签 / 或签 / 依次：任务按参与人列表建成多实例；「指定人员」必须<b>显式选人</b>
+                    （角色 / 部门负责人等来源发布时会报错）。
+                  </div>
                 </el-form-item>
 
                 <el-form-item label="同一审批人">
@@ -308,7 +392,8 @@
 
               <!-- 进入条件：图形化编辑器直接内嵌（原"编辑条件"弹窗已合并到这里） -->
               <el-form-item v-if="!selectedBranch.defaultBranch" label="进入条件">
-                <ConditionEditor :branch="selectedBranch" :field-options="conditionFieldOptions" />
+                <ConditionEditor :branch="selectedBranch" :field-options="conditionFieldOptions"
+                  :field-label-map="fieldLabelMap" :field-options-map="fieldOptionsMap" />
               </el-form-item>
               <el-form-item v-else label="进入条件">
                 <div class="tip">其余条件都不满足时进入本分支（系统自动生成，不可编辑）</div>
@@ -405,6 +490,27 @@
         </el-table-column>
       </el-table>
     </el-drawer>
+
+    <!--
+      选人弹窗（§3.3 方案 A）：只做"选"，不持有最终状态 ——
+      确认后由 `onUserPicked` 把 **user_id** 写回打开弹窗时锁定的那个节点，
+      显示（chip）再由 id 反查姓名。共享组件 `org/UserAllSelect` 未被改动，
+      `form/FormUserSelect` 也一行未动。
+
+      `:type` 随节点的「多人方式」切换（2026-10-05 修复）：
+        - 单人（SINGLE）→ `single`：共享组件把 `el-checkbox-group` 的 `:max` 置 1，
+          勾第 2 个人会被 element-ui 直接拒掉；「全选 / 清空」按钮也自动隐藏；
+        - 会签 / 或签 / 依次 → `multiple`：勾选上限 999999（多实例要的就是多人）。
+      此前这里写死 `type="multiple"`，所以"多人方式=单人"的节点**照样能勾一堆人**，
+      编译期人数 >1 会退化成 `candidateUsers`（候选人抢单）—— 与"单人"语义矛盾。
+    -->
+    <user-all-select
+      :open.sync="userPickerOpen"
+      :type="userPickerType"
+      :selected-users="pickerSelectedUsers"
+      :pinned-users="pickerPinnedUsers"
+      @confimUser="onUserPicked"
+    />
   </div>
 </template>
 
@@ -424,8 +530,25 @@ import {
   getOrCreateByTemplate
 } from '@/api/workflow/simpleFlow'
 import { listDynamicForm, getDynamicForm } from '@/api/workflow/dynamicForm'
+import { getUsers, getUser } from '@/api/system/user'
+import { listRole } from '@/api/system/role'
+import UserAllSelect from '@/components/org/UserAllSelect/index.vue'
+import { fieldLabelMap, formatConditionText } from '../conditionText'
+import { validateFlowKey } from '../flowKey'
+import {
+  assigneePatch,
+  cleanIds,
+  missingRoleIds,
+  missingUserIds,
+  singleModeUserIds,
+  summarizeNames,
+  toRoleObjects,
+  toUserIds,
+  toUserObjects
+} from '../assigneeMapping'
 import {
   extractFormFields,
+  extractFieldOptions,
   conditionableFields,
   requiredFieldNames,
   multiFieldNames
@@ -451,7 +574,7 @@ import {
  */
 export default {
   name: 'FlowDesigner',
-  components: { ConditionEditor, FlowTree, StateBlock },
+  components: { ConditionEditor, FlowTree, StateBlock, UserAllSelect },
   props: {
     /** 内嵌模式：隐藏流程名称/流程标识/关联表单三个输入，改为只读展示 */
     embedded: {
@@ -527,7 +650,40 @@ export default {
       loadError: '',
       loadErrorCause: '',
       /** 关联的表单及其字段清单（从表单 schema 自动提取，不再手敲字段名） */
-      formDef: { id: '', name: '', list: [] },
+      formDef: { id: '', name: '', list: [], options: {} },
+      /* ---- 选人 / 选角色（§3.3 方案 A：父组件状态是唯一真源） ---- */
+      /** 选人弹窗开关（受控：`:open.sync`） */
+      userPickerOpen: false,
+      /**
+       * 弹窗打开时**锁定的目标节点**（对象引用，不是下标）。
+       * 确认后只写回它 —— 防止"切节点后回调把人员写到另一个节点上"这类跨节点写入。
+       */
+      pickerTargetNode: null,
+      /** 系统用户清单（chip 显示姓名用；`getUsers` 无权限门槛但不含超管，缺的按 id 补查） */
+      allUsers: [],
+      userListLoading: false,
+      userListError: '',
+      /** 按 id 也查不到的已选人员（原值仍保留在流程里，只是显示占位） */
+      usersNotFound: [],
+      /** 已发出"按 id 补查"请求的 id：清单与流程两条加载路径都会触发补查，靠它去重 */
+      usersRequested: [],
+      /**
+       * 「指定人员」弹窗里**常驻候选**的 userId（2026-10-05）。
+       *
+       * 超管账号在 `/system/user/getUsers` 与 `/system/user/listDeptUser` 两条链路的 SQL 里
+       * 都被**硬排除**（`u.user_id != 'superAdmin'`），而且它挂在公司根节点上 ——
+       * 结果是流程设计器**根本选不到超管**，而超管正是最常用的流程测试账号。
+       * 这里声明"哪些账号必须常驻候选"，由本组件按 id 取回后交给共享弹窗（`pinnedUsers`），
+       * **不改共享 SQL**（那条 SQL 影响日程/知识库授权/转办等所有选人入口）。
+       * 以后要再钉别的账号（如某个只做测试的账号），往这个数组里加 id 即可。
+       */
+      assigneePinnedUserIds: ['superAdmin'],
+      /** 角色清单（「角色」多选的候选；来自 `/system/role/list`） */
+      roleOptions: [],
+      roleListLoading: false,
+      roleListError: '',
+      /** 角色清单是否已成功加载过（区分"没加载"与"加载到 0 个"） */
+      roleListLoaded: false,
       assigneeSources: [
         { value: 'USER', label: '指定人员' },
         { value: 'ROLE', label: '角色' },
@@ -670,6 +826,14 @@ export default {
     conditionFieldOptions() {
       return conditionableFields(this.formDef.list)
     },
+    /** vModel → label：条件文字只显示 label（查不到回退 vModel） */
+    fieldLabelMap() {
+      return fieldLabelMap(this.formDef.list)
+    },
+    /** vModel → 选项清单：把条件里的值显示成选项名（如 1 → 经营） */
+    fieldOptionsMap() {
+      return this.formDef.options || {}
+    },
     /** 多选字段（并行分支的集合来源只能选多选） */
     multiFieldOptions() {
       return this.formDef.list.filter(f => f.multi)
@@ -682,21 +846,77 @@ export default {
     multiFields() {
       return multiFieldNames(this.formDef.list)
     },
-    userIdsText: {
+    /** 当前节点已选人员 → chip 显示用的对象数组（查不到也显示占位，不静默丢人） */
+    assigneeUserChips() {
+      const a = this.currentNode && this.currentNode.assignee
+      return toUserObjects((a && a.userIds) || [], this.allUsers)
+    },
+    /**
+     * 当前节点「多人方式」是不是**单人**。
+     *
+     * 未设置按 `SINGLE` 处理 —— 与编译器的口径一致（`StringUtils.defaultIfBlank(multiMode, M_SINGLE)`），
+     * 避免"旧数据没这个字段 ⇒ 界面上当成多人"这种前后端不一致。
+     */
+    isSingleMode() {
+      const n = this.currentNode
+      return !n || !n.multiMode || n.multiMode === 'SINGLE'
+    },
+    /**
+     * 流程标识的**格式**问题（空串 = 合法）。
+     * 口径与新建弹窗、后端 `SimpleFlowValidator` V-0 完全一致（都来自 `flowKey.js` 的 `validateFlowKey`）。
+     * 唯一性这里判不了，仍由服务端 `saveDraft` 拦。
+     */
+    keyFormatError() {
+      return validateFlowKey(this.flow.defKey)
+    },
+    /**
+     * 选人弹窗的选人类型（共享组件 `org/UserAllSelect` 的 `type` prop）：
+     * `single` ⇒ 勾选上限 1（`:max="1"`）、隐藏「全选 / 清空」；`multiple` ⇒ 上限 999999。
+     * 取的是**打开弹窗时锁定的那个节点**（`pickerTargetNode`）的多人方式，
+     * 与写入目标同一个节点，避免"按当前选中节点算、写到另一个节点"。
+     */
+    userPickerType() {
+      const node = this.pickerTargetNode || this.currentNode
+      if (!node) return 'multiple'
+      return !node.multiMode || node.multiMode === 'SINGLE' ? 'single' : 'multiple'
+    },
+    /**
+     * 要交给共享弹窗的**常驻候选人对象**（`assigneePinnedUserIds` 按 id 取回的那些）。
+     * 取不到时返回空数组 —— 弹窗退化成原行为，不会因此报错或白屏。
+     */
+    pickerPinnedUsers() {
+      return toUserObjects(this.assigneePinnedUserIds, this.allUsers)
+    },
+    /** 弹窗打开时锁定的节点所对应的人员 = 弹窗内的初始勾选态（与写入目标同一个节点） */
+    pickerSelectedUsers() {      const node = this.pickerTargetNode || this.currentNode
+      const a = node && node.assignee
+      const ids = cleanIds((a && a.userIds) || [])
+      /* 单人节点上"已选 >1 人"只可能来自旧数据或"先多选、后切单人"。
+         整批带进弹窗、确认后却只留第 1 个，界面就成了"勾了 3 个只剩 1 个"。
+         所以按多人方式分流：非 SINGLE 全部回显；单人 / 未设置只回显第 1 个。 */
+      if (!ids.length) return []
+      if (node && node.multiMode && node.multiMode !== 'SINGLE') return toUserObjects(ids, this.allUsers)
+      return toUserObjects(ids.slice(0, 1), this.allUsers)
+    },
+    /**
+     * 当前节点已选角色（`el-select multiple` 直接绑 id 数组）。
+     * 写回前用 `cleanIds` 去空去重 —— 这些 id 会被引擎直接 `join(",")` 写进 BPMN。
+     */
+    assigneeRoleIds: {
       get() {
-        return (this.currentNode && this.currentNode.assignee.userIds || []).join(',')
+        const a = this.currentNode && this.currentNode.assignee
+        return cleanIds((a && a.roleIds) || [])
       },
-      set(v) {
-        this.currentNode.assignee.userIds = this.splitIds(v)
+      set(ids) {
+        const node = this.currentNode
+        if (!node) return
+        this.ensureAssignee(node).roleIds = cleanIds(ids)
       }
     },
-    roleIdsText: {
-      get() {
-        return (this.currentNode && this.currentNode.assignee.roleIds || []).join(',')
-      },
-      set(v) {
-        this.currentNode.assignee.roleIds = this.splitIds(v)
-      }
+    /** 已存但角色清单里查不到的 roleId（原值保留，但要让用户看得见） */
+    unknownRoleIds() {
+      if (!this.roleListLoaded || this.roleListError) return []
+      return missingRoleIds(this.assigneeRoleIds, this.roleOptions)
     }
   },
   /**
@@ -732,6 +952,10 @@ export default {
   },
   created() {
     this.loadFormOptions()
+    // 选人/选角色的候选清单：进页面就拉（失败只在该来源的表单项下可见，不打扰无关操作）
+    this.loadUserList()
+    this.loadPinnedUsers()
+    this.loadRoleList()
     if (this.embedded) {
       // 内嵌（模板页签，B1 §6.3）：按模板取或建草稿；字段来源固定取 template.formId
       this.initEmbedded()
@@ -799,6 +1023,8 @@ export default {
       this.flow.deployId = data.deployId || null
       const def = this.parseContent(data.content)
       this.flow.nodes = (def && def.nodes) || []
+      // 旧内容可能缺 userIds/roleIds（甚至整个 assignee）——进编辑器前补齐成规范形状
+      this.normalizeAssignees()
       this.selection = { path: [] }
       this.drawerVisible = false
     },
@@ -1108,6 +1334,7 @@ export default {
         this.formDef.id = d.id
         this.formDef.name = d.name
         this.formDef.list = extractFormFields(d.content)
+        this.formDef.options = extractFieldOptions(d.content)
       }).catch(err => {
         // 关键：不能让"拉字段失败"退化成"这个表单没有字段"。
         // 后者会让发布校验静默跳过字段级检查，等于放行了本该拦下的流程。
@@ -1123,6 +1350,218 @@ export default {
         this.loadFormOptions()
       }
     },
+    /* ================= 选人 / 选角色（§3.3 方案 A） ================= */
+    /**
+     * 把节点的 assignee 补齐成规范形状。
+     *
+     * 为什么必须 `$set`：旧流程内容里可能整个 `assignee` 都没有（或只有 source），
+     * 而 Vue2 对"新增属性"不做响应式 —— 直接 `node.assignee.userIds = []` 补出来的字段
+     * 在界面上永远不会更新（`audit-undeclared-writes` 门禁盯的就是这类）。
+     */
+    ensureAssignee(node) {
+      const patch = assigneePatch(node.assignee)
+      if (patch.assignee) {
+        this.$set(node, 'assignee', patch.assignee)
+      } else {
+        Object.keys(patch).forEach(k => this.$set(node.assignee, k, patch[k]))
+      }
+      return node.assignee
+    },
+    /** 全量归一化（加载流程后调用一次）：后续任何写路径都不会踩到"字段不存在" */
+    normalizeAssignees() {
+      const walk = nodes => {
+        (nodes || []).forEach(n => {
+          if (n.assignee || this.isApprovable(n)) this.ensureAssignee(n)
+          /* 旧数据可能"多人方式=单人"却存了多人（历史上弹窗写死 multiple 造成的）。
+             这里只**在内存里**收敛成 1 个：用户看到的就是落库会得到的，
+             不静默改库、也不出现"界面上挂着 3 个 chip 的单人节点"。 */
+          if (n.assignee && Array.isArray(n.assignee.userIds)) {
+            const one = singleModeUserIds(n.multiMode, n.assignee.userIds)
+            if (one.length !== cleanIds(n.assignee.userIds).length) {
+              this.$set(n.assignee, 'userIds', cleanIds(n.assignee.userIds).slice(0, 1))
+            }
+          }
+          ;(n.branches || []).forEach(br => walk(br.nodes))
+        })
+      }
+      walk(this.flow.nodes)
+      // ⚠ 补查必须在这里也做一次：`getUsers` 常常比流程详情先返回，
+      // 那一刻 flow.nodes 还是空的（算出来"没有缺人"），只有流程到位后才知道要补谁。
+      this.fillMissingUsers()
+      // 常驻候选人同理：它可能正是流程里已选的人（超管最常见的用法），流程到位后再确认一次
+      this.loadPinnedUsers()
+    },
+    /** 头像地址（相对路径补 baseApi）；没有头像返回空串，模板就不渲染 el-avatar */
+    avatarUrl(avatar) {
+      if (!avatar) return ''
+      if (/^https?:\/\//.test(avatar)) return avatar
+      return (process.env.VUE_APP_BASE_API || '') + avatar
+    },
+    /**
+     * 系统用户清单：chip 要显示**姓名**而不是 id。
+     * `/system/user/getUsers` 无权限门槛，但**不含超管**（实测只返回 4 人），
+     * 缺的人按 id 用 `GET /system/user/{userId}` 补查；补查失败必须显式提示（不做空 catch）。
+     */
+    loadUserList() {
+      this.userListLoading = true
+      this.userListError = ''
+      getUsers().then(res => {
+        this.userListLoading = false
+        this.allUsers = (res && res.data) || []
+        this.fillMissingUsers()
+      }).catch(err => {
+        this.userListLoading = false
+        // 拉不到清单 ≠ 没人选：chip 会退化成"id（用户不存在）"，所以原因必须说出来
+        this.userListError = describeError(err).text
+      })
+    },
+    /** 已选但不在清单里的 userId：逐个补查；查不到就记下来显式提示 */
+    fillMissingUsers() {
+      const missing = missingUserIds(this.allAssigneeUserIds(), this.allUsers)
+        .filter(id => this.usersRequested.indexOf(id) < 0)
+      missing.forEach(id => {
+        this.usersRequested.push(id)
+        getUser(id).then(res => {
+          const u = res && res.data
+          if (u && u.userId) {
+            this.allUsers.push(u)
+          } else {
+            this.forgetRequested(id)
+            this.noteMissingUser(id)
+          }
+        }).catch(() => {
+          // 失败要把 id 放回"可重试"，否则点「重试」时会被当成"已经查过了"
+          this.forgetRequested(id)
+          this.noteMissingUser(id)
+        })
+      })
+    },
+    forgetRequested(id) {
+      const i = this.usersRequested.indexOf(id)
+      if (i >= 0) this.usersRequested.splice(i, 1)
+    },
+    noteMissingUser(id) {
+      if (this.usersNotFound.indexOf(id) < 0) this.usersNotFound.push(id)
+    },
+    /** 取回**常驻候选人**（超管）并入用户清单 —— 否则「指定人员」弹窗里没有这个账号可勾。
+     *  走 `GET /system/user/{userId}`（它不排除超管），取不到就静默跳过、弹窗退化为原行为。 */
+    loadPinnedUsers() {
+      ;(this.assigneePinnedUserIds || []).forEach(id => {
+        if (!id || missingUserIds([id], this.allUsers).length === 0) return
+        if (this.usersRequested.indexOf(id) >= 0) return
+        this.usersRequested.push(id)
+        getUser(id).then(res => {
+          const u = res && res.data
+          if (u && u.userId) {
+            this.allUsers.push(u)
+            this.fillMissingUsers()
+          } else {
+            this.forgetRequested(id)
+          }
+        }).catch(() => {
+          this.forgetRequested(id)
+        })
+      })
+    },
+    /** 整棵流程树里所有 USER 节点的 userIds（去重） */
+    allAssigneeUserIds() {
+      const ids = []
+      const walk = nodes => {
+        (nodes || []).forEach(n => {
+          const arr = n.assignee && n.assignee.userIds
+          if (Array.isArray(arr)) {
+            arr.forEach(id => { if (id && ids.indexOf(id) < 0) ids.push(id) })
+          }
+          ;(n.branches || []).forEach(br => walk(br.nodes))
+        })
+      }
+      walk(this.flow.nodes)
+      return ids
+    },
+    /** 打开选人弹窗：**锁定当前节点**（确认后只写回它，避免跨节点写入） */
+    openUserPicker() {
+      if (!this.currentNode) return
+      this.pickerTargetNode = this.currentNode
+      this.userPickerOpen = true
+    },
+    /**
+     * 切换「多人方式」后的写入口径收敛：单人 ⇒ 指定人员只留 1 个。
+     *
+     * 为什么要在切换的当下就收敛，而不是等保存：`multiMode` 与 `userIds` 是两个独立字段，
+     * "多选 3 人 → 改成单人"如果不收敛，卡片上会一直挂着 3 个 chip（用户以为自己选了 3 个人
+     * 还能是"单人"）。切换即收敛，界面与落库立刻一致；被去掉的人明确提示出来。
+     */
+    onMultiModeChange(mode) {
+      const node = this.currentNode
+      if (!node || !node.assignee) return
+      const before = cleanIds(node.assignee.userIds)
+      if (mode === 'SINGLE' && before.length > 1) {
+        this.ensureAssignee(node).userIds = [before[0]]
+        const kept = toUserObjects([before[0]], this.allUsers)
+        const dropped = toUserObjects(before.slice(1), this.allUsers)
+        this.$message.warning(
+          '「单人」只能指定一个人，已保留「' + summarizeNames(kept) + '」，' +
+          '移除「' + summarizeNames(dropped, 99) + '」；如需多人请选择会签 / 或签 / 依次'
+        )
+      } else {
+        this.ensureAssignee(node).userIds = before
+      }
+    },
+    /**
+     * 选人确认：只写 **user_id**（引擎只认 id），并把这些用户并进本地清单，
+     * 免得刚选完的人因为"不在 getUsers 清单里"瞬间变成"（用户不存在）"。
+     *
+     * ⚠ 写入**必须按多人方式收敛**：弹窗自身已是单选（`:type="single"` ⇒ `:max="1"`），
+     *   但旧数据 / 手工构造的请求仍可能带回多人，而"单人节点存了 2 个人"在编译期会退化成
+     *   `candidateUsers`（候选人抢单）—— 所以这里再挡一道，不依赖界面。
+     */
+    onUserPicked(users) {
+      const target = this.pickerTargetNode
+      this.userPickerOpen = false
+      this.pickerTargetNode = null
+      if (!target) return
+      this.ensureAssignee(target).userIds = singleModeUserIds(target.multiMode, toUserIds(users))
+      this.mergeUsers(users)
+    },
+    /** 把弹窗回传的用户并入本地清单（含超管等 `getUsers` 不返回的账号） */
+    mergeUsers(users) {
+      ;(users || []).forEach(u => {
+        if (!u || !u.userId) return
+        if (missingUserIds([u.userId], this.allUsers).length) this.allUsers.push(u)
+      })
+    },
+    /** 移除一位已选人员（chip 上的 ×） */
+    removeAssigneeUser(userId) {
+      const node = this.currentNode
+      if (!node) return
+      const a = this.ensureAssignee(node)
+      a.userIds = (a.userIds || []).filter(id => id !== userId)
+    },
+    /**
+     * 角色清单（`/system/role/list`）。
+     * 存的必须是 **role_id**：实测运行期 `FlowCommonService#getRoleUserIds` 拿编译出的
+     * expId（= roleIds）去 `sys_user_role.role_id` 关联用户，写 roleKey 会一个人都选不出来。
+     */
+    loadRoleList() {
+      this.roleListLoading = true
+      this.roleListError = ''
+      listRole({ pageNum: 1, pageSize: 200 }).then(res => {
+        this.roleListLoading = false
+        this.roleListLoaded = true
+        this.roleOptions = (res && res.rows) || []
+      }).catch(err => {
+        this.roleListLoading = false
+        this.roleListError = describeError(err).text
+      })
+    },
+    /** 画布节点摘要里的人员/角色名（查不到显示占位，不隐藏） */
+    assigneeSummary(node) {
+      const a = (node && node.assignee) || {}
+      if (a.source === 'USER') return summarizeNames(toUserObjects(a.userIds || [], this.allUsers))
+      if (a.source === 'ROLE') return summarizeNames(toRoleObjects(a.roleIds || [], this.roleOptions))
+      return ''
+    },
+
     /* ---------------- 初始化 ---------------- */
     initEmptyFlow() {
       this.flow.nodes = [
@@ -1148,6 +1587,8 @@ export default {
         try {
           const content = JSON.parse(d.content)
           this.flow.nodes = content.nodes || []
+          // 旧内容可能缺 userIds/roleIds（甚至整个 assignee）——补齐后再让配置面板读它
+          this.normalizeAssignees()
           if (content.formId) {
             this.formDef.id = content.formId
             this.loadForm(content.formId)
@@ -1242,16 +1683,8 @@ export default {
     /* ---------------- 条件分支 ---------------- */
 
     condText(branch) {
-      const groups = branch.groups || []
-      const parts = []
-      groups.forEach(g => {
-        const rows = (g.rows || []).filter(r => r.field).map(r => {
-          const op = { EQ: '=', NE: '≠', GT: '>', GE: '≥', LT: '<', LE: '≤', CONTAINS: '包含', NOT_CONTAINS: '不包含', EMPTY: '为空', NOT_EMPTY: '不为空' }[r.op] || r.op
-          return r.op === 'EMPTY' || r.op === 'NOT_EMPTY' ? `${r.field} ${op}` : `${r.field} ${op} ${r.value}`
-        })
-        if (rows.length) parts.push(rows.join(' 且 '))
-      })
-      return parts.length ? ('当 ' + parts.join(' 或 ')) : '未设置条件'
+      // 显示口径集中在 conditionText.js（只显示字段 label、不显示 vModel；值按选项名显示）
+      return formatConditionText(branch, this.fieldLabelMap, this.fieldOptionsMap)
     },
     /* ---------------- 保存 / 发布 ---------------- */
     /**
@@ -1294,20 +1727,35 @@ export default {
       }
       return JSON.stringify(content)
     },
-    handleSaveDraft() {
-      if (!this.flow.name) return this.$modal.msgError('请填写流程名称')
-      if (!this.flow.defKey) return this.$modal.msgError('请填写流程标识')
-      this.saving = true
-      saveSimpleFlowDraft({
+    /**
+     * 把**当前画布**存成草稿（不弹成功提示，由调用方决定怎么反馈）。
+     *
+     * ⚠ 为什么必须抽出来：`/validate` 是按 **id 读库里的 content** 校验的（后端口径），
+     * 它**看不到**画布上还没保存的改动。所以"发布"必须先把这个存下去再校验 ——
+     * 否则会出现"画布上明明有 4 个审批节点，却报『只有 1 个审批节点』"这种
+     * **校验结果与眼前画布对不上**的现象（根因：校验的是上一次保存的旧内容）。
+     */
+    saveDraftQuietly() {
+      return saveSimpleFlowDraft({
         id: this.flow.id,
         name: this.flow.name,
         category: this.flow.category,
         content: this.buildContent()
       }).then(res => {
-        this.saving = false
         if (res.data && res.data.id) {
           this.flow.id = res.data.id
         }
+        return res
+      })
+    },
+    handleSaveDraft() {
+      if (!this.flow.name) return this.$modal.msgError('请填写流程名称')
+      if (!this.flow.defKey) return this.$modal.msgError('请填写流程标识')
+      // 格式问题本地先拦一次（口径与后端 V-0 相同），别让用户等到服务端才知道敲错了
+      if (this.keyFormatError) return this.$modal.msgError('流程标识不可用：' + this.keyFormatError)
+      this.saving = true
+      this.saveDraftQuietly().then(() => {
+        this.saving = false
         this.$modal.msgSuccess('草稿已保存')
         this.flowState = 'draft'
         this.$emit('saved', { flowId: this.flow.id, defKey: this.flow.defKey })
@@ -1323,7 +1771,20 @@ export default {
       if (!this.flow.id) {
         return this.$modal.msgError('请先保存草稿')
       }
-      // 先校验再发布，把问题一次性列出来
+      // ① **先存当前画布**：`/validate` 与 `/publish` 都按 id 读库里的内容，
+      //    不先落盘就会出现"校验的是旧内容 ⇒ 报的问题在画布上找不到"（本轮修的就是这个）。
+      this.publishing = true
+      this.saveDraftQuietly().then(() => {
+        this.publishing = false
+        this.validateThenPublish()
+      }).catch(err => {
+        this.publishing = false
+        this.$modal.msgError('发布前保存草稿失败：' + describeError(err).text)
+      })
+    },
+    /** 校验 → 有阻断就列出来；只有提示项则确认后发布 */
+    validateThenPublish() {
+      // 把问题一次性列出来
       const hasForm = this.formDef.list.length > 0
       validateSimpleFlow({
         id: this.flow.id,
@@ -1386,11 +1847,38 @@ export default {
         this.$modal.msgError('发布前校验未完成：' + describeError(err).text)
       })
     },
+    /**
+     * 校验问题里的 nodeId → 画布上的节点名（含分支内节点）。
+     *
+     * 为什么需要：V-2/V-4/V-7 的 message 里**已经带了节点名**，但前面还会拼一个 `节点 n_first：`
+     * —— 节点被改过名时（如 `n_first` 现在叫「发起部门审核」），只念 id 会让人在画布上找不到是哪一个。
+     * 所以这里按当前画布反查名字，并把"找不到"也显式说出来（那种情况通常意味着内容不同步）。
+     */
+    nodeNameById(nodeId) {
+      let found = ''
+      const walk = nodes => {
+        (nodes || []).forEach(n => {
+          if (!found && n && n.id === nodeId) found = n.name || ''
+          ;(n.branches || []).forEach(br => walk(br.nodes))
+        })
+      }
+      walk(this.flow.nodes)
+      return found
+    },
     showIssues(blocks, warns) {
       const html = []
       if (blocks.length) {
         html.push('<b>阻断项（必须修复）</b>')
-        blocks.forEach(b => html.push('· [' + b.rule + '] ' + (b.nodeId ? '节点 ' + b.nodeId + '：' : '') + b.message))
+        blocks.forEach(b => {
+          if (!b.nodeId) {
+            html.push('· [' + b.rule + '] ' + b.message)
+            return
+          }
+          // message 里已含「节点名」，这里只补一句"在画布上是哪个节点"，避免只看到 id
+          const name = this.nodeNameById(b.nodeId)
+          const where = name ? '（画布上叫「' + name + '」）' : '（当前画布上找不到这个节点，请重新保存后再校验）'
+          html.push('· [' + b.rule + '] ' + b.message + where)
+        })
       }
       if (warns.length) {
         html.push('<br/><b>提示项</b>')
@@ -1434,10 +1922,6 @@ export default {
       }).catch(() => {})
     },
     /* ---------------- 工具 ---------------- */
-    splitIds(text) {
-      if (!text) return []
-      return String(text).split(',').map(s => s.trim()).filter(s => s)
-    },
     isSys(node) {
       return node.type === 'start' || node.type === 'end'
     },
@@ -1471,9 +1955,11 @@ export default {
       if (node.type === 'condition') return '排他路由 · ' + (node.branches ? node.branches.length : 0) + ' 条分支'
       if (node.type === 'parallel') return '多实例 · ' + (node.joinMode === 'ANY' ? '任一完成' : '全部完成')
       const src = (this.assigneeSources.find(s => s.value === node.assignee.source) || {}).label || ''
+      // 画布上直接显示选了谁（人名字/角色名）——否则"选了人"这件事只能在配置抽屉里看到
+      const picked = this.assigneeSummary(node)
       const multi = { SINGLE: '单人', AND: '会签', OR: '或签', SEQ: '依次' }[node.multiMode] || ''
       const sign = node.signMode === 'REQUIRED' ? ' · 需签名' : ''
-      return src + ' · ' + multi + sign
+      return src + (picked ? '（' + picked + '）' : '') + ' · ' + multi + sign
     }
   }
 }
@@ -1560,6 +2046,45 @@ export default {
     max-height: none;
     overflow-y: visible;
     padding-right: 6px;
+  }
+  /* 选人 chip（§3.3 方案 A）：父组件自绘，不依赖共享选人组件的内部状态 */
+  .assignee-picker {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .assignee-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 2px 0 6px;
+    background: #f5faff;
+    border: 1px solid #d6e8ff;
+    border-radius: 12px;
+    font-size: 12px;
+    line-height: 24px;
+    .chip-name {
+      margin-left: 4px;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chip-remove {
+      padding: 0 4px;
+      margin-left: 0;
+      color: #909399;
+      font-size: 13px;
+      line-height: 1;
+      &:hover {
+        color: #f56c6c;
+      }
+    }
+  }
+  .assignee-empty {
+    color: #c0c4cc;
+    font-size: 12px;
   }
   /* 分支配置面板 */
   .row-inline {
